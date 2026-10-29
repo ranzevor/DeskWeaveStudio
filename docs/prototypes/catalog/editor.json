@@ -1,0 +1,671 @@
+{
+  "key": "editor",
+  "name": "流程制作与版本",
+  "prefix": "E",
+  "order": 2,
+  "req": [
+    "DW-002",
+    "DW-003",
+    "DW-006",
+    "DW-007",
+    "DW-008"
+  ],
+  "screens": [
+    {
+      "code": "E01",
+      "id": "editor-graph",
+      "title": "流程画布",
+      "view": "editor",
+      "variant": "graph",
+      "parent": null,
+      "purpose": "用命名出口组织动作，查看节点与目标。",
+      "primary": "run-config",
+      "primaryLabel": "运行",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E02",
+      "id": "editor-steps",
+      "title": "步骤列表",
+      "view": "editor",
+      "variant": "steps",
+      "parent": null,
+      "purpose": "使用键盘和结构列表编辑同一流程。",
+      "primary": "editor-graph",
+      "primaryLabel": "切换到流程",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E03",
+      "id": "editor-source",
+      "title": "源码编辑",
+      "view": "editor",
+      "variant": "source",
+      "parent": null,
+      "purpose": "查看同一流程的格式、引用与字段诊断。",
+      "primary": "editor-steps",
+      "primaryLabel": "切换到步骤",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E04",
+      "id": "node-properties",
+      "title": "节点属性",
+      "view": "editor",
+      "variant": "properties",
+      "parent": null,
+      "purpose": "编辑定位节点的目标、模板、阈值和输出。",
+      "primary": "expression",
+      "primaryLabel": "使用表达式",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E05",
+      "id": "expression",
+      "title": "表达式与变量",
+      "view": "modal",
+      "variant": "expression",
+      "parent": "node-properties",
+      "purpose": "从可见变量选择数据路径并校验表达式。",
+      "primary": "node-properties",
+      "primaryLabel": "应用表达式",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E06",
+      "id": "flow-parameters",
+      "title": "参数与局部变量",
+      "view": "drawer",
+      "variant": "parameters",
+      "parent": "editor-graph",
+      "purpose": "声明输入参数、默认值、类型和敏感属性。",
+      "primary": "editor-graph",
+      "primaryLabel": "保存参数",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E07",
+      "id": "target-select",
+      "title": "目标窗口选择",
+      "view": "modal",
+      "variant": "targets",
+      "parent": "editor-graph",
+      "purpose": "从窗口列表绑定目标，检查名称和采集预览。",
+      "primary": "editor-graph",
+      "primaryLabel": "绑定此窗口",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E08",
+      "id": "run-config",
+      "title": "运行准备",
+      "view": "modal",
+      "variant": "run-config",
+      "parent": "editor-graph",
+      "purpose": "确认固定版本、输入、目标和预算后启动。",
+      "primary": "run-running",
+      "primaryLabel": "开始运行",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E09",
+      "id": "history",
+      "title": "流程版本",
+      "view": "drawer",
+      "variant": "history",
+      "parent": "editor-graph",
+      "purpose": "查看不可变版本，比较并恢复为新草稿。",
+      "primary": "version-diff",
+      "primaryLabel": "比较版本",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E10",
+      "id": "version-diff",
+      "title": "版本差异",
+      "view": "editor",
+      "variant": "diff",
+      "parent": null,
+      "purpose": "按节点和参数比较两个已保存版本。",
+      "primary": "history",
+      "primaryLabel": "返回版本",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E11",
+      "id": "save-conflict",
+      "title": "保存冲突处理",
+      "view": "modal",
+      "variant": "conflict",
+      "parent": "editor-graph",
+      "purpose": "比较外部版本与当前草稿，保留有效编辑。",
+      "primary": "editor-graph",
+      "primaryLabel": "另存为分支草稿",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E12",
+      "id": "close-unsaved",
+      "title": "关闭与未保存草稿",
+      "view": "modal",
+      "variant": "close",
+      "parent": "editor-graph",
+      "purpose": "分别处理草稿保存和活动运行。",
+      "primary": "workspace",
+      "primaryLabel": "保存后关闭",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E13",
+      "id": "action-library",
+      "title": "动作库与搜索",
+      "view": "editor",
+      "variant": "library",
+      "parent": null,
+      "purpose": "按类别搜索动作，添加到选中节点之后。",
+      "primary": "node-properties",
+      "primaryLabel": "添加定位动作",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E14",
+      "id": "delete-node",
+      "title": "删除节点确认",
+      "view": "modal",
+      "variant": "delete-node",
+      "parent": "editor-graph",
+      "purpose": "检查受影响连线和引用后确认删除。",
+      "primary": "editor-graph",
+      "primaryLabel": "删除节点",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E15",
+      "id": "target-display",
+      "title": "屏幕与区域选择",
+      "view": "modal",
+      "variant": "display",
+      "parent": "editor-graph",
+      "purpose": "选择显示器或区域，确认显示缩放。",
+      "primary": "capture-overlay",
+      "primaryLabel": "选择区域",
+      "requirements": [
+        "DW-002",
+        "DW-003",
+        "DW-006",
+        "DW-007",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E16",
+      "id": "run-from-node",
+      "title": "从节点运行检查",
+      "view": "modal",
+      "variant": "start-node",
+      "parent": "editor-graph",
+      "purpose": "检查指定入口的缺失值，进入初始值准备。",
+      "primary": "run-start-values",
+      "primaryLabel": "填写前置值",
+      "requirements": [
+        "DW-027"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E17",
+      "id": "draft-export",
+      "title": "保存草稿副本",
+      "view": "modal",
+      "variant": "draft-export",
+      "parent": "editor-graph",
+      "purpose": "保存失败时保留源码原文和最后有效结构。",
+      "primary": "editor-graph",
+      "primaryLabel": "保存草稿副本",
+      "requirements": [
+        "DW-003",
+        "DW-018"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E18",
+      "id": "run-shared-declarations",
+      "title": "运行共享变量声明",
+      "view": "execution-extra",
+      "variant": "shared",
+      "parent": null,
+      "purpose": "声明共享值、初始值与本次运行的作用范围。",
+      "primary": "editor-graph",
+      "primaryLabel": "保存声明",
+      "requirements": [
+        "DW-026"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E19",
+      "id": "run-start-values",
+      "title": "指定节点初始值",
+      "view": "execution-extra",
+      "variant": "start-values",
+      "parent": null,
+      "purpose": "填写跳过步骤所需的初始值并重新检查。",
+      "primary": "run-start-ready",
+      "primaryLabel": "检查前置条件",
+      "requirements": [
+        "DW-027"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "E20",
+      "id": "run-start-ready",
+      "title": "指定节点启动就绪",
+      "view": "execution-extra",
+      "variant": "start-ready",
+      "parent": null,
+      "purpose": "核对已固定的入口、版本、目标与初始值。",
+      "primary": "run-running",
+      "primaryLabel": "开始新运行",
+      "requirements": [
+        "DW-027"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E21",
+      "id": "run-start-stale",
+      "title": "启动准备结果过期",
+      "view": "execution-extra",
+      "variant": "start-stale",
+      "parent": null,
+      "purpose": "目标变化后重新生成准备结果。",
+      "primary": "run-start-values",
+      "primaryLabel": "重新检查",
+      "requirements": [
+        "DW-027"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E22",
+      "id": "run-interrupt-policy",
+      "title": "运行接管策略",
+      "view": "execution-extra",
+      "variant": "interrupt",
+      "parent": null,
+      "purpose": "选择物理操作的暂停策略并查看强制中断条件。",
+      "primary": "run-config",
+      "primaryLabel": "应用到新运行",
+      "requirements": [
+        "DW-029"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E23",
+      "id": "topology-edit",
+      "title": "连接出口与流程入口",
+      "view": "completion",
+      "variant": "topology-edit",
+      "parent": null,
+      "purpose": "选择命名出口与目标，确认替换、断开和入口变更；步骤重排仅改变布局。",
+      "primary": null,
+      "primaryLabel": "应用控制关系",
+      "primaryKind": "local",
+      "primaryResult": "流程定义的入口与出口经校验后原子应用。",
+      "requirements": [
+        "DW-002",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E24",
+      "id": "topology-invalid",
+      "title": "控制关系校验失败",
+      "view": "completion",
+      "variant": "topology-invalid",
+      "parent": null,
+      "purpose": "保留候选连接并定位图环，修正后重新应用。",
+      "primary": null,
+      "primaryLabel": "重新应用控制关系",
+      "primaryKind": "local",
+      "primaryResult": "无效连接保持未应用，修正后更新同一草稿。",
+      "requirements": [
+        "DW-002",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E25",
+      "id": "expression-builder",
+      "title": "复合表达式编辑",
+      "view": "completion",
+      "variant": "expression-builder",
+      "parent": null,
+      "purpose": "通过结构树或 JSON 编辑嵌套运算，使用合成数据校验后应用。",
+      "primary": null,
+      "primaryLabel": "应用到条件",
+      "primaryKind": "local",
+      "primaryResult": "有效 Value AST 写回条件字段。",
+      "requirements": [
+        "DW-006",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E26",
+      "id": "expression-invalid",
+      "title": "表达式类型错误",
+      "view": "completion",
+      "variant": "expression-invalid",
+      "parent": null,
+      "purpose": "保留非法编辑与最后有效 AST，定位操作数类型错误。",
+      "primary": null,
+      "primaryLabel": "校验并预览",
+      "primaryKind": "local",
+      "primaryResult": "修正后的表达式结果及字段类型可核对。",
+      "requirements": [
+        "DW-006",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E27",
+      "id": "revision-browser",
+      "title": "流程历史版本",
+      "view": "authoring",
+      "variant": "revision-browser",
+      "parent": null,
+      "purpose": "分页发现固定版本，选择历史版本且保留当前草稿。",
+      "primary": null,
+      "primaryLabel": "重新查询",
+      "primaryKind": "local",
+      "primaryResult": "分页发现固定版本，选择历史版本且保留当前草稿。",
+      "requirements": [
+        "DW-003",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E28",
+      "id": "revision-query-expired",
+      "title": "版本查询已过期",
+      "view": "authoring",
+      "variant": "revision-query-expired",
+      "parent": null,
+      "purpose": "重新建立历史查询，保留所选版本。",
+      "primary": null,
+      "primaryLabel": "重新查询",
+      "primaryKind": "local",
+      "primaryResult": "重新建立历史查询，保留所选版本。",
+      "requirements": [
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E29",
+      "id": "content-save",
+      "title": "大流程分块保存",
+      "view": "authoring",
+      "variant": "content-save",
+      "parent": null,
+      "purpose": "分块核验后封存内容，比较草稿与基准版本并保存。",
+      "primary": null,
+      "primaryLabel": "开始传输",
+      "primaryKind": "local",
+      "primaryResult": "分块核验后封存内容，比较草稿与基准版本并保存。",
+      "requirements": [
+        "DW-003",
+        "DW-013",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E30",
+      "id": "content-transfer-failed",
+      "title": "保存传输中断",
+      "view": "authoring",
+      "variant": "content-transfer-failed",
+      "parent": null,
+      "purpose": "保留草稿和编辑代次，重新上传完整内容。",
+      "primary": null,
+      "primaryLabel": "重新传输",
+      "primaryKind": "local",
+      "primaryResult": "保留草稿和编辑代次，重新上传完整内容。",
+      "requirements": [
+        "DW-003",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

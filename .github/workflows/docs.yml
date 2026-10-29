@@ -1,0 +1,57 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  docs:
+    name: Docs and contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.15.0'
+      - name: Install documentation dependencies
+        run: python -m pip install -r requirements-docs.txt -r requirements-prototypes.txt
+      - name: Check repository contents
+        run: python tools/check_repository.py --tracked
+      - name: Check documentation and contracts
+        run: python tools/check_docs.py --contracts
+      - name: Verify canonical JSON in Python and JavaScript
+        run: |
+          python tools/check_canonical_json.py
+          node tools/check_canonical_json.js
+      - name: Verify authoring boundaries
+        run: python tools/check_authoring_contracts.py
+      - name: Verify signed update examples
+        run: node tools/check_update_signatures.js
+      - name: Check prototype coverage and images
+        run: python tools/check_prototypes.py
+      - name: Check prototype pages and interactions
+        run: python tools/render_prototypes.py --check-only
+      - name: Check high-resolution design images
+        run: python tools/export_design_showcase.py --check

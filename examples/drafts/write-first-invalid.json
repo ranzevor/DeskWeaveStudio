@@ -1,0 +1,13 @@
+{
+  "workflowId": "hello",
+  "editorId": "editor-demo",
+  "expectedEditVersion": null,
+  "editVersion": 0,
+  "baseRevision": null,
+  "source": {
+    "kind": "inline",
+    "text": "{"
+  },
+  "lastValidModel": null,
+  "modelEditVersion": null
+}

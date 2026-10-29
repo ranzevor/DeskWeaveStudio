@@ -1,0 +1,80 @@
+{
+  "recordingId": "recording-desktop",
+  "state": "recording",
+  "controlVersion": 1,
+  "source": {
+    "scope": "allDisplays",
+    "topology": {
+      "version": 42,
+      "coordinateSpace": "desktopPhysicalPixels",
+      "virtualBounds": {
+        "x": -1440,
+        "y": -1200,
+        "width": 4000,
+        "height": 3760
+      },
+      "displays": [
+        {
+          "displayId": "portrait-left",
+          "name": "显示屏 1",
+          "outputNames": [
+            "左侧竖屏"
+          ],
+          "bounds": {
+            "x": -1440,
+            "y": 0,
+            "width": 1440,
+            "height": 2560
+          },
+          "rotation": 90,
+          "dpiX": 144,
+          "dpiY": 144,
+          "primary": false
+        },
+        {
+          "displayId": "main",
+          "name": "显示屏 2",
+          "outputNames": [
+            "主显示屏"
+          ],
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 2560,
+            "height": 1440
+          },
+          "rotation": 0,
+          "dpiX": 96,
+          "dpiY": 96,
+          "primary": true
+        },
+        {
+          "displayId": "top",
+          "name": "显示屏 3",
+          "outputNames": [
+            "上方显示屏"
+          ],
+          "bounds": {
+            "x": 0,
+            "y": -1200,
+            "width": 1920,
+            "height": 1200
+          },
+          "rotation": 0,
+          "dpiX": 120,
+          "dpiY": 120,
+          "primary": false
+        }
+      ]
+    },
+    "displayIds": [
+      "portrait-left",
+      "main",
+      "top"
+    ],
+    "initialPointer": {
+      "x": 800,
+      "y": 500
+    }
+  }
+}

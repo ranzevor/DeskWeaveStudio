@@ -1,0 +1,85 @@
+{
+  "collectionId": "collection-templateNames",
+  "kind": "templateNames",
+  "querySnapshot": {
+    "snapshotId": "query-templateNames",
+    "snapshotAt": "2026-11-05T02:00:00Z",
+    "expiresAt": "2026-11-05T02:05:00Z",
+    "sourceVersion": "1"
+  },
+  "items": [
+    {
+      "index": 0,
+      "value": {
+        "candidateId": "candidate-save",
+        "name": "保存按钮",
+        "source": "ocr",
+        "reason": "名称已被另一资产使用",
+        "conflict": true
+      }
+    },
+    {
+      "index": 1,
+      "value": {
+        "candidateId": "candidate-status",
+        "name": "状态标签_002",
+        "source": "rule",
+        "reason": "OCR 未返回文字",
+        "conflict": false
+      }
+    },
+    {
+      "index": 2,
+      "value": {
+        "candidateId": "candidate-2",
+        "name": "筛选按钮",
+        "source": "manual",
+        "reason": null,
+        "conflict": false
+      }
+    },
+    {
+      "index": 3,
+      "value": {
+        "candidateId": "candidate-3",
+        "name": "归档入口",
+        "source": "manual",
+        "reason": null,
+        "conflict": true
+      }
+    },
+    {
+      "index": 4,
+      "value": {
+        "candidateId": "candidate-4",
+        "name": "预览按钮",
+        "source": "manual",
+        "reason": null,
+        "conflict": false
+      }
+    },
+    {
+      "index": 5,
+      "value": {
+        "candidateId": "candidate-5",
+        "name": "下载提示",
+        "source": "manual",
+        "reason": null,
+        "conflict": false
+      }
+    },
+    {
+      "index": 6,
+      "value": {
+        "candidateId": "candidate-6",
+        "name": "返回按钮",
+        "source": "manual",
+        "reason": null,
+        "conflict": true
+      }
+    }
+  ],
+  "matchedCount": 7,
+  "nextCursor": null,
+  "countState": "exact"
+}

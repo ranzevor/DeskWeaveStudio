@@ -1,0 +1,17 @@
+{
+  "mode": "displayLocal",
+  "displays": [
+    {
+      "sourceDisplayId": "portrait-left",
+      "targetDisplayId": "portrait-left"
+    },
+    {
+      "sourceDisplayId": "main",
+      "targetDisplayId": "main"
+    },
+    {
+      "sourceDisplayId": "top",
+      "targetDisplayId": "top"
+    }
+  ]
+}

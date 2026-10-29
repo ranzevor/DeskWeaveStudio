@@ -1,0 +1,75 @@
+{
+  "os": "linux",
+  "arch": "x64",
+  "backend": "linux-wayland-portal",
+  "backendVersion": "1.0.0",
+  "generation": 4,
+  "topologyVersion": 7,
+  "topologyCoverage": "selected",
+  "trajectoryVersions": [
+    "1.0",
+    "1.1"
+  ],
+  "features": {
+    "capture.display": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "capture.window": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "record.pointerAbsolute": {
+      "state": "unsupported",
+      "reason": "NO_PASSIVE_CAPTURE",
+      "nextAction": "switchSession"
+    },
+    "record.pointerRelative": {
+      "state": "unsupported",
+      "reason": "NO_PASSIVE_CAPTURE",
+      "nextAction": "switchSession"
+    },
+    "record.keyboard": {
+      "state": "unsupported",
+      "reason": "NO_PASSIVE_CAPTURE",
+      "nextAction": "switchSession"
+    },
+    "record.allDisplays": {
+      "state": "unsupported",
+      "reason": "NO_PASSIVE_CAPTURE",
+      "nextAction": "switchSession"
+    },
+    "input.pointerAbsolute": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "input.pointerRelative": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "input.keyboard": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "input.unicodeText": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "control.globalShortcut": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "control.focusTarget": {
+      "state": "unsupported",
+      "reason": "PROTOCOL_MISSING",
+      "nextAction": "none"
+    }
+  }
+}

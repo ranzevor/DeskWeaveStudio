@@ -1,0 +1,11 @@
+{
+  "operationId": "operation-observation-export-demo",
+  "method": "observation.export",
+  "state": "succeeded",
+  "result": {
+    "exportId": "observation-export-demo",
+    "count": 1,
+    "manifestResource": "deskweave://exports/observation-export-demo/manifest"
+  },
+  "error": null
+}

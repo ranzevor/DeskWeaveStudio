@@ -1,0 +1,16 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "event",
+  "streamId": "run-demo",
+  "instanceEpoch": "epoch-demo",
+  "seq": "1",
+  "event": "runtime.variables.changed",
+  "occurredAt": "2026-10-28T00:00:00Z",
+  "payload": {
+    "runId": "run-report",
+    "dataVersion": 9,
+    "controlVersion": 4,
+    "frameId": "frame-main",
+    "scope": "local"
+  }
+}

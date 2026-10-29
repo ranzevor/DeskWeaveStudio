@@ -1,0 +1,14 @@
+{
+  "planId": "resume-plan-idle",
+  "runId": "run-demo",
+  "controlVersion": 8,
+  "pauseId": "pause-idle-demo",
+  "agentEpoch": "agent-live-demo",
+  "generation": 4,
+  "expiresAt": "2026-10-29T02:01:00Z",
+  "heldInputs": [],
+  "pointerToRestore": null,
+  "requiresConfirmation": false,
+  "planHash": "64301482ff73df420df5f1f66394fc95da11fd368ebc16b9e9cc6f8b3123f8b6",
+  "restoreTargetToken": null
+}

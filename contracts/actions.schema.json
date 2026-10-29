@@ -1,0 +1,3480 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:actions:1",
+  "title": "流程动作参数",
+  "$defs": {
+    "time.wait": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "time.wait"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "durationMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "durationMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "data.assign": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "data.assign"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "value": {
+              "$ref": "urn:deskweave:values:1#/$defs/value"
+            },
+            "scope": {
+              "enum": [
+                "local",
+                "run"
+              ],
+              "default": "local"
+            },
+            "path": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 16,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 999999
+                  }
+                ]
+              }
+            },
+            "expectedVersion": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "logic.branch": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "logic.branch"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "condition"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "yes": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "no": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "yes",
+            "no"
+          ],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "logic.assert": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "logic.assert"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "condition"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "flow.call": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "flow.call"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflow": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "inputs": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/value"
+              }
+            },
+            "mode": {
+              "enum": [
+                "wait",
+                "start"
+              ]
+            }
+          },
+          "required": [
+            "workflow",
+            "inputs",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "flow.join": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "flow.join"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "handle": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 262144
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "string",
+                      "maxLength": 262144
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "timeoutMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "handle",
+            "timeoutMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "flow.repeat": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "flow.repeat"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflow": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "count": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "inputs": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "workflow",
+            "count",
+            "inputs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "flow.return": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "flow.return"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "values": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "values"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "screen.capture": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "screen.capture"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "roi": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "$ref": "urn:deskweave:vision:1#/$defs/roi"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "target"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "vision.match": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "vision.match"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "image": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "threshold": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "timeoutMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "intervalMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 10,
+                  "maximum": 60000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 10,
+                      "maximum": 60000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "selection": {
+              "enum": [
+                "unique",
+                "highest"
+              ]
+            },
+            "roi": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "$ref": "urn:deskweave:vision:1#/$defs/roi"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            },
+            "scales": {
+              "oneOf": [
+                {
+                  "$ref": "urn:deskweave:vision:1#/$defs/scales"
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "image",
+            "threshold",
+            "timeoutMs",
+            "intervalMs",
+            "selection"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "vision.observe": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "vision.observe"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "connection": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "prompt": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 262144
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "string",
+                      "maxLength": 262144
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "timeoutMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "roi": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "$ref": "urn:deskweave:vision:1#/$defs/roi"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            },
+            "outputMode": {
+              "enum": [
+                "text",
+                "json"
+              ]
+            },
+            "outputSchema": {
+              "oneOf": [
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "connection",
+            "prompt",
+            "timeoutMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "pointer.move": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "pointer.move"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "position": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "desktopPhysical"
+                            },
+                            "x": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "displayPixels"
+                            },
+                            "displayId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "x": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "displayId",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "location"
+                        },
+                        "token": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "token"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "oneOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "desktopPhysical"
+                                },
+                                "x": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "displayPixels"
+                                },
+                                "displayId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "displayId",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "location"
+                            },
+                            "token": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "token"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "durationMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "position",
+            "durationMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false,
+      "description": "durationMs 大于零时生成连续加减速的中间位置；零时长为单次定位。已有录制点列使用 input.trajectory。"
+    },
+    "pointer.delta": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "pointer.delta"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "dx": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": -2147483648,
+                  "maximum": 2147483647
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "dy": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": -2147483648,
+                  "maximum": 2147483647
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "durationMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "dx",
+            "dy",
+            "durationMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false,
+      "description": "正时长分配相对运动，各分步增量之和严格等于 dx/dy；不从当前光标状态切换成绝对位置。"
+    },
+    "pointer.click": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "pointer.click"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "position": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "desktopPhysical"
+                            },
+                            "x": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "displayPixels"
+                            },
+                            "displayId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "x": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "displayId",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "location"
+                        },
+                        "token": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "token"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "oneOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "desktopPhysical"
+                                },
+                                "x": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "displayPixels"
+                                },
+                                "displayId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "displayId",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "location"
+                            },
+                            "token": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "token"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "button": {
+              "enum": [
+                "left",
+                "right",
+                "middle",
+                "x1",
+                "x2"
+              ]
+            },
+            "clicks": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "intervalMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "pressDurationMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "position",
+            "button",
+            "clicks",
+            "intervalMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "pointer.drag": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "pointer.drag"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "from": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "desktopPhysical"
+                            },
+                            "x": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "displayPixels"
+                            },
+                            "displayId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "x": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "displayId",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "location"
+                        },
+                        "token": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "token"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "oneOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "desktopPhysical"
+                                },
+                                "x": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "displayPixels"
+                                },
+                                "displayId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "displayId",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "location"
+                            },
+                            "token": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "token"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "to": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "desktopPhysical"
+                            },
+                            "x": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "integer",
+                              "minimum": -2147483648,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "point"
+                            },
+                            "space": {
+                              "const": "displayPixels"
+                            },
+                            "displayId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "x": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "space",
+                            "displayId",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "location"
+                        },
+                        "token": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "token"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "oneOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "desktopPhysical"
+                                },
+                                "x": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "integer",
+                                  "minimum": -2147483648,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "const": "point"
+                                },
+                                "space": {
+                                  "const": "displayPixels"
+                                },
+                                "displayId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2147483647
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "space",
+                                "displayId",
+                                "x",
+                                "y"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "location"
+                            },
+                            "token": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "token"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "button": {
+              "enum": [
+                "left",
+                "right",
+                "middle",
+                "x1",
+                "x2"
+              ]
+            },
+            "durationMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "from",
+            "to",
+            "button",
+            "durationMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false,
+      "description": "定位 from、按下 button、在 durationMs 内持续发送中间位置，最后一次移动完成对应后端的原生提交后释放；复杂曲线使用轨迹。"
+    },
+    "pointer.scroll": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "pointer.scroll"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "dx": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": -10000,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "dy": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": -10000,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "dx",
+            "dy"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "pointer.button": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "pointer.button"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "button": {
+              "enum": [
+                "left",
+                "right",
+                "middle",
+                "x1",
+                "x2"
+              ]
+            },
+            "state": {
+              "enum": [
+                "down",
+                "up"
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "button",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "keyboard.down": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "keyboard.down"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            }
+          },
+          "required": [
+            "target",
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "keyboard.up": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "keyboard.up"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            }
+          },
+          "required": [
+            "target",
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "keyboard.text": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "keyboard.text"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "text": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 262144
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "string",
+                      "maxLength": 262144
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "intervalMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$literal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000
+                    }
+                  },
+                  "required": [
+                    "$literal"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "text",
+            "intervalMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "input.trajectory": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "input.trajectory"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "trajectory": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "displayMapping": {
+              "$ref": "urn:deskweave:recording:1#/$defs/displayMapping"
+            }
+          },
+          "required": [
+            "target",
+            "trajectory"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false,
+      "description": "保持完整事件点列、原始增量、数组顺序与时间，按钮按住期间逐点发送；不自动平滑、抽样或压缩成首尾拖拽。"
+    },
+    "flow.loop": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "flow.loop"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflow": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "inputs": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/value"
+              }
+            },
+            "condition": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            },
+            "mode": {
+              "enum": [
+                "while",
+                "until"
+              ]
+            },
+            "maxIterations": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            },
+            "timeoutMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 86400000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "workflow",
+            "inputs",
+            "condition",
+            "mode",
+            "maxIterations",
+            "timeoutMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "flow.break": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "flow.break"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "values": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/value"
+              }
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "flow.continue": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "flow.continue"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "values": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/value"
+              }
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "keyboard.chord": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "const": "keyboard.chord"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "uniqueItems": true
+            },
+            "pressDurationMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/expressionValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "keys",
+            "pressDurationMs"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "action",
+        "params",
+        "on"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/time.wait"
+    },
+    {
+      "$ref": "#/$defs/data.assign"
+    },
+    {
+      "$ref": "#/$defs/logic.branch"
+    },
+    {
+      "$ref": "#/$defs/logic.assert"
+    },
+    {
+      "$ref": "#/$defs/flow.call"
+    },
+    {
+      "$ref": "#/$defs/flow.join"
+    },
+    {
+      "$ref": "#/$defs/flow.repeat"
+    },
+    {
+      "$ref": "#/$defs/flow.return"
+    },
+    {
+      "$ref": "#/$defs/screen.capture"
+    },
+    {
+      "$ref": "#/$defs/vision.match"
+    },
+    {
+      "$ref": "#/$defs/vision.observe"
+    },
+    {
+      "$ref": "#/$defs/pointer.move"
+    },
+    {
+      "$ref": "#/$defs/pointer.delta"
+    },
+    {
+      "$ref": "#/$defs/pointer.click"
+    },
+    {
+      "$ref": "#/$defs/pointer.drag"
+    },
+    {
+      "$ref": "#/$defs/pointer.scroll"
+    },
+    {
+      "$ref": "#/$defs/pointer.button"
+    },
+    {
+      "$ref": "#/$defs/keyboard.down"
+    },
+    {
+      "$ref": "#/$defs/keyboard.up"
+    },
+    {
+      "$ref": "#/$defs/keyboard.text"
+    },
+    {
+      "$ref": "#/$defs/input.trajectory"
+    },
+    {
+      "$ref": "#/$defs/flow.loop"
+    },
+    {
+      "$ref": "#/$defs/flow.break"
+    },
+    {
+      "$ref": "#/$defs/flow.continue"
+    },
+    {
+      "$ref": "#/$defs/keyboard.chord"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "collectionId": "collection-templateNames",
+  "kind": "templateNames",
+  "querySnapshot": {
+    "snapshotId": "query-templateNames",
+    "snapshotAt": "2026-11-05T02:00:00Z",
+    "expiresAt": "2026-11-05T02:05:00Z",
+    "sourceVersion": "1"
+  },
+  "items": [],
+  "matchedCount": 0,
+  "nextCursor": null,
+  "countState": "exact"
+}

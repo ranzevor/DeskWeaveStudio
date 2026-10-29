@@ -1,0 +1,230 @@
+{
+  "formatVersion": "1.0",
+  "actions": [
+    {
+      "id": "time.wait",
+      "label": "等待",
+      "group": "time",
+      "effect": "none",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/time.wait",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/time.wait/properties/params",
+      "outputs": "对象：elapsedActiveMs，为本次等待的主动毫秒数。"
+    },
+    {
+      "id": "data.assign",
+      "label": "赋值",
+      "group": "data",
+      "effect": "none",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/data.assign",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/data.assign/properties/params",
+      "outputs": "对象：name、scope、value、version；运行共享写入按预期版本比较提交。"
+    },
+    {
+      "id": "logic.branch",
+      "label": "条件分支",
+      "group": "logic",
+      "effect": "none",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/logic.branch",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/logic.branch/properties/params",
+      "outputs": "对象：condition，为求值后的布尔值。"
+    },
+    {
+      "id": "logic.assert",
+      "label": "断言",
+      "group": "logic",
+      "effect": "none",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/logic.assert",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/logic.assert/properties/params",
+      "outputs": "对象：passed=true；失败进入错误出口。"
+    },
+    {
+      "id": "flow.call",
+      "label": "调用子流程",
+      "group": "flow",
+      "effect": "delegated",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.call",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.call/properties/params",
+      "outputs": "wait 返回子流程输出对象；start 返回运行内调用句柄字符串。"
+    },
+    {
+      "id": "flow.join",
+      "label": "等待子流程",
+      "group": "flow",
+      "effect": "delegated",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.join",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.join/properties/params",
+      "outputs": "返回子流程成功输出对象；重复等待返回同一结果。"
+    },
+    {
+      "id": "flow.repeat",
+      "label": "重复子流程",
+      "group": "flow",
+      "effect": "delegated",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.repeat",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.repeat/properties/params",
+      "outputs": "对象：iterations 为实际次数，lastOutput 为最后输出；零次时为 null。"
+    },
+    {
+      "id": "flow.return",
+      "label": "返回",
+      "group": "flow",
+      "effect": "none",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.return",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.return/properties/params",
+      "outputs": "返回 values 求值后的对象。"
+    },
+    {
+      "id": "screen.capture",
+      "label": "截图",
+      "group": "vision",
+      "effect": "capture",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/screen.capture",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/screen.capture/properties/params",
+      "outputs": "对象：frameId、resource、targetVersion、topologyVersion、origin、width、height、createdAt。"
+    },
+    {
+      "id": "vision.match",
+      "label": "图像匹配",
+      "group": "vision",
+      "effect": "capture",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/vision.match",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/vision.match/properties/params",
+      "outputs": "对象：frameId、candidates、selected；位置含矩形、分数、尺度与有效定位令牌。"
+    },
+    {
+      "id": "vision.observe",
+      "label": "模型观察",
+      "group": "vision",
+      "effect": "network",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/vision.observe",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/vision.observe/properties/params",
+      "outputs": "对象：operationId、frameId、connectionId、output 与 durationMs。"
+    },
+    {
+      "id": "pointer.move",
+      "label": "移动指针",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/pointer.move",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/pointer.move/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup；目标结果由后置检查确定。"
+    },
+    {
+      "id": "pointer.delta",
+      "label": "相对移动",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/pointer.delta",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/pointer.delta/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "pointer.click",
+      "label": "点击",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/pointer.click",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/pointer.click/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "pointer.drag",
+      "label": "拖拽",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/pointer.drag",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/pointer.drag/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "pointer.scroll",
+      "label": "滚动",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/pointer.scroll",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/pointer.scroll/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "pointer.button",
+      "label": "鼠标按钮",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/pointer.button",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/pointer.button/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "keyboard.down",
+      "label": "按下按键",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/keyboard.down",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/keyboard.down/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "keyboard.up",
+      "label": "释放按键",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/keyboard.up",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/keyboard.up/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "keyboard.text",
+      "label": "输入文本",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/keyboard.text",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/keyboard.text/properties/params",
+      "outputs": "输入段收据：segmentId、state、cleanup。"
+    },
+    {
+      "id": "input.trajectory",
+      "label": "输入轨迹",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/input.trajectory",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/input.trajectory/properties/params",
+      "outputs": "整段收据：segmentId、state、cleanup；按来源与显示映射逐事件播放，保留全部中间位置、增量、时间、顺序和按住笔画。"
+    },
+    {
+      "id": "flow.loop",
+      "label": "条件循环",
+      "group": "flow",
+      "effect": "delegated",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.loop",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.loop/properties/params",
+      "outputs": "对象：iterations、lastOutput、reason；reason 为 condition、break 或 limit。"
+    },
+    {
+      "id": "flow.break",
+      "label": "退出循环",
+      "group": "flow",
+      "effect": "none",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.break",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.break/properties/params",
+      "outputs": "向所属循环返回 break 信号及 values，完成本次调用清理。"
+    },
+    {
+      "id": "flow.continue",
+      "label": "下一次循环",
+      "group": "flow",
+      "effect": "none",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.continue",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.continue/properties/params",
+      "outputs": "向所属循环返回 continue 信号及 values，再检查条件与预算。"
+    },
+    {
+      "id": "keyboard.chord",
+      "label": "组合按键",
+      "group": "input",
+      "effect": "input",
+      "nodeSchema": "urn:deskweave:actions:1#/$defs/keyboard.chord",
+      "parameterSchema": "urn:deskweave:actions:1#/$defs/keyboard.chord/properties/params",
+      "outputs": "单个输入段收据；按给定顺序按下，逆序释放全部按键。"
+    }
+  ]
+}

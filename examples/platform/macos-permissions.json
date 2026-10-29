@@ -1,0 +1,75 @@
+{
+  "os": "macos",
+  "arch": "arm64",
+  "backend": "macos-quartz",
+  "backendVersion": "1.0.0",
+  "generation": 4,
+  "topologyVersion": 7,
+  "topologyCoverage": "all",
+  "trajectoryVersions": [
+    "1.0",
+    "1.1"
+  ],
+  "features": {
+    "capture.display": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "capture.window": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "record.pointerAbsolute": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "record.pointerRelative": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "record.keyboard": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "record.allDisplays": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "input.pointerAbsolute": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "input.pointerRelative": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "input.keyboard": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "input.unicodeText": {
+      "state": "permissionRequired",
+      "reason": "PERMISSION_MISSING",
+      "nextAction": "grantPermission"
+    },
+    "control.globalShortcut": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "control.focusTarget": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    }
+  }
+}

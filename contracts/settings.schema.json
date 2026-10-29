@@ -1,0 +1,2065 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:settings:1",
+  "title": "DeskWeaveStudio 类型化设置 1.0",
+  "$defs": {
+    "values": {
+      "type": "object",
+      "properties": {
+        "ui.theme": {
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ]
+        },
+        "ui.locale": {
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        "ui.density": {
+          "enum": [
+            "standard",
+            "comfortable"
+          ]
+        },
+        "ui.reducedMotion": {
+          "enum": [
+            "system",
+            "reduce",
+            "full"
+          ]
+        },
+        "studio.restoreWorkspace": {
+          "type": "boolean"
+        },
+        "studio.askBeforeBackground": {
+          "type": "boolean"
+        },
+        "input.hotkeys": {
+          "type": "object",
+          "properties": {
+            "emergencyStop": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "recordToggle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "runPauseResume": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "required": [
+            "emergencyStop",
+            "recordToggle",
+            "runPauseResume"
+          ],
+          "additionalProperties": false
+        },
+        "runtime.maxQueuedRuns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "runtime.interruptPolicy": {
+          "enum": [
+            "pause",
+            "ignore"
+          ]
+        },
+        "runtime.modelConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "runtime.imageConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "runtime.observationSessions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "storage.imageCacheMiB": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 4096
+        },
+        "storage.runRetentionDays": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage.runAttachmentMiB": {
+          "type": "integer",
+          "minimum": 128,
+          "maximum": 1048576
+        },
+        "storage.observationRetentionDays": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage.observationScreenshotMiB": {
+          "type": "integer",
+          "minimum": 128,
+          "maximum": 1048576
+        },
+        "agent.previewHz": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "privacy.telemetry": {
+          "type": "boolean"
+        },
+        "updates.channel": {
+          "enum": [
+            "stable",
+            "preview"
+          ]
+        },
+        "updates.checkAutomatically": {
+          "type": "boolean"
+        },
+        "storage.runRetentionEnabled": {
+          "type": "boolean"
+        },
+        "storage.observationRetentionEnabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ui.theme",
+        "ui.locale",
+        "ui.density",
+        "ui.reducedMotion",
+        "studio.restoreWorkspace",
+        "studio.askBeforeBackground",
+        "input.hotkeys",
+        "runtime.maxQueuedRuns",
+        "runtime.interruptPolicy",
+        "runtime.modelConcurrency",
+        "runtime.imageConcurrency",
+        "runtime.observationSessions",
+        "storage.imageCacheMiB",
+        "storage.runRetentionDays",
+        "storage.runAttachmentMiB",
+        "storage.observationRetentionDays",
+        "storage.observationScreenshotMiB",
+        "agent.previewHz",
+        "privacy.telemetry",
+        "updates.channel",
+        "updates.checkAutomatically",
+        "storage.runRetentionEnabled",
+        "storage.observationRetentionEnabled"
+      ],
+      "additionalProperties": false
+    },
+    "overrides": {
+      "type": "object",
+      "properties": {
+        "ui.theme": {
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ]
+        },
+        "ui.locale": {
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ]
+        },
+        "ui.density": {
+          "enum": [
+            "standard",
+            "comfortable"
+          ]
+        },
+        "ui.reducedMotion": {
+          "enum": [
+            "system",
+            "reduce",
+            "full"
+          ]
+        },
+        "studio.restoreWorkspace": {
+          "type": "boolean"
+        },
+        "studio.askBeforeBackground": {
+          "type": "boolean"
+        },
+        "input.hotkeys": {
+          "type": "object",
+          "properties": {
+            "emergencyStop": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "recordToggle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "runPauseResume": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "required": [
+            "emergencyStop",
+            "recordToggle",
+            "runPauseResume"
+          ],
+          "additionalProperties": false
+        },
+        "runtime.maxQueuedRuns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "runtime.interruptPolicy": {
+          "enum": [
+            "pause",
+            "ignore"
+          ]
+        },
+        "runtime.modelConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "runtime.imageConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "runtime.observationSessions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "storage.imageCacheMiB": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 4096
+        },
+        "storage.runRetentionDays": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage.runAttachmentMiB": {
+          "type": "integer",
+          "minimum": 128,
+          "maximum": 1048576
+        },
+        "storage.observationRetentionDays": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage.observationScreenshotMiB": {
+          "type": "integer",
+          "minimum": 128,
+          "maximum": 1048576
+        },
+        "agent.previewHz": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "privacy.telemetry": {
+          "type": "boolean"
+        },
+        "updates.channel": {
+          "enum": [
+            "stable",
+            "preview"
+          ]
+        },
+        "updates.checkAutomatically": {
+          "type": "boolean"
+        },
+        "storage.runRetentionEnabled": {
+          "type": "boolean"
+        },
+        "storage.observationRetentionEnabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "change": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "ui.theme"
+            },
+            "value": {
+              "enum": [
+                "system",
+                "light",
+                "dark"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "ui.locale"
+            },
+            "value": {
+              "enum": [
+                "zh-CN",
+                "en-US"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "ui.density"
+            },
+            "value": {
+              "enum": [
+                "standard",
+                "comfortable"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "ui.reducedMotion"
+            },
+            "value": {
+              "enum": [
+                "system",
+                "reduce",
+                "full"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "studio.restoreWorkspace"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "studio.askBeforeBackground"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "input.hotkeys"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "emergencyStop": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "recordToggle": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "runPauseResume": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              },
+              "required": [
+                "emergencyStop",
+                "recordToggle",
+                "runPauseResume"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "runtime.maxQueuedRuns"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "runtime.interruptPolicy"
+            },
+            "value": {
+              "enum": [
+                "pause",
+                "ignore"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "runtime.modelConcurrency"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "runtime.imageConcurrency"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "runtime.observationSessions"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "storage.imageCacheMiB"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 32,
+              "maximum": 4096
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "storage.runRetentionDays"
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3650
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "storage.runAttachmentMiB"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 128,
+              "maximum": 1048576
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "storage.observationRetentionDays"
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3650
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "storage.observationScreenshotMiB"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 128,
+              "maximum": 1048576
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "agent.previewHz"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "privacy.telemetry"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "updates.channel"
+            },
+            "value": {
+              "enum": [
+                "stable",
+                "preview"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "updates.checkAutomatically"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "storage.runRetentionEnabled"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "key": {
+              "const": "storage.observationRetentionEnabled"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "key",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "const": "reset"
+            },
+            "key": {
+              "enum": [
+                "ui.theme",
+                "ui.locale",
+                "ui.density",
+                "ui.reducedMotion",
+                "studio.restoreWorkspace",
+                "studio.askBeforeBackground",
+                "input.hotkeys",
+                "runtime.maxQueuedRuns",
+                "runtime.interruptPolicy",
+                "runtime.modelConcurrency",
+                "runtime.imageConcurrency",
+                "runtime.observationSessions",
+                "storage.imageCacheMiB",
+                "storage.runRetentionDays",
+                "storage.runAttachmentMiB",
+                "storage.observationRetentionDays",
+                "storage.observationScreenshotMiB",
+                "agent.previewHz",
+                "privacy.telemetry",
+                "updates.channel",
+                "updates.checkAutomatically",
+                "storage.runRetentionEnabled",
+                "storage.observationRetentionEnabled"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "key"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "updateParams": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "enum": [
+            "user",
+            "workspace"
+          ]
+        },
+        "expectedVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedBaseVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updates": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "ui.theme"
+                  },
+                  "value": {
+                    "enum": [
+                      "system",
+                      "light",
+                      "dark"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "ui.locale"
+                  },
+                  "value": {
+                    "enum": [
+                      "zh-CN",
+                      "en-US"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "ui.density"
+                  },
+                  "value": {
+                    "enum": [
+                      "standard",
+                      "comfortable"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "ui.reducedMotion"
+                  },
+                  "value": {
+                    "enum": [
+                      "system",
+                      "reduce",
+                      "full"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "studio.restoreWorkspace"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "studio.askBeforeBackground"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "input.hotkeys"
+                  },
+                  "value": {
+                    "type": "object",
+                    "properties": {
+                      "emergencyStop": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "recordToggle": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "runPauseResume": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      }
+                    },
+                    "required": [
+                      "emergencyStop",
+                      "recordToggle",
+                      "runPauseResume"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "runtime.maxQueuedRuns"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 128
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "runtime.interruptPolicy"
+                  },
+                  "value": {
+                    "enum": [
+                      "pause",
+                      "ignore"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "runtime.modelConcurrency"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "runtime.imageConcurrency"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "runtime.observationSessions"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "storage.imageCacheMiB"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 32,
+                    "maximum": 4096
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "storage.runRetentionDays"
+                  },
+                  "value": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "storage.runAttachmentMiB"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 128,
+                    "maximum": 1048576
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "storage.observationRetentionDays"
+                  },
+                  "value": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "storage.observationScreenshotMiB"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 128,
+                    "maximum": 1048576
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "agent.previewHz"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "privacy.telemetry"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "updates.channel"
+                  },
+                  "value": {
+                    "enum": [
+                      "stable",
+                      "preview"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "set"
+                  },
+                  "key": {
+                    "const": "updates.checkAutomatically"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "op",
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "reset"
+                  },
+                  "key": {
+                    "enum": [
+                      "ui.theme",
+                      "ui.locale",
+                      "ui.density",
+                      "ui.reducedMotion",
+                      "studio.restoreWorkspace",
+                      "studio.askBeforeBackground",
+                      "input.hotkeys",
+                      "runtime.maxQueuedRuns",
+                      "runtime.interruptPolicy",
+                      "runtime.modelConcurrency",
+                      "runtime.imageConcurrency",
+                      "runtime.observationSessions",
+                      "storage.imageCacheMiB",
+                      "storage.runRetentionDays",
+                      "storage.runAttachmentMiB",
+                      "storage.observationRetentionDays",
+                      "storage.observationScreenshotMiB",
+                      "agent.previewHz",
+                      "privacy.telemetry",
+                      "updates.channel",
+                      "updates.checkAutomatically"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "key"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "maxItems": 64,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "scope",
+        "expectedVersion",
+        "expectedBaseVersion",
+        "updates"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": "user"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expectedBaseVersion": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "expectedBaseVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "updates": {
+                "items": {
+                  "properties": {
+                    "key": {
+                      "enum": [
+                        "runtime.maxQueuedRuns",
+                        "runtime.interruptPolicy",
+                        "runtime.modelConcurrency",
+                        "runtime.imageConcurrency",
+                        "runtime.observationSessions",
+                        "storage.imageCacheMiB",
+                        "storage.runRetentionDays",
+                        "storage.runAttachmentMiB",
+                        "storage.observationRetentionDays",
+                        "storage.observationScreenshotMiB",
+                        "storage.runRetentionEnabled",
+                        "storage.observationRetentionEnabled"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "enum": [
+            "user",
+            "workspace"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "baseVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "values": {
+          "$ref": "#/$defs/values"
+        },
+        "overrides": {
+          "$ref": "#/$defs/overrides"
+        },
+        "sources": {
+          "type": "object",
+          "properties": {
+            "ui.theme": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "ui.locale": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "ui.density": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "ui.reducedMotion": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "studio.restoreWorkspace": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "studio.askBeforeBackground": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "input.hotkeys": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "runtime.maxQueuedRuns": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "runtime.interruptPolicy": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "runtime.modelConcurrency": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "runtime.imageConcurrency": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "runtime.observationSessions": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "storage.imageCacheMiB": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "storage.runRetentionDays": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "storage.runAttachmentMiB": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "storage.observationRetentionDays": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "storage.observationScreenshotMiB": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "agent.previewHz": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "privacy.telemetry": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "updates.channel": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "updates.checkAutomatically": {
+              "enum": [
+                "default",
+                "user"
+              ]
+            },
+            "storage.runRetentionEnabled": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            },
+            "storage.observationRetentionEnabled": {
+              "enum": [
+                "default",
+                "user",
+                "workspace"
+              ]
+            }
+          },
+          "required": [
+            "ui.theme",
+            "ui.locale",
+            "ui.density",
+            "ui.reducedMotion",
+            "studio.restoreWorkspace",
+            "studio.askBeforeBackground",
+            "input.hotkeys",
+            "runtime.maxQueuedRuns",
+            "runtime.interruptPolicy",
+            "runtime.modelConcurrency",
+            "runtime.imageConcurrency",
+            "runtime.observationSessions",
+            "storage.imageCacheMiB",
+            "storage.runRetentionDays",
+            "storage.runAttachmentMiB",
+            "storage.observationRetentionDays",
+            "storage.observationScreenshotMiB",
+            "agent.previewHz",
+            "privacy.telemetry",
+            "updates.channel",
+            "updates.checkAutomatically",
+            "storage.runRetentionEnabled",
+            "storage.observationRetentionEnabled"
+          ],
+          "additionalProperties": false
+        },
+        "pending": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "const": "agent.previewHz"
+              },
+              "activation": {
+                "const": "restartAgent"
+              },
+              "savedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "key",
+              "activation",
+              "savedVersion"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64
+        },
+        "platform": {
+          "enum": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "version",
+        "baseVersion",
+        "values",
+        "overrides",
+        "sources",
+        "pending"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": "user"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "baseVersion": {
+                "type": "null"
+              },
+              "sources": {
+                "properties": {
+                  "ui.theme": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "ui.locale": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "ui.density": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "ui.reducedMotion": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "studio.restoreWorkspace": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "studio.askBeforeBackground": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "input.hotkeys": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "runtime.maxQueuedRuns": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "runtime.interruptPolicy": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "runtime.modelConcurrency": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "runtime.imageConcurrency": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "runtime.observationSessions": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "storage.imageCacheMiB": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "storage.runRetentionDays": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "storage.runAttachmentMiB": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "storage.observationRetentionDays": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "storage.observationScreenshotMiB": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "agent.previewHz": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "privacy.telemetry": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "updates.channel": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "updates.checkAutomatically": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "storage.runRetentionEnabled": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  },
+                  "storage.observationRetentionEnabled": {
+                    "enum": [
+                      "default",
+                      "user"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "baseVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "overrides": {
+                "propertyNames": {
+                  "enum": [
+                    "runtime.maxQueuedRuns",
+                    "runtime.interruptPolicy",
+                    "runtime.modelConcurrency",
+                    "runtime.imageConcurrency",
+                    "runtime.observationSessions",
+                    "storage.imageCacheMiB",
+                    "storage.runRetentionDays",
+                    "storage.runAttachmentMiB",
+                    "storage.observationRetentionDays",
+                    "storage.observationScreenshotMiB",
+                    "storage.runRetentionEnabled",
+                    "storage.observationRetentionEnabled"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "updateResult": {
+      "type": "object",
+      "properties": {
+        "snapshot": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "activation": {
+          "enum": [
+            "immediate",
+            "nextRun",
+            "restartAgent",
+            "mixed"
+          ]
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "enum": [
+                  "ui.theme",
+                  "ui.locale",
+                  "ui.density",
+                  "ui.reducedMotion",
+                  "studio.restoreWorkspace",
+                  "studio.askBeforeBackground",
+                  "input.hotkeys",
+                  "runtime.maxQueuedRuns",
+                  "runtime.interruptPolicy",
+                  "runtime.modelConcurrency",
+                  "runtime.imageConcurrency",
+                  "runtime.observationSessions",
+                  "storage.imageCacheMiB",
+                  "storage.runRetentionDays",
+                  "storage.runAttachmentMiB",
+                  "storage.observationRetentionDays",
+                  "storage.observationScreenshotMiB",
+                  "agent.previewHz",
+                  "privacy.telemetry",
+                  "updates.channel",
+                  "updates.checkAutomatically",
+                  "storage.runRetentionEnabled",
+                  "storage.observationRetentionEnabled"
+                ]
+              },
+              "activation": {
+                "enum": [
+                  "immediate",
+                  "nextRun",
+                  "restartAgent"
+                ]
+              },
+              "changed": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "key",
+              "activation",
+              "changed"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "snapshot",
+        "activation",
+        "changes"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

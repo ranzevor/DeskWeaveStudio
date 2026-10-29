@@ -1,0 +1,17 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "agent-lease.resume",
+  "session": "session-demo",
+  "method": "lease.resume",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "leaseId": "lease-demo",
+    "generation": 4,
+    "pauseId": "pause-demo",
+    "resumeAttemptId": "resume-attempt-demo",
+    "resumePlanHash": "f2d8b8812f35c8a1564e103a0e725bee7a404dad1bd3e55e052406e3d2c55d11",
+    "confirmationGrant": "local-confirmation-demo"
+  }
+}

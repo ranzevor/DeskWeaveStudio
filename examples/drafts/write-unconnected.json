@@ -1,0 +1,140 @@
+{
+  "workflowId": "hello",
+  "editorId": "editor-demo",
+  "expectedEditVersion": null,
+  "editVersion": 0,
+  "baseRevision": null,
+  "source": {
+    "kind": "inline",
+    "text": "{\n  \"formatVersion\": \"1.0\",\n  \"id\": \"hello\",\n  \"name\": \"问候与断言\",\n  \"entry\": \"assign\",\n  \"parameters\": {\n    \"message\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"sensitive\": false,\n      \"default\": \"Hello DeskWeave\"\n    }\n  },\n  \"variables\": {},\n  \"targets\": {},\n  \"resources\": {},\n  \"limits\": {\n    \"activeMs\": 600000,\n    \"steps\": 10000,\n    \"callDepth\": 8,\n    \"parallelCalls\": 8,\n    \"inputEvents\": 100000\n  },\n  \"nodes\": [\n    {\n      \"id\": \"assign\",\n      \"title\": \"设置问候\",\n      \"action\": \"data.assign\",\n      \"params\": {\n        \"name\": \"greeting\",\n        \"value\": {\n          \"$expr\": {\n            \"op\": \"path\",\n            \"path\": [\n              \"inputs\",\n              \"message\"\n            ]\n          }\n        }\n      },\n      \"on\": {\n        \"next\": \"wait\"\n      }\n    },\n    {\n      \"id\": \"wait\",\n      \"title\": \"等待50毫秒\",\n      \"action\": \"time.wait\",\n      \"params\": {\n        \"durationMs\": 50\n      },\n      \"on\": {\n        \"next\": \"assert\"\n      }\n    },\n    {\n      \"id\": \"assert\",\n      \"title\": \"核对问候\",\n      \"action\": \"logic.assert\",\n      \"params\": {\n        \"condition\": {\n          \"$expr\": {\n            \"op\": \"equal\",\n            \"args\": [\n              {\n                \"$expr\": {\n                  \"op\": \"path\",\n                  \"path\": [\n                    \"vars\",\n                    \"greeting\"\n                  ]\n                }\n              },\n              {\n                \"$expr\": {\n                  \"op\": \"path\",\n                  \"path\": [\n                    \"inputs\",\n                    \"message\"\n                  ]\n                }\n              }\n            ]\n          }\n        },\n        \"message\": \"问候内容不一致\"\n      },\n      \"on\": {\n        \"next\": \"return\"\n      }\n    },\n    {\n      \"id\": \"return\",\n      \"title\": \"返回问候\",\n      \"action\": \"flow.return\",\n      \"params\": {\n        \"values\": {\n          \"message\": {\n            \"$expr\": {\n              \"op\": \"path\",\n              \"path\": [\n                \"vars\",\n                \"greeting\"\n              ]\n            }\n          }\n        }\n      },\n      \"on\": {}\n    },\n    {\n      \"id\": \"unconnected\",\n      \"title\": \"待连接步骤\",\n      \"action\": \"time.wait\",\n      \"params\": {\n        \"durationMs\": 0\n      },\n      \"on\": {}\n    }\n  ]\n}\n"
+  },
+  "lastValidModel": {
+    "kind": "inline",
+    "value": {
+      "source": "{\n  \"formatVersion\": \"1.0\",\n  \"id\": \"hello\",\n  \"name\": \"问候与断言\",\n  \"entry\": \"assign\",\n  \"parameters\": {\n    \"message\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"sensitive\": false,\n      \"default\": \"Hello DeskWeave\"\n    }\n  },\n  \"variables\": {},\n  \"targets\": {},\n  \"resources\": {},\n  \"limits\": {\n    \"activeMs\": 600000,\n    \"steps\": 10000,\n    \"callDepth\": 8,\n    \"parallelCalls\": 8,\n    \"inputEvents\": 100000\n  },\n  \"nodes\": [\n    {\n      \"id\": \"assign\",\n      \"title\": \"设置问候\",\n      \"action\": \"data.assign\",\n      \"params\": {\n        \"name\": \"greeting\",\n        \"value\": {\n          \"$expr\": {\n            \"op\": \"path\",\n            \"path\": [\n              \"inputs\",\n              \"message\"\n            ]\n          }\n        }\n      },\n      \"on\": {\n        \"next\": \"wait\"\n      }\n    },\n    {\n      \"id\": \"wait\",\n      \"title\": \"等待50毫秒\",\n      \"action\": \"time.wait\",\n      \"params\": {\n        \"durationMs\": 50\n      },\n      \"on\": {\n        \"next\": \"assert\"\n      }\n    },\n    {\n      \"id\": \"assert\",\n      \"title\": \"核对问候\",\n      \"action\": \"logic.assert\",\n      \"params\": {\n        \"condition\": {\n          \"$expr\": {\n            \"op\": \"equal\",\n            \"args\": [\n              {\n                \"$expr\": {\n                  \"op\": \"path\",\n                  \"path\": [\n                    \"vars\",\n                    \"greeting\"\n                  ]\n                }\n              },\n              {\n                \"$expr\": {\n                  \"op\": \"path\",\n                  \"path\": [\n                    \"inputs\",\n                    \"message\"\n                  ]\n                }\n              }\n            ]\n          }\n        },\n        \"message\": \"问候内容不一致\"\n      },\n      \"on\": {\n        \"next\": \"return\"\n      }\n    },\n    {\n      \"id\": \"return\",\n      \"title\": \"返回问候\",\n      \"action\": \"flow.return\",\n      \"params\": {\n        \"values\": {\n          \"message\": {\n            \"$expr\": {\n              \"op\": \"path\",\n              \"path\": [\n                \"vars\",\n                \"greeting\"\n              ]\n            }\n          }\n        }\n      },\n      \"on\": {}\n    },\n    {\n      \"id\": \"unconnected\",\n      \"title\": \"待连接步骤\",\n      \"action\": \"time.wait\",\n      \"params\": {\n        \"durationMs\": 0\n      },\n      \"on\": {}\n    }\n  ]\n}\n",
+      "definition": {
+        "formatVersion": "1.0",
+        "id": "hello",
+        "name": "问候与断言",
+        "entry": "assign",
+        "parameters": {
+          "message": {
+            "type": "string",
+            "required": false,
+            "sensitive": false,
+            "default": "Hello DeskWeave"
+          }
+        },
+        "variables": {},
+        "targets": {},
+        "resources": {},
+        "limits": {
+          "activeMs": 600000,
+          "steps": 10000,
+          "callDepth": 8,
+          "parallelCalls": 8,
+          "inputEvents": 100000
+        },
+        "nodes": [
+          {
+            "id": "assign",
+            "title": "设置问候",
+            "action": "data.assign",
+            "params": {
+              "name": "greeting",
+              "value": {
+                "$expr": {
+                  "op": "path",
+                  "path": [
+                    "inputs",
+                    "message"
+                  ]
+                }
+              }
+            },
+            "on": {
+              "next": "wait"
+            }
+          },
+          {
+            "id": "wait",
+            "title": "等待50毫秒",
+            "action": "time.wait",
+            "params": {
+              "durationMs": 50
+            },
+            "on": {
+              "next": "assert"
+            }
+          },
+          {
+            "id": "assert",
+            "title": "核对问候",
+            "action": "logic.assert",
+            "params": {
+              "condition": {
+                "$expr": {
+                  "op": "equal",
+                  "args": [
+                    {
+                      "$expr": {
+                        "op": "path",
+                        "path": [
+                          "vars",
+                          "greeting"
+                        ]
+                      }
+                    },
+                    {
+                      "$expr": {
+                        "op": "path",
+                        "path": [
+                          "inputs",
+                          "message"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "message": "问候内容不一致"
+            },
+            "on": {
+              "next": "return"
+            }
+          },
+          {
+            "id": "return",
+            "title": "返回问候",
+            "action": "flow.return",
+            "params": {
+              "values": {
+                "message": {
+                  "$expr": {
+                    "op": "path",
+                    "path": [
+                      "vars",
+                      "greeting"
+                    ]
+                  }
+                }
+              }
+            },
+            "on": {}
+          },
+          {
+            "id": "unconnected",
+            "title": "待连接步骤",
+            "action": "time.wait",
+            "params": {
+              "durationMs": 0
+            },
+            "on": {}
+          }
+        ]
+      },
+      "dependencies": {}
+    }
+  },
+  "modelEditVersion": 0
+}

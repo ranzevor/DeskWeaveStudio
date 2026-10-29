@@ -1,0 +1,16 @@
+{
+  "operationId": "operation-input-submit-demo",
+  "method": "input.submit",
+  "state": "uncertain",
+  "result": null,
+  "error": {
+    "code": "EFFECT_UNCERTAIN",
+    "message": "原输入段的实际发送与释放状态尚未核定",
+    "retry": "sameRequest",
+    "details": {
+      "segmentId": "segment-demo",
+      "state": "uncertain",
+      "cleanup": "pending"
+    }
+  }
+}

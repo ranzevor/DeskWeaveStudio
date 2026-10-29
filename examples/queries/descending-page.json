@@ -1,0 +1,35 @@
+{
+  "collectionId": "collection-templateNames",
+  "kind": "templateNames",
+  "querySnapshot": {
+    "snapshotId": "query-templateNames",
+    "snapshotAt": "2026-11-05T02:00:00Z",
+    "expiresAt": "2026-11-05T02:05:00Z",
+    "sourceVersion": "1"
+  },
+  "items": [
+    {
+      "index": 6,
+      "value": {
+        "candidateId": "candidate-6",
+        "name": "返回按钮",
+        "source": "manual",
+        "reason": null,
+        "conflict": true
+      }
+    },
+    {
+      "index": 5,
+      "value": {
+        "candidateId": "candidate-5",
+        "name": "下载提示",
+        "source": "manual",
+        "reason": null,
+        "conflict": false
+      }
+    }
+  ],
+  "matchedCount": 7,
+  "nextCursor": "cursor-next",
+  "countState": "exact"
+}

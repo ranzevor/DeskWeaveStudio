@@ -1,0 +1,429 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:package:1",
+  "title": "便携任务包清单 1.0",
+  "type": "object",
+  "properties": {
+    "formatVersion": {
+      "const": "1.0"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "entry": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+    },
+    "resources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "pattern": "^(?!/)(?!.*[\\\\:\\u0000-\\u001f\\u007f<>\"|?*])(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*[. ](?:/|$))(?!.*\\/$).+$"
+          },
+          "kind": {
+            "enum": [
+              "workflow",
+              "image",
+              "trajectory"
+            ]
+          },
+          "mediaType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1073741824
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sourceVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "bindings": {
+            "type": "object",
+            "maxProperties": 10000,
+            "propertyNames": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "path",
+          "kind",
+          "mediaType",
+          "bytes",
+          "sha256"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "workflow"
+                }
+              }
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "bindings"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "formatVersion",
+    "name",
+    "entry",
+    "resources"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "importMapping": {
+      "type": "object",
+      "properties": {
+        "sourceKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "sourceKind": {
+          "enum": [
+            "workflow",
+            "image",
+            "trajectory"
+          ]
+        },
+        "sourceId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceVersion": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "targetKind": {
+          "enum": [
+            "workflow",
+            "image",
+            "trajectory"
+          ]
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "disposition": {
+          "enum": [
+            "created",
+            "reused"
+          ]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "sourceKey",
+        "sourceKind",
+        "sourceId",
+        "sourceVersion",
+        "sourceSha256",
+        "targetKind",
+        "targetId",
+        "targetVersion",
+        "targetSha256",
+        "disposition",
+        "displayName"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sourceKind": {
+                "const": "workflow"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targetKind": {
+                "const": "workflow"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "sourceKind": {
+                "const": "image"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targetKind": {
+                "const": "image"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "sourceKind": {
+                "const": "trajectory"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targetKind": {
+                "const": "trajectory"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "importPlan": {
+      "type": "object",
+      "properties": {
+        "planId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sourceManifestHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "package 模式为原始 manifest 文件字节 SHA-256；image、trajectory、workflow 单文件模式为原始源文件 SHA-256，与唯一 input 映射的 sourceSha256 相同。"
+        },
+        "catalogVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "mappingCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "mappingResource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "mappingSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "previewMappings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "urn:deskweave:package:1#/$defs/importMapping"
+          }
+        },
+        "entryWorkflow": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "workflowId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "workflowId",
+                "revision"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "planId",
+        "sourceManifestHash",
+        "catalogVersion",
+        "expiresAt",
+        "mappingCount",
+        "mappingResource",
+        "mappingSha256",
+        "previewMappings",
+        "entryWorkflow"
+      ],
+      "additionalProperties": false
+    },
+    "importManifest": {
+      "type": "object",
+      "properties": {
+        "importId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "planId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceManifestHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "package 模式为原始 manifest 文件字节 SHA-256；image、trajectory、workflow 单文件模式为原始源文件 SHA-256，与唯一 input 映射的 sourceSha256 相同。"
+        },
+        "catalogVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "mappings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {
+            "$ref": "urn:deskweave:package:1#/$defs/importMapping"
+          }
+        },
+        "entryWorkflow": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "workflowId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "workflowId",
+                "revision"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "importId",
+        "planId",
+        "sourceManifestHash",
+        "catalogVersion",
+        "mappings",
+        "entryWorkflow",
+        "completedAt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

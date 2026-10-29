@@ -1,0 +1,21 @@
+{
+  "operationId": "operation-asset-import-demo",
+  "method": "asset.import",
+  "state": "succeeded",
+  "result": {
+    "kind": "package",
+    "entryWorkflow": {
+      "workflowId": "workflow-not-imported",
+      "revision": "revision-demo"
+    },
+    "manifestResource": "deskweave://imports/import-demo/manifest",
+    "objectCount": 2,
+    "objectsQuery": {
+      "collectionId": "collection-invalid-operation-import-entry-result",
+      "kind": "importedObjects",
+      "itemCount": 2,
+      "expiresAt": null
+    }
+  },
+  "error": null
+}

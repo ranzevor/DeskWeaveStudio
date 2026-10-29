@@ -1,0 +1,81 @@
+{
+  "signed": {
+    "role": "root",
+    "formatVersion": "1.0",
+    "product": "DeskWeaveStudio",
+    "version": 2,
+    "issuedAt": "2026-10-01T00:00:00Z",
+    "expiresAt": "2027-01-01T00:00:00Z",
+    "keys": [
+      {
+        "keyId": "58adc81487acadedeba167a96efc3ae8012186b83814958187cb2ad5edf2ada4",
+        "algorithm": "Ed25519",
+        "publicKey": "fN/Q7jAlnsVLgbfPJbyK3DIGdcObI0PN9ReVUptvbUc="
+      },
+      {
+        "keyId": "738e1f2ae3ef6be2505abe1c0bd7b584a68ef79bdc890e9d325e17187757ffc1",
+        "algorithm": "Ed25519",
+        "publicKey": "HwrG7dq25GUKqgDa3d1+YiOjWDVs47qPA2/MLyDYgUc="
+      },
+      {
+        "keyId": "4a50a00e297ea2e75b9d54cd2cd57bb4fa1778ae98256c8acb6181a93d26e660",
+        "algorithm": "Ed25519",
+        "publicKey": "exqezjDVjEjzpN0F4ywBFAbHt9agwys0hXEs4r4056s="
+      },
+      {
+        "keyId": "956a8f19baa4dce685bdb83d6586680422dad9ea0ab3e08c5c42d342c7241730",
+        "algorithm": "Ed25519",
+        "publicKey": "bK9jYg5bHSmdOJIuJknlWpz8p710Wz2ed38mS8SfOm8="
+      },
+      {
+        "keyId": "1743956ee8f1b02f5719044c88da7966e6863ba58a60024a0da9e534b745e82f",
+        "algorithm": "Ed25519",
+        "publicKey": "W+z/0r3F7xh5hVrA+qEA5gsJfVe5IEzPj0oztP7cCsQ="
+      }
+    ],
+    "roles": {
+      "root": {
+        "threshold": 2,
+        "keyIds": [
+          "58adc81487acadedeba167a96efc3ae8012186b83814958187cb2ad5edf2ada4",
+          "738e1f2ae3ef6be2505abe1c0bd7b584a68ef79bdc890e9d325e17187757ffc1",
+          "4a50a00e297ea2e75b9d54cd2cd57bb4fa1778ae98256c8acb6181a93d26e660"
+        ]
+      },
+      "stable": {
+        "threshold": 1,
+        "keyIds": [
+          "956a8f19baa4dce685bdb83d6586680422dad9ea0ab3e08c5c42d342c7241730"
+        ]
+      },
+      "preview": {
+        "threshold": 1,
+        "keyIds": [
+          "1743956ee8f1b02f5719044c88da7966e6863ba58a60024a0da9e534b745e82f"
+        ]
+      }
+    },
+    "minimumSecuritySequence": {
+      "stable": 0,
+      "preview": 0
+    }
+  },
+  "signatures": [
+    {
+      "keyId": "2f3bfc0ffff4766cf9f1e9723c1b36b37a7a62c56d5bfa8bccd1520f46738b5f",
+      "signature": "lLShH5UHr4IrMsvU8WZfu1BWJAkgf141GmQ/pIpjRwu6i5RJ0s/kfzIuNqbMP8dI4Ji2GgMXGSZYDDu7a5fIAw=="
+    },
+    {
+      "keyId": "3040073e7b368ec9bea05af8f1a8560e4bdae9c9f4338612a91b7a412dc392ef",
+      "signature": "BEj09exZHiYBVJYDfubH5QErdwmMzOsGafn+ydrNw2APg3bToQ6SDqx4jDEsmThD79mfODtSBdPF8L06G5q5Cg=="
+    },
+    {
+      "keyId": "58adc81487acadedeba167a96efc3ae8012186b83814958187cb2ad5edf2ada4",
+      "signature": "Xkjx1H7HJltY5CSxuh7GrUI0EWJhBkyWrCm841Oz+TWVR9eGN7BlZwDz1y3rYt1+rsaaEvgHPKkZPNy9Vc8dAg=="
+    },
+    {
+      "keyId": "738e1f2ae3ef6be2505abe1c0bd7b584a68ef79bdc890e9d325e17187757ffc1",
+      "signature": "fxsz1Pe0y4HCL28HtBfNfY/DBDl1oLirJKveR4GZd8x31P7WE3CUOY+1vKkgPFsNjSyXm5V1vhWQgakoOe95Bw=="
+    }
+  ]
+}

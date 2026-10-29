@@ -1,0 +1,34 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "breakpoint-add",
+  "session": "session-demo",
+  "method": "debug.breakpoints.update",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "workflowId": "parent",
+    "revision": "parent-r1",
+    "expectedVersion": 0,
+    "breakpoints": [
+      {
+        "workflowId": "parent",
+        "revision": "parent-r1",
+        "nodeId": "call",
+        "enabled": true
+      },
+      {
+        "workflowId": "child",
+        "revision": "child-r1",
+        "nodeId": "return",
+        "enabled": false
+      },
+      {
+        "workflowId": "parent",
+        "revision": "parent-r1",
+        "nodeId": "join",
+        "enabled": true
+      }
+    ]
+  }
+}

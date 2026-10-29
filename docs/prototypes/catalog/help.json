@@ -1,0 +1,160 @@
+{
+  "key": "help",
+  "name": "辅助入口与帮助",
+  "prefix": "H",
+  "order": 8,
+  "req": [
+    "DW-016",
+    "DW-018",
+    "DW-020"
+  ],
+  "screens": [
+    {
+      "code": "H01",
+      "id": "command-palette",
+      "title": "命令菜单",
+      "view": "modal",
+      "variant": "commands",
+      "parent": "editor-graph",
+      "purpose": "通过搜索执行可用的工作台操作。",
+      "primary": "record-config",
+      "primaryLabel": "开始录制",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-020"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "H02",
+      "id": "shortcuts-help",
+      "title": "快捷键帮助",
+      "view": "modal",
+      "variant": "shortcuts-help",
+      "parent": "editor-graph",
+      "purpose": "查看有效快捷键与当前键盘导航方式。",
+      "primary": "settings-shortcuts",
+      "primaryLabel": "编辑快捷键",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-020"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "H03",
+      "id": "about",
+      "title": "关于与更新",
+      "view": "about",
+      "variant": "about",
+      "parent": null,
+      "purpose": "查看组件版本、更新与帮助入口。",
+      "primary": "update-available",
+      "primaryLabel": "检查更新",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-020"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "H04",
+      "id": "support-export",
+      "title": "支持包导出预览",
+      "view": "modal",
+      "variant": "support",
+      "parent": "settings-diagnostics",
+      "purpose": "核对文件范围与敏感字段处理后导出。",
+      "primary": "settings-diagnostics",
+      "primaryLabel": "导出所选材料",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-020"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "H05",
+      "id": "tray-menu",
+      "title": "托盘与后台任务",
+      "view": "tray",
+      "variant": "menu",
+      "parent": null,
+      "purpose": "查看后台运行，打开工作台或急停。",
+      "primary": "run-running",
+      "primaryLabel": "打开运行",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-020"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "H06",
+      "id": "thirdparty-notices",
+      "title": "第三方许可",
+      "view": "about",
+      "variant": "notices",
+      "parent": null,
+      "purpose": "按组件查看发行内实际附带的许可文件。",
+      "primary": "about",
+      "primaryLabel": "返回关于",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-020"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "H07",
+      "id": "help-docs",
+      "title": "帮助与使用指南",
+      "view": "help",
+      "variant": "docs",
+      "parent": null,
+      "purpose": "按制作、录制、运行和恢复任务查阅帮助。",
+      "primary": "editor-graph",
+      "primaryLabel": "打开制作工作台",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-020"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

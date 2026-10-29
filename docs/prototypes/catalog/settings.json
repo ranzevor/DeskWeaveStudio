@@ -1,0 +1,352 @@
+{
+  "key": "settings",
+  "name": "设置与外部接入",
+  "prefix": "S",
+  "order": 6,
+  "req": [
+    "DW-013",
+    "DW-014",
+    "DW-016",
+    "DW-018",
+    "DW-N02"
+  ],
+  "screens": [
+    {
+      "code": "S01",
+      "id": "settings-general",
+      "title": "通用与外观",
+      "view": "settings",
+      "variant": "general",
+      "parent": null,
+      "purpose": "设置主题、密度、语言和窗口行为。",
+      "primary": "editor-dark",
+      "primaryLabel": "预览暗色主题",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S02",
+      "id": "settings-shortcuts",
+      "title": "快捷键与冲突",
+      "view": "settings",
+      "variant": "shortcuts",
+      "parent": null,
+      "purpose": "配置工作台和系统热键，处理注册冲突。",
+      "primary": "shortcuts-help",
+      "primaryLabel": "查看快捷键",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S03",
+      "id": "settings-connections",
+      "title": "模型连接",
+      "view": "settings",
+      "variant": "connections",
+      "parent": null,
+      "purpose": "管理本地和远程观察连接。",
+      "primary": "connection-edit",
+      "primaryLabel": "添加连接",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02",
+        "DW-N01"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S04",
+      "id": "connection-edit",
+      "title": "编辑模型连接",
+      "view": "modal",
+      "variant": "connection",
+      "parent": "settings-connections",
+      "purpose": "配置端点、模型和密钥模式，测试后保存。",
+      "primary": "settings-connections",
+      "primaryLabel": "保存连接",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S05",
+      "id": "connection-failed",
+      "title": "连接测试失败",
+      "view": "modal",
+      "variant": "connection-failed",
+      "parent": "settings-connections",
+      "purpose": "保留原配置，修正地址或密钥后重试。",
+      "primary": "connection-edit",
+      "primaryLabel": "修改连接",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S06",
+      "id": "settings-mcp",
+      "title": "MCP 客户端",
+      "view": "settings",
+      "variant": "mcp",
+      "parent": null,
+      "purpose": "查看客户端、工作空间范围和已授予能力。",
+      "primary": "mcp-approval",
+      "primaryLabel": "管理授权",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S07",
+      "id": "mcp-approval",
+      "title": "客户端权限确认",
+      "view": "modal",
+      "variant": "mcp-approval",
+      "parent": "settings-mcp",
+      "purpose": "按工作空间、目标与用途授予有限能力。",
+      "primary": "settings-mcp",
+      "primaryLabel": "保存所选授权",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S08",
+      "id": "mcp-activity",
+      "title": "客户端活动",
+      "view": "settings",
+      "variant": "mcp-activity",
+      "parent": null,
+      "purpose": "按客户端查看任务接收、运行和取消结果。",
+      "primary": "run-running",
+      "primaryLabel": "查看关联运行",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S09",
+      "id": "settings-storage",
+      "title": "存储与保留",
+      "view": "settings",
+      "variant": "storage",
+      "parent": null,
+      "purpose": "查看占用、备份和附件保留策略。",
+      "primary": "backup-create",
+      "primaryLabel": "创建备份",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S10",
+      "id": "settings-diagnostics",
+      "title": "诊断与支持",
+      "view": "settings",
+      "variant": "diagnostics",
+      "parent": null,
+      "purpose": "选择支持材料范围并预览导出内容。",
+      "primary": "support-export",
+      "primaryLabel": "预览支持包",
+      "requirements": [
+        "DW-013",
+        "DW-014",
+        "DW-016",
+        "DW-018",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S11",
+      "id": "settings-overrides",
+      "title": "设置范围与有效来源",
+      "view": "completion",
+      "variant": "settings-overrides",
+      "parent": null,
+      "purpose": "编辑用户或工作空间覆盖，按批次保存并区分即时、下次运行与重启生效。",
+      "primary": null,
+      "primaryLabel": "整批保存",
+      "primaryKind": "local",
+      "primaryResult": "CAS通过后提交整批set/reset并显示逐项生效时间。",
+      "requirements": [
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S12",
+      "id": "settings-conflict",
+      "title": "设置并发冲突",
+      "view": "completion",
+      "variant": "settings-conflict",
+      "parent": null,
+      "purpose": "保留本批编辑，重新读取范围与继承版本后核对保存。",
+      "primary": null,
+      "primaryLabel": "重新读取并保留编辑",
+      "primaryKind": "local",
+      "primaryResult": "新基准与本批待保存编辑分别保留。",
+      "requirements": [
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S13",
+      "id": "connection-browser",
+      "title": "模型连接清单",
+      "view": "authoring",
+      "variant": "connection-browser",
+      "parent": null,
+      "purpose": "读取连接元数据并打开配置，凭据保持受保护。",
+      "primary": null,
+      "primaryLabel": "重新查询",
+      "primaryKind": "local",
+      "primaryResult": "读取连接元数据并打开配置，凭据保持受保护。",
+      "requirements": [
+        "DW-025",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S14",
+      "id": "connection-draft-test",
+      "title": "测试未保存的连接",
+      "view": "authoring",
+      "variant": "connection-draft-test",
+      "parent": null,
+      "purpose": "测试与正式保存分离，结果只对应当前编辑内容。",
+      "primary": null,
+      "primaryLabel": "测试当前草稿",
+      "primaryKind": "local",
+      "primaryResult": "测试与正式保存分离，结果只对应当前编辑内容。",
+      "requirements": [
+        "DW-025"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "S15",
+      "id": "connection-test-stale",
+      "title": "连接测试结果已失效",
+      "view": "authoring",
+      "variant": "connection-test-stale",
+      "parent": null,
+      "purpose": "修改配置使原测试失效，迟到结果不覆盖当前状态。",
+      "primary": null,
+      "primaryLabel": "测试当前草稿",
+      "primaryKind": "local",
+      "primaryResult": "修改配置使原测试失效，迟到结果不覆盖当前状态。",
+      "requirements": [
+        "DW-025"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

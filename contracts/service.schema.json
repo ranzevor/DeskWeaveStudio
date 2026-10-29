@@ -1,0 +1,6553 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:service:1",
+  "title": "Engine 命令参数与结果",
+  "$defs": {
+    "workspace.open": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workspace.open"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "directoryGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "directoryGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "formatVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "permissions": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "maxItems": 10000
+            }
+          },
+          "required": [
+            "workspaceId",
+            "formatVersion",
+            "permissions"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workflow.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workflow.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "contentMode": {
+              "enum": [
+                "auto",
+                "inline",
+                "resource"
+              ]
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "definition": {
+              "$ref": "urn:deskweave:workflow:1"
+            },
+            "dependencies": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "definitionHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "modelResource": {
+              "$ref": "urn:deskweave:service:1#/$defs/asset.read/properties/result"
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision",
+            "definitionHash"
+          ],
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "definition",
+                "dependencies"
+              ],
+              "not": {
+                "required": [
+                  "modelResource"
+                ]
+              }
+            },
+            {
+              "required": [
+                "modelResource"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "definition"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "dependencies"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workflow.validate": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workflow.validate"
+        },
+        "params": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "workflowId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "workflowId",
+                "revision"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "definition": {
+                  "$ref": "urn:deskweave:workflow:1"
+                }
+              },
+              "required": [
+                "definition"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "valid": {
+              "type": "boolean"
+            },
+            "diagnosticsQuery": {
+              "allOf": [
+                {
+                  "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "diagnostics"
+                    }
+                  }
+                }
+              ]
+            },
+            "diagnosticCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "valid",
+            "diagnosticsQuery",
+            "diagnosticCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workflow.save": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workflow.save"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "draftVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "baseRevision": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "definition": {
+              "$ref": "urn:deskweave:workflow:1"
+            },
+            "dependencies": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "modelRef": {
+              "$ref": "urn:deskweave:content:1#/$defs/contentRef"
+            }
+          },
+          "required": [
+            "workflowId",
+            "draftVersion",
+            "baseRevision"
+          ],
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "definition",
+                "dependencies"
+              ],
+              "not": {
+                "required": [
+                  "modelRef"
+                ]
+              }
+            },
+            {
+              "required": [
+                "modelRef"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "definition"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "dependencies"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "draftVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "definitionHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision",
+            "draftVersion",
+            "definitionHash"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workflow.export": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workflow.export"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "outputGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision",
+            "outputGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.start": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.start"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "inputs": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "targets": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "detached": {
+              "type": "boolean"
+            },
+            "limits": {
+              "$ref": "urn:deskweave:workflow:1#/properties/limits"
+            },
+            "startNode": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "initialVariables": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "runVariables": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "planId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "interruptPolicy": {
+              "enum": [
+                "pause",
+                "ignore"
+              ],
+              "default": "pause"
+            },
+            "debug": {
+              "$ref": "urn:deskweave:execution-control:1#/$defs/debugStart"
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision",
+            "inputs",
+            "targets",
+            "detached"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "startNode"
+                ]
+              },
+              "then": {
+                "required": [
+                  "planId",
+                  "initialVariables"
+                ]
+              }
+            }
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "const": "queued"
+            }
+          },
+          "required": [
+            "accepted",
+            "runId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.pause": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.pause"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "runId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "preparing",
+                "running",
+                "pausing",
+                "paused",
+                "stopping",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "interrupted"
+              ]
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "accepted",
+            "runId",
+            "state",
+            "controlVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.resume": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.resume"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "resumePlanId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "confirmationGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "runId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false,
+          "dependentRequired": {
+            "confirmationGrant": [
+              "resumePlanId"
+            ]
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "preparing",
+                "running",
+                "pausing",
+                "paused",
+                "stopping",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "interrupted"
+              ]
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "accepted",
+            "runId",
+            "state",
+            "controlVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.stop": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.stop"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "runId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "preparing",
+                "running",
+                "pausing",
+                "paused",
+                "stopping",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "interrupted"
+              ]
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "accepted",
+            "runId",
+            "state",
+            "controlVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.snapshot": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.snapshot"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "runId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "preparing",
+                "running",
+                "pausing",
+                "paused",
+                "stopping",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "interrupted"
+              ]
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "cleanup": {
+              "enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "notRequired"
+              ]
+            },
+            "lastSeq": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "resume": {
+              "$ref": "urn:deskweave:execution-control:1#/$defs/resumeSummary"
+            },
+            "debug": {
+              "$ref": "urn:deskweave:execution-control:1#/$defs/debugSnapshot"
+            },
+            "frameCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "effectCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "dataVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "framesQuery": {
+              "allOf": [
+                {
+                  "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "runFrames"
+                    }
+                  }
+                }
+              ]
+            },
+            "effectsQuery": {
+              "allOf": [
+                {
+                  "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "runEffects"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "required": [
+            "runId",
+            "workflowId",
+            "revision",
+            "state",
+            "controlVersion",
+            "cleanup",
+            "lastSeq",
+            "framesQuery",
+            "effectsQuery",
+            "frameCount",
+            "effectCount",
+            "dataVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "debug.step": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "debug.step"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "frameId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "runId",
+            "frameId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "preparing",
+                "running",
+                "pausing",
+                "paused",
+                "stopping",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "interrupted"
+              ]
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "accepted",
+            "runId",
+            "state",
+            "controlVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "record.start": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "record.start"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "targetToken": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "coordinateMode": {
+              "enum": [
+                "physical",
+                "relative",
+                "event",
+                "display"
+              ]
+            },
+            "includePointerMotion": {
+              "type": "boolean",
+              "description": "默认启用；关闭时仅省略未按住按钮的普通运动，点击/滚轮位置锚点及按钮按住期间全部运动仍记录。"
+            },
+            "expectedTopologyVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "targetToken",
+            "coordinateMode",
+            "includePointerMotion",
+            "expectedTopologyVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "recordingId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "const": "recording"
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "source": {
+              "$ref": "urn:deskweave:recording:1#/$defs/source"
+            }
+          },
+          "required": [
+            "recordingId",
+            "state",
+            "controlVersion",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "record.pause": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "record.pause"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "recordingId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "recordingId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "recordingId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "pausing",
+                "paused"
+              ]
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "recordingId",
+            "state",
+            "controlVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "record.finish": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "record.finish"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "recordingId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "recordingId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "target.select": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "target.select"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "selectionGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "selectionGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "targetToken": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kind": {
+              "enum": [
+                "window",
+                "display",
+                "region",
+                "desktop"
+              ]
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+            },
+            "topology": {
+              "$ref": "urn:deskweave:recording:1#/$defs/topology"
+            }
+          },
+          "required": [
+            "targetToken",
+            "displayName",
+            "kind",
+            "expiresAt"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "desktop"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "topology"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "capture.create": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "capture.create"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "targetToken": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "roi": {
+              "oneOf": [
+                {
+                  "$ref": "urn:deskweave:vision:1#/$defs/roi"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "targetToken"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "frameId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "resource": {
+              "type": "object",
+              "properties": {
+                "resourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "mediaType": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "length": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+                }
+              },
+              "required": [
+                "resourceId",
+                "mediaType",
+                "length",
+                "sha256",
+                "expiresAt"
+              ],
+              "additionalProperties": false
+            },
+            "targetVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "topologyVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "origin": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ],
+              "additionalProperties": false
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+            }
+          },
+          "required": [
+            "frameId",
+            "resource",
+            "targetVersion",
+            "topologyVersion",
+            "origin",
+            "width",
+            "height",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "vision.match": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "vision.match"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "targetToken": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "imageVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "intervalMs": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 60000
+            },
+            "selection": {
+              "enum": [
+                "unique",
+                "highest"
+              ]
+            },
+            "roi": {
+              "oneOf": [
+                {
+                  "$ref": "urn:deskweave:vision:1#/$defs/roi"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scales": {
+              "$ref": "urn:deskweave:vision:1#/$defs/scales"
+            }
+          },
+          "required": [
+            "targetToken",
+            "imageVersion",
+            "threshold",
+            "timeoutMs",
+            "intervalMs",
+            "selection"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "vision.observe": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "vision.observe"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "targetToken": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "prompt": {
+              "type": "string",
+              "maxLength": 262144
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "roi": {
+              "oneOf": [
+                {
+                  "$ref": "urn:deskweave:vision:1#/$defs/roi"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "outputMode": {
+              "enum": [
+                "text",
+                "json"
+              ]
+            },
+            "outputSchema": {
+              "oneOf": [
+                {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "targetToken",
+            "connectionId",
+            "prompt",
+            "timeoutMs"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "assetVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4194304
+            }
+          },
+          "required": [
+            "assetVersion",
+            "offset",
+            "length"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "resourceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "mediaType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+            }
+          },
+          "required": [
+            "resourceId",
+            "mediaType",
+            "length",
+            "sha256",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.import": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.import"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sourceGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kind": {
+              "enum": [
+                "image",
+                "trajectory",
+                "workflow",
+                "package"
+              ]
+            },
+            "importPlanId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "sourceGrant",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.references": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.references"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "assetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "assetVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "cursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "assetId"
+              ]
+            },
+            {
+              "required": [
+                "assetVersion"
+              ]
+            }
+          ]
+        },
+        "result": {
+          "$ref": "urn:deskweave:asset-management:1#/$defs/referencesResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "settings.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "settings.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": [
+                "user",
+                "workspace"
+              ]
+            }
+          },
+          "required": [
+            "scope"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:settings:1#/$defs/snapshot"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "settings.update": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "settings.update"
+        },
+        "params": {
+          "$ref": "urn:deskweave:settings:1#/$defs/updateParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:settings:1#/$defs/updateResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "operation.get": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "operation.get"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "operationId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:operation-results:1#/$defs/operationSnapshot"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "operation.cancel": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "operation.cancel"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "operationId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:operation-results:1#/$defs/operationSnapshot"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "request.status": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "request.status"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "requestId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "notReceived",
+                "accepted",
+                "finished",
+                "uncertain"
+              ]
+            },
+            "operationId": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "result": {
+              "$ref": "urn:deskweave:values:1#/$defs/raw"
+            }
+          },
+          "required": [
+            "requestId",
+            "state",
+            "operationId",
+            "result"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "connection.configure": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "connection.configure"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "endpoint": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "apiKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192,
+              "writeOnly": true
+            },
+            "keyMode": {
+              "enum": [
+                "keep",
+                "replace",
+                "none"
+              ]
+            },
+            "expectedVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "options": {
+              "$ref": "urn:deskweave:vision:1#/$defs/connectionOptions"
+            },
+            "revokePreviousCredential": {
+              "type": "boolean",
+              "default": false
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "connectionId",
+            "endpoint",
+            "model",
+            "keyMode",
+            "expectedVersion",
+            "options"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "keyMode": {
+                    "const": "replace"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "apiKey"
+                ]
+              },
+              "else": {
+                "not": {
+                  "required": [
+                    "apiKey"
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "keyMode": {
+                    "const": "keep"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "revokePreviousCredential": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "configured": {
+              "const": true
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "connectionId",
+            "configured",
+            "version"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "connection.test": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "connection.test"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "connectionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "reachable": {
+              "type": "boolean"
+            },
+            "modelAvailable": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "connectionId",
+            "reachable",
+            "modelAvailable"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "input.submit": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "input.submit"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "intentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "targetToken": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "operation": {
+              "oneOf": [
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/pointer.move"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/pointer.delta"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/pointer.click"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/pointer.drag"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/pointer.scroll"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/pointer.button"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/keyboard.down"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/keyboard.up"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/keyboard.text"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/input.trajectory"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "urn:deskweave:actions:1#/$defs/keyboard.chord"
+                    },
+                    {
+                      "properties": {
+                        "on": {
+                          "maxProperties": 0
+                        },
+                        "params": {
+                          "properties": {
+                            "target": {
+                              "const": "main"
+                            }
+                          }
+                        }
+                      },
+                      "not": {
+                        "required": [
+                          "store"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "trajectoryVersions": {
+              "type": "object",
+              "maxProperties": 1,
+              "propertyNames": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          },
+          "required": [
+            "intentId",
+            "targetToken",
+            "operation"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "operation": {
+                    "properties": {
+                      "action": {
+                        "const": "input.trajectory"
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "trajectoryVersions"
+                ],
+                "properties": {
+                  "trajectoryVersions": {
+                    "minProperties": 1
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "record.resume": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "record.resume"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "recordingId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "recordingId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "recordingId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "const": "recording"
+            },
+            "controlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "recordingId",
+            "state",
+            "controlVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workspace.catalog": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workspace.catalog"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "workflow",
+                "asset",
+                "run"
+              ]
+            },
+            "cursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "nameContains": {
+              "type": "string",
+              "maxLength": 120,
+              "default": ""
+            },
+            "states": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "maxItems": 16,
+              "uniqueItems": true,
+              "default": []
+            },
+            "order": {
+              "enum": [
+                "updatedDesc",
+                "nameAsc",
+                "nameDesc"
+              ],
+              "default": "updatedDesc"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "run"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "states": {
+                    "items": {
+                      "enum": [
+                        "queued",
+                        "preparing",
+                        "running",
+                        "pausing",
+                        "paused",
+                        "stopping",
+                        "succeeded",
+                        "failed",
+                        "cancelled",
+                        "interrupted"
+                      ]
+                    }
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "states": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "version": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "state": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "version"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "nextCursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "snapshotId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "snapshotAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "items",
+            "nextCursor",
+            "snapshotId",
+            "snapshotAt",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workspace.backup": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workspace.backup"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "outputGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "outputGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workspace.restore": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workspace.restore"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sourceGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "destinationGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "sourceGrant",
+            "destinationGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "event.subscribe": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "event.subscribe"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "runId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "instanceEpoch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "snapshot": {
+              "$ref": "urn:deskweave:service:1#/$defs/run.snapshot/properties/result"
+            }
+          },
+          "required": [
+            "subscriptionId",
+            "instanceEpoch",
+            "snapshot"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "event.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "event.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "instanceEpoch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "afterSeq": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            }
+          },
+          "required": [
+            "runId",
+            "instanceEpoch",
+            "afterSeq",
+            "limit"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "maxItems": 5000,
+              "items": {
+                "$ref": "urn:deskweave:message:1#/oneOf/3"
+              }
+            },
+            "hasMore": {
+              "type": "boolean"
+            },
+            "resyncRequired": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "events",
+            "hasMore",
+            "resyncRequired"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "event.unsubscribe": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "event.unsubscribe"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "subscriptionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "closed": {
+              "const": true
+            }
+          },
+          "required": [
+            "closed"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "emergency.stop": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "emergency.stop"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "locked"
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "cleanup": {
+              "enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "notRequired"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "generation",
+            "cleanup"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "emergency.rearm": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "emergency.rearm"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "expectedGeneration": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "confirmationGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "expectedGeneration",
+            "confirmationGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "armed"
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "state",
+            "generation"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.prepare": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.prepare"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "inputs": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "targets": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "detached": {
+              "type": "boolean"
+            },
+            "limits": {
+              "$ref": "urn:deskweave:workflow:1#/properties/limits"
+            },
+            "startNode": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "initialVariables": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "runVariables": {
+              "type": "object",
+              "maxProperties": 1000,
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            },
+            "interruptPolicy": {
+              "enum": [
+                "pause",
+                "ignore"
+              ],
+              "default": "pause"
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision",
+            "inputs",
+            "targets",
+            "detached"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "planId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "valid": {
+              "type": "boolean"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "definitionHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "requirementsQuery": {
+              "allOf": [
+                {
+                  "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "runRequirements"
+                    }
+                  }
+                }
+              ]
+            },
+            "diagnosticsQuery": {
+              "allOf": [
+                {
+                  "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "diagnostics"
+                    }
+                  }
+                }
+              ]
+            },
+            "requirementCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "diagnosticCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "planId",
+            "valid",
+            "expiresAt",
+            "definitionHash",
+            "requirementsQuery",
+            "diagnosticsQuery",
+            "requirementCount",
+            "diagnosticCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "connection.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "connection.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "connectionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "endpoint": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "keyMode": {
+              "enum": [
+                "keep",
+                "replace",
+                "none"
+              ]
+            },
+            "credentialPresent": {
+              "type": "boolean"
+            },
+            "options": {
+              "$ref": "urn:deskweave:vision:1#/$defs/connectionOptions"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "connectionId",
+            "version",
+            "endpoint",
+            "model",
+            "keyMode",
+            "credentialPresent",
+            "options"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "ocr.status": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "ocr.status"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "languages": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              }
+            }
+          },
+          "required": [
+            "languages"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "missingLanguages": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              }
+            },
+            "reason": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "installedLanguagesQuery": {
+              "allOf": [
+                {
+                  "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "ocrLanguages"
+                    }
+                  }
+                }
+              ]
+            },
+            "installedLanguageCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "available",
+            "installedLanguagesQuery",
+            "missingLanguages",
+            "reason",
+            "installedLanguageCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "template.extract": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "template.extract"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "urn:deskweave:vision:1#/$defs/source"
+            },
+            "roi": {
+              "oneOf": [
+                {
+                  "$ref": "urn:deskweave:vision:1#/$defs/roi"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "options": {
+              "$ref": "urn:deskweave:vision:1#/$defs/extractionOptions"
+            }
+          },
+          "required": [
+            "source",
+            "roi",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "template.candidates": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "template.candidates"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "candidateSetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "cursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "minimumScore": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "candidateSetId",
+            "version",
+            "minimumScore"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 100,
+              "items": {
+                "$ref": "urn:deskweave:vision:1#/$defs/candidate"
+              }
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "nextCursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "snapshotId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "snapshotAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "items",
+            "total",
+            "nextCursor",
+            "snapshotId",
+            "snapshotAt",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "template.names": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "template.names"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "candidateSetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedVersion": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "candidateIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2000,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "uniqueItems": true
+            },
+            "policy": {
+              "$ref": "urn:deskweave:vision:1#/$defs/namingPolicy"
+            },
+            "overrides": {
+              "type": "object",
+              "maxProperties": 2000,
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              }
+            }
+          },
+          "required": [
+            "candidateSetId",
+            "expectedVersion",
+            "candidateIds",
+            "policy",
+            "overrides"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:vision:1#/$defs/nameProposal"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "template.commit": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "template.commit"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "candidateSetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "proposalId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "proposalHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "candidateSetId",
+            "proposalId",
+            "proposalHash"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "template.export": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "template.export"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "assetVersions": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2000,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "uniqueItems": true
+            },
+            "outputGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "assetVersions",
+            "outputGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "template.discard": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "template.discard"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "candidateSetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "candidateSetId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "discarded": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "discarded"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "observation.start": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "observation.start"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "targetToken": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "connectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "connectionVersion": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "plan": {
+              "$ref": "urn:deskweave:vision:1#/$defs/observationPlan"
+            },
+            "detached": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": [
+            "targetToken",
+            "connectionId",
+            "connectionVersion",
+            "plan"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:vision:1#/$defs/observationSession"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "observation.stop": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "observation.stop"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "sessionId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:vision:1#/$defs/observationSession"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "observation.session": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "observation.session"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:vision:1#/$defs/observationSession"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "observation.query": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "observation.query"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "from": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "until": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "states": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 5,
+              "items": {
+                "enum": [
+                  "succeeded",
+                  "skipped",
+                  "failed",
+                  "cancelled",
+                  "persistenceFailed"
+                ]
+              },
+              "uniqueItems": true
+            },
+            "order": {
+              "enum": [
+                "newest",
+                "oldest"
+              ]
+            },
+            "cursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          "required": [
+            "sessionId",
+            "from",
+            "until",
+            "states",
+            "order"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 100,
+              "items": {
+                "$ref": "urn:deskweave:vision:1#/$defs/observationRecord"
+              }
+            },
+            "nextCursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "querySnapshot": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "snapshotAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "items",
+            "nextCursor",
+            "querySnapshot",
+            "snapshotAt",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "observation.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "observation.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "recordId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "recordId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:vision:1#/$defs/observationRecord"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "observation.export": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "observation.export"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "recordIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10000,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "uniqueItems": true
+            },
+            "format": {
+              "enum": [
+                "jsonl",
+                "csv"
+              ]
+            },
+            "includeFrames": {
+              "type": "boolean"
+            },
+            "outputGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "recordIds",
+            "format",
+            "includeFrames",
+            "outputGrant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "resource.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "resource.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "resourceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 196608
+            }
+          },
+          "required": [
+            "resourceId",
+            "offset",
+            "length"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "resourceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "mediaType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 196608
+            },
+            "totalLength": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "chunk": {
+              "type": "string",
+              "maxLength": 262144,
+              "contentEncoding": "base64"
+            }
+          },
+          "required": [
+            "resourceId",
+            "mediaType",
+            "offset",
+            "length",
+            "totalLength",
+            "sha256",
+            "chunk"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.configure": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.configure"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "expectedVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "config": {
+              "$ref": "urn:deskweave:mcp:1#/$defs/serverConfig"
+            }
+          },
+          "required": [
+            "expectedVersion",
+            "config"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "requiresRestart": {
+              "type": "boolean"
+            },
+            "config": {
+              "$ref": "urn:deskweave:bridge-management:1#/$defs/publicServerConfig"
+            }
+          },
+          "required": [
+            "version",
+            "requiresRestart",
+            "config"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.start": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.start"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "stopped",
+                "starting",
+                "listening",
+                "stopping",
+                "failed"
+              ]
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "endpoint": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sessions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "reason": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "version",
+            "endpoint",
+            "sessions",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.stop": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.stop"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "stopped",
+                "starting",
+                "listening",
+                "stopping",
+                "failed"
+              ]
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "endpoint": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sessions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "reason": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "version",
+            "endpoint",
+            "sessions",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.status": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.status"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "stopped",
+                "starting",
+                "listening",
+                "stopping",
+                "failed"
+              ]
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "endpoint": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sessions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "reason": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "version",
+            "endpoint",
+            "sessions",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.token.issue": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.token.issue"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "grant": {
+              "$ref": "urn:deskweave:mcp:1#/$defs/tokenGrant"
+            }
+          },
+          "required": [
+            "grant"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "tokenId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "token": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "writeOnly": true
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "tokenId",
+            "token",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.token.revoke": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.token.revoke"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "tokenId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "stopOwnedRuns": {
+              "type": "boolean"
+            },
+            "impactSnapshotId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "tokenId",
+            "stopOwnedRuns"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "revoked": {
+              "type": "boolean"
+            },
+            "affectedSessions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "stoppingRuns": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "previewState": {
+              "enum": [
+                "notProvided",
+                "current",
+                "stale",
+                "expired",
+                "unavailable"
+              ]
+            },
+            "impactVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "affectedSubscriptions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "revokedDirectInputPermits": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "revoked",
+            "affectedSessions",
+            "stoppingRuns",
+            "previewState",
+            "impactVersion",
+            "affectedSubscriptions",
+            "revokedDirectInputPermits"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "stream.subscribe": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "stream.subscribe"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": [
+                "observation",
+                "extraction"
+              ]
+            },
+            "objectId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "scope",
+            "objectId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "streamId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "instanceEpoch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "lastSeq": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "snapshot": {
+              "$ref": "urn:deskweave:values:1#/$defs/raw"
+            },
+            "scope": {
+              "enum": [
+                "observation",
+                "extraction"
+              ]
+            }
+          },
+          "required": [
+            "subscriptionId",
+            "streamId",
+            "instanceEpoch",
+            "lastSeq",
+            "snapshot",
+            "scope"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "then": {
+                "properties": {
+                  "snapshot": {
+                    "$ref": "urn:deskweave:vision:1#/$defs/observationSession"
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "scope": {
+                    "const": "observation"
+                  }
+                }
+              }
+            },
+            {
+              "then": {
+                "properties": {
+                  "snapshot": {
+                    "$ref": "urn:deskweave:vision:1#/$defs/extractionResult"
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "scope": {
+                    "const": "extraction"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "stream.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "stream.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "streamId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "instanceEpoch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "afterSeq": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "required": [
+            "streamId",
+            "instanceEpoch",
+            "afterSeq",
+            "limit"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 1000,
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "urn:deskweave:message:1"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "event"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "hasMore": {
+              "type": "boolean"
+            },
+            "resyncRequired": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "events",
+            "hasMore",
+            "resyncRequired"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "stream.unsubscribe": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "stream.unsubscribe"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "subscriptionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "closed"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "system.capabilities": {
+      "properties": {
+        "params": {
+          "properties": {},
+          "additionalProperties": false,
+          "type": "object",
+          "required": []
+        },
+        "method": {
+          "const": "system.capabilities"
+        },
+        "result": {
+          "properties": {
+            "platform": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "componentVersions": {
+              "type": "object",
+              "maxProperties": 16,
+              "additionalProperties": {
+                "minLength": 1,
+                "maxLength": 64,
+                "type": "string"
+              }
+            },
+            "actions": {
+              "items": {
+                "minLength": 1,
+                "maxLength": 64,
+                "type": "string"
+              },
+              "maxItems": 256,
+              "type": "array"
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": {
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "maxProperties": 64
+            },
+            "desktop": {
+              "$ref": "urn:deskweave:platform:1#/$defs/capabilities"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "platform",
+            "componentVersions",
+            "actions",
+            "limits"
+          ]
+        }
+      },
+      "additionalProperties": true,
+      "type": "object",
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    "draft.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "draft.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "editorId": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "workflowId",
+            "editorId",
+            "cursor",
+            "pageSize"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "$ref": "urn:deskweave:draft:1#/$defs/draftSnapshot"
+              }
+            },
+            "nextCursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "items",
+            "nextCursor"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "draft.write": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "draft.write"
+        },
+        "params": {
+          "$ref": "urn:deskweave:draft:1#/$defs/writeParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:draft:1#/$defs/draftSnapshot"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "draft.discard": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "draft.discard"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "editorId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedEditVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "workflowId",
+            "editorId",
+            "expectedEditVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "editorId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "discarded": {
+              "type": "boolean"
+            },
+            "editVersion": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "workflowId",
+            "editorId",
+            "discarded",
+            "editVersion"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "discarded": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "editVersion": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "editVersion": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:bridge-management:1#/$defs/bridgeSnapshot"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.token.list": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.token.list"
+        },
+        "params": {
+          "$ref": "urn:deskweave:bridge-management:1#/$defs/tokenListParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:bridge-management:1#/$defs/tokenPage"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.delete": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.delete"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "assetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedCurrentVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "assetId",
+            "expectedCurrentVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:asset-management:1#/$defs/deleteResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.resume.prepare": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.resume.prepare"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "runId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:execution-control:1#/$defs/resumePlan"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "run.resume.discard": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "run.resume.discard"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "planId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedControlVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "runId",
+            "planId",
+            "expectedControlVersion"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "planId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "discarded": {
+              "type": "boolean"
+            },
+            "state": {
+              "enum": [
+                "cancelled",
+                "expired",
+                "consumed"
+              ]
+            }
+          },
+          "required": [
+            "runId",
+            "planId",
+            "discarded",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "debug.breakpoints.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "debug.breakpoints.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:execution-control:1#/$defs/breakpointProfile"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "debug.breakpoints.update": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "debug.breakpoints.update"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workflowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "breakpoints": {
+              "type": "array",
+              "maxItems": 10000,
+              "items": {
+                "$ref": "urn:deskweave:execution-control:1#/$defs/breakpoint"
+              }
+            }
+          },
+          "required": [
+            "workflowId",
+            "revision",
+            "expectedVersion",
+            "breakpoints"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:execution-control:1#/$defs/breakpointProfile"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.import.prepare": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.import.prepare"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sourceGrant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kind": {
+              "enum": [
+                "image",
+                "trajectory",
+                "workflow",
+                "package"
+              ]
+            }
+          },
+          "required": [
+            "sourceGrant",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:package:1#/$defs/importPlan"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "bridge.token.impact": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "bridge.token.impact"
+        },
+        "params": {
+          "$ref": "urn:deskweave:bridge-management:1#/$defs/tokenImpactParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:bridge-management:1#/$defs/tokenImpactPage"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "content.begin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "content.begin"
+        },
+        "params": {
+          "$ref": "urn:deskweave:content:1#/$defs/beginParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:content:1#/$defs/upload"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "content.write": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "content.write"
+        },
+        "params": {
+          "$ref": "urn:deskweave:content:1#/$defs/writeParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:content:1#/$defs/writeResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "content.seal": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "content.seal"
+        },
+        "params": {
+          "$ref": "urn:deskweave:content:1#/$defs/sealParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:content:1#/$defs/sealResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "content.discard": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "content.discard"
+        },
+        "params": {
+          "$ref": "urn:deskweave:content:1#/$defs/discardParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:content:1#/$defs/discardResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "workflow.revisions": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "workflow.revisions"
+        },
+        "params": {
+          "$ref": "urn:deskweave:inspection:1#/$defs/revisionParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "connection.list": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "connection.list"
+        },
+        "params": {
+          "$ref": "urn:deskweave:inspection:1#/$defs/connectionListParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:inspection:1#/$defs/connectionPage"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "connection.testDraft": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "connection.testDraft"
+        },
+        "params": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/draftTestParams"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "debug.variables.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "debug.variables.read"
+        },
+        "params": {
+          "$ref": "urn:deskweave:inspection:1#/$defs/variablesParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:inspection:1#/$defs/variablesPage"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.edit.prepare": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.edit.prepare"
+        },
+        "params": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editPrepareParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editPlan"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.edit.commit": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.edit.commit"
+        },
+        "params": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editCommitParams"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "accepted": {
+              "const": true
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            }
+          },
+          "required": [
+            "accepted",
+            "operationId",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "asset.edit.discard": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "asset.edit.discard"
+        },
+        "params": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editDiscardParams"
+        },
+        "result": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editDiscardResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "desktop.topology": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "desktop.topology"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:recording:1#/$defs/topology"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "record.snapshot": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "record.snapshot"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "recordingId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "recordingId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:recording:1#/$defs/snapshot"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "query.read": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "query.read"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "collectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kind": {
+              "enum": [
+                "diagnostics",
+                "runRequirements",
+                "runFrames",
+                "runEffects",
+                "templateNames",
+                "templateAssets",
+                "matchCandidates",
+                "importedObjects",
+                "ocrLanguages"
+              ]
+            },
+            "filter": {
+              "type": "object",
+              "default": {}
+            },
+            "order": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            },
+            "cursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "includeTotal": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": [
+            "collectionId",
+            "kind"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "diagnostics"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/diagnosticsFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "runRequirements"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/runRequirementsFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "runFrames"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/runFramesFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "runEffects"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/runEffectsFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "templateNames"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/templateNamesFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "templateAssets"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/templateAssetsFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "matchCandidates"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/matchCandidatesFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "importedObjects"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/importedObjectsFilter"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "ocrLanguages"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "filter": {
+                    "$ref": "urn:deskweave:query:1#/$defs/ocrLanguagesFilter"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "result": {
+          "$ref": "urn:deskweave:query:1#/$defs/page"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "query.close": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "query.close"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "snapshotId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "snapshotId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "urn:deskweave:query:1#/$defs/closeResult"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "expression.preview": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "expression.preview"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "$ref": "urn:deskweave:values:1#/$defs/value"
+            },
+            "context": {
+              "type": "object",
+              "properties": {
+                "inputs": {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                },
+                "vars": {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                },
+                "run": {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                },
+                "prev": {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                },
+                "calls": {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                },
+                "runtime": {
+                  "$ref": "urn:deskweave:values:1#/$defs/raw"
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            },
+            "expectedType": {
+              "enum": [
+                "any",
+                "null",
+                "boolean",
+                "number",
+                "string",
+                "array",
+                "object"
+              ],
+              "default": "any"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "$ref": "urn:deskweave:values:1#/$defs/raw"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/workspace.open"
+    },
+    {
+      "$ref": "#/$defs/workflow.read"
+    },
+    {
+      "$ref": "#/$defs/workflow.validate"
+    },
+    {
+      "$ref": "#/$defs/workflow.save"
+    },
+    {
+      "$ref": "#/$defs/workflow.export"
+    },
+    {
+      "$ref": "#/$defs/run.start"
+    },
+    {
+      "$ref": "#/$defs/run.pause"
+    },
+    {
+      "$ref": "#/$defs/run.resume"
+    },
+    {
+      "$ref": "#/$defs/run.stop"
+    },
+    {
+      "$ref": "#/$defs/run.snapshot"
+    },
+    {
+      "$ref": "#/$defs/debug.step"
+    },
+    {
+      "$ref": "#/$defs/record.start"
+    },
+    {
+      "$ref": "#/$defs/record.pause"
+    },
+    {
+      "$ref": "#/$defs/record.finish"
+    },
+    {
+      "$ref": "#/$defs/target.select"
+    },
+    {
+      "$ref": "#/$defs/capture.create"
+    },
+    {
+      "$ref": "#/$defs/vision.match"
+    },
+    {
+      "$ref": "#/$defs/vision.observe"
+    },
+    {
+      "$ref": "#/$defs/asset.read"
+    },
+    {
+      "$ref": "#/$defs/asset.import"
+    },
+    {
+      "$ref": "#/$defs/asset.references"
+    },
+    {
+      "$ref": "#/$defs/settings.read"
+    },
+    {
+      "$ref": "#/$defs/settings.update"
+    },
+    {
+      "$ref": "#/$defs/operation.get"
+    },
+    {
+      "$ref": "#/$defs/operation.cancel"
+    },
+    {
+      "$ref": "#/$defs/request.status"
+    },
+    {
+      "$ref": "#/$defs/connection.configure"
+    },
+    {
+      "$ref": "#/$defs/connection.test"
+    },
+    {
+      "$ref": "#/$defs/input.submit"
+    },
+    {
+      "$ref": "#/$defs/record.resume"
+    },
+    {
+      "$ref": "#/$defs/workspace.catalog"
+    },
+    {
+      "$ref": "#/$defs/workspace.backup"
+    },
+    {
+      "$ref": "#/$defs/workspace.restore"
+    },
+    {
+      "$ref": "#/$defs/event.subscribe"
+    },
+    {
+      "$ref": "#/$defs/event.read"
+    },
+    {
+      "$ref": "#/$defs/event.unsubscribe"
+    },
+    {
+      "$ref": "#/$defs/emergency.stop"
+    },
+    {
+      "$ref": "#/$defs/emergency.rearm"
+    },
+    {
+      "$ref": "#/$defs/run.prepare"
+    },
+    {
+      "$ref": "#/$defs/connection.read"
+    },
+    {
+      "$ref": "#/$defs/ocr.status"
+    },
+    {
+      "$ref": "#/$defs/template.extract"
+    },
+    {
+      "$ref": "#/$defs/template.candidates"
+    },
+    {
+      "$ref": "#/$defs/template.names"
+    },
+    {
+      "$ref": "#/$defs/template.commit"
+    },
+    {
+      "$ref": "#/$defs/template.export"
+    },
+    {
+      "$ref": "#/$defs/template.discard"
+    },
+    {
+      "$ref": "#/$defs/observation.start"
+    },
+    {
+      "$ref": "#/$defs/observation.stop"
+    },
+    {
+      "$ref": "#/$defs/observation.session"
+    },
+    {
+      "$ref": "#/$defs/observation.query"
+    },
+    {
+      "$ref": "#/$defs/observation.read"
+    },
+    {
+      "$ref": "#/$defs/observation.export"
+    },
+    {
+      "$ref": "#/$defs/resource.read"
+    },
+    {
+      "$ref": "#/$defs/bridge.configure"
+    },
+    {
+      "$ref": "#/$defs/bridge.start"
+    },
+    {
+      "$ref": "#/$defs/bridge.stop"
+    },
+    {
+      "$ref": "#/$defs/bridge.status"
+    },
+    {
+      "$ref": "#/$defs/bridge.token.issue"
+    },
+    {
+      "$ref": "#/$defs/bridge.token.revoke"
+    },
+    {
+      "$ref": "#/$defs/stream.subscribe"
+    },
+    {
+      "$ref": "#/$defs/stream.read"
+    },
+    {
+      "$ref": "#/$defs/stream.unsubscribe"
+    },
+    {
+      "$ref": "#/$defs/system.capabilities"
+    },
+    {
+      "$ref": "#/$defs/draft.read"
+    },
+    {
+      "$ref": "#/$defs/draft.write"
+    },
+    {
+      "$ref": "#/$defs/draft.discard"
+    },
+    {
+      "$ref": "#/$defs/bridge.read"
+    },
+    {
+      "$ref": "#/$defs/bridge.token.list"
+    },
+    {
+      "$ref": "#/$defs/asset.delete"
+    },
+    {
+      "$ref": "#/$defs/run.resume.prepare"
+    },
+    {
+      "$ref": "#/$defs/run.resume.discard"
+    },
+    {
+      "$ref": "#/$defs/debug.breakpoints.read"
+    },
+    {
+      "$ref": "#/$defs/debug.breakpoints.update"
+    },
+    {
+      "$ref": "#/$defs/asset.import.prepare"
+    },
+    {
+      "$ref": "#/$defs/bridge.token.impact"
+    },
+    {
+      "$ref": "#/$defs/content.begin"
+    },
+    {
+      "$ref": "#/$defs/content.write"
+    },
+    {
+      "$ref": "#/$defs/content.seal"
+    },
+    {
+      "$ref": "#/$defs/content.discard"
+    },
+    {
+      "$ref": "#/$defs/workflow.revisions"
+    },
+    {
+      "$ref": "#/$defs/connection.list"
+    },
+    {
+      "$ref": "#/$defs/connection.testDraft"
+    },
+    {
+      "$ref": "#/$defs/debug.variables.read"
+    },
+    {
+      "$ref": "#/$defs/asset.edit.prepare"
+    },
+    {
+      "$ref": "#/$defs/asset.edit.commit"
+    },
+    {
+      "$ref": "#/$defs/asset.edit.discard"
+    },
+    {
+      "$ref": "#/$defs/desktop.topology"
+    },
+    {
+      "$ref": "#/$defs/record.snapshot"
+    },
+    {
+      "$ref": "#/$defs/query.read"
+    },
+    {
+      "$ref": "#/$defs/query.close"
+    },
+    {
+      "$ref": "#/$defs/expression.preview"
+    }
+  ]
+}

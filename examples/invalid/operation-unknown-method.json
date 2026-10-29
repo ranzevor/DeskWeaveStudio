@@ -1,0 +1,7 @@
+{
+  "operationId": "operation-method-unknown-demo",
+  "method": "method.unknown",
+  "state": "running",
+  "result": null,
+  "error": null
+}

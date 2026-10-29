@@ -1,0 +1,38 @@
+{
+  "operationId": "operation-template-extract-demo",
+  "method": "template.extract",
+  "state": "running",
+  "result": {
+    "candidateSetId": "candidates-demo",
+    "version": 1,
+    "sourceFrameId": "frame-demo",
+    "total": 0,
+    "expiresAt": "2026-10-29T02:30:00Z",
+    "options": {
+      "algorithms": {
+        "contour": 0.6,
+        "color": 0.3,
+        "corner": 0.1
+      },
+      "minArea": 16,
+      "maxArea": 262144,
+      "minConfidence": 0.65,
+      "minAspectRatio": 0.1,
+      "maxAspectRatio": 10,
+      "deduplication": {
+        "iou": 0.7,
+        "hashDistance": 8
+      },
+      "filterText": true,
+      "maxCandidates": 2000,
+      "timeoutMs": 120000
+    },
+    "source": {
+      "kind": "frame",
+      "frameId": "frame-demo"
+    },
+    "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "truncatedCount": 0
+  },
+  "error": null
+}

@@ -1,0 +1,79 @@
+{
+  "formatVersion": "1.0",
+  "id": "single-imported-workflow-needs-dependencies",
+  "name": "后台子流程",
+  "entry": "call",
+  "parameters": {},
+  "variables": {},
+  "targets": {},
+  "resources": {
+    "child": {
+      "kind": "workflow"
+    }
+  },
+  "limits": {
+    "activeMs": 600000,
+    "steps": 10000,
+    "callDepth": 8,
+    "parallelCalls": 8,
+    "inputEvents": 100000
+  },
+  "nodes": [
+    {
+      "id": "call",
+      "title": "启动子流程",
+      "action": "flow.call",
+      "params": {
+        "workflow": "child",
+        "inputs": {
+          "value": "DeskWeave"
+        },
+        "mode": "start"
+      },
+      "on": {
+        "next": "join"
+      },
+      "store": "childHandle"
+    },
+    {
+      "id": "join",
+      "title": "等待子流程",
+      "action": "flow.join",
+      "params": {
+        "handle": {
+          "$expr": {
+            "op": "path",
+            "path": [
+              "vars",
+              "childHandle"
+            ]
+          }
+        },
+        "timeoutMs": 5000
+      },
+      "on": {
+        "next": "return"
+      },
+      "store": "childResult"
+    },
+    {
+      "id": "return",
+      "title": "返回结果",
+      "action": "flow.return",
+      "params": {
+        "values": {
+          "child": {
+            "$expr": {
+              "op": "path",
+              "path": [
+                "vars",
+                "childResult"
+              ]
+            }
+          }
+        }
+      },
+      "on": {}
+    }
+  ]
+}

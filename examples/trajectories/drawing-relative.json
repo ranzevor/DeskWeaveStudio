@@ -1,0 +1,210 @@
+{
+  "formatVersion": "1.0",
+  "coordinateMode": "relative",
+  "events": [
+    {
+      "kind": "pointer.button",
+      "atUs": 100000,
+      "button": "left",
+      "state": "down"
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 108000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 116000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 124000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 132000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 140000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 148000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 156000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 164000,
+      "dx": 8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 172000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 180000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 188000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 196000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 204000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 212000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 220000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 228000,
+      "dx": 0,
+      "dy": 8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 236000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 244000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 252000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 260000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 268000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 276000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 284000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 292000,
+      "dx": -8,
+      "dy": 0
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 300000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 308000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 316000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 324000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 332000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 340000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 348000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 356000,
+      "dx": 0,
+      "dy": -8
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 400000,
+      "button": "left",
+      "state": "up"
+    }
+  ]
+}

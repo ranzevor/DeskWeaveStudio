@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/subscriptions/acknowledged",
+  "params": {
+    "_meta": {
+      "io.modelcontextprotocol/subscriptionId": "listen-1"
+    },
+    "notifications": {
+      "toolsListChanged": true,
+      "resourceSubscriptions": [
+        "deskweave://workspace/workspace-demo/runs/run-example/snapshot"
+      ]
+    }
+  },
+  "id": 1
+}

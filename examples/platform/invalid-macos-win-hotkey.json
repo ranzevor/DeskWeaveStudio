@@ -1,0 +1,16 @@
+{
+  "scope": "user",
+  "expectedVersion": 4,
+  "expectedBaseVersion": null,
+  "updates": [
+    {
+      "op": "set",
+      "key": "input.hotkeys",
+      "value": {
+        "emergencyStop": "Win+F12",
+        "recordToggle": "Meta+Shift+R",
+        "runPauseResume": "Meta+Shift+P"
+      }
+    }
+  ]
+}

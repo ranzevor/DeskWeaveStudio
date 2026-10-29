@@ -1,0 +1,44 @@
+{
+  "operationId": "operation-vision-match-demo",
+  "method": "vision.match",
+  "state": "succeeded",
+  "result": {
+    "outcome": "notFound",
+    "frame": {
+      "frameId": "frame-demo",
+      "resource": {
+        "resourceId": "frame-resource-demo",
+        "mediaType": "image/png",
+        "length": 4096,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expiresAt": "2026-10-29T03:00:00Z"
+      },
+      "targetVersion": "target-version-demo",
+      "topologyVersion": "topology-demo",
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "width": 1920,
+      "height": 1080,
+      "createdAt": "2026-10-29T02:00:00Z"
+    },
+    "imageVersion": "image-version-demo",
+    "roi": null,
+    "scales": [
+      1
+    ],
+    "durationMs": 24,
+    "selectedIndex": null,
+    "locationToken": null,
+    "candidateCount": 0,
+    "candidatesQuery": {
+      "collectionId": "collection-operations-vision-match-not-found-result",
+      "kind": "matchCandidates",
+      "itemCount": 0,
+      "expiresAt": null
+    },
+    "selected": null
+  },
+  "error": null
+}

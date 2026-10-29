@@ -1,0 +1,670 @@
+{
+  "formatVersion": "1.0",
+  "scopeOrder": [
+    "default",
+    "user",
+    "workspace"
+  ],
+  "keys": [
+    {
+      "key": "ui.theme",
+      "label": "主题",
+      "valueSchema": {
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "default": "system",
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "ui.locale",
+      "label": "界面语言",
+      "valueSchema": {
+        "enum": [
+          "zh-CN",
+          "en-US"
+        ]
+      },
+      "default": "zh-CN",
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "ui.density",
+      "label": "界面密度",
+      "valueSchema": {
+        "enum": [
+          "standard",
+          "comfortable"
+        ]
+      },
+      "default": "standard",
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "ui.reducedMotion",
+      "label": "减少动态效果",
+      "valueSchema": {
+        "enum": [
+          "system",
+          "reduce",
+          "full"
+        ]
+      },
+      "default": "system",
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "studio.restoreWorkspace",
+      "label": "恢复上次工作空间",
+      "valueSchema": {
+        "type": "boolean"
+      },
+      "default": true,
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "studio.askBeforeBackground",
+      "label": "关闭时询问后台运行",
+      "valueSchema": {
+        "type": "boolean"
+      },
+      "default": true,
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "input.hotkeys",
+      "label": "全局快捷键",
+      "valueSchema": {
+        "type": "object",
+        "properties": {
+          "emergencyStop": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "recordToggle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "runPauseResume": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "emergencyStop",
+          "recordToggle",
+          "runPauseResume"
+        ],
+        "additionalProperties": false
+      },
+      "default": {
+        "emergencyStop": "Ctrl+Alt+Pause",
+        "recordToggle": "Ctrl+Alt+R",
+        "runPauseResume": "Ctrl+Alt+P"
+      },
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ],
+      "platformDefaults": {
+        "macos": {
+          "emergencyStop": "Ctrl+Alt+F12",
+          "recordToggle": "Ctrl+Alt+R",
+          "runPauseResume": "Ctrl+Alt+P"
+        }
+      }
+    },
+    {
+      "key": "runtime.maxQueuedRuns",
+      "label": "排队运行上限",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "default": 16,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "nextRun",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "runtime.interruptPolicy",
+      "label": "物理操作接管策略",
+      "valueSchema": {
+        "enum": [
+          "pause",
+          "ignore"
+        ]
+      },
+      "default": "pause",
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "nextRun",
+      "runOverrides": [
+        "run.prepare.interruptPolicy",
+        "run.start.interruptPolicy"
+      ],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "runtime.modelConcurrency",
+      "label": "模型并发上限",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 8
+      },
+      "default": 2,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "nextRun",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "runtime.imageConcurrency",
+      "label": "图像计算并发上限",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 8
+      },
+      "default": 2,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "nextRun",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "runtime.observationSessions",
+      "label": "观察会话上限",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 16
+      },
+      "default": 4,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "nextRun",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "storage.imageCacheMiB",
+      "label": "图像缓存上限",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 32,
+        "maximum": 4096
+      },
+      "default": 256,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "storage.runRetentionDays",
+      "label": "运行附件保留天数",
+      "valueSchema": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "default": 30,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "storage.runAttachmentMiB",
+      "label": "运行附件容量上限",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 128,
+        "maximum": 1048576
+      },
+      "default": 5120,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "storage.observationRetentionDays",
+      "label": "观察记录保留天数",
+      "valueSchema": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "default": 30,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "storage.observationScreenshotMiB",
+      "label": "观察截图容量上限",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 128,
+        "maximum": 1048576
+      },
+      "default": 2048,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "agent.previewHz",
+      "label": "预览刷新频率",
+      "valueSchema": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 30
+      },
+      "default": 5,
+      "scopes": [
+        "user"
+      ],
+      "activation": "restartAgent",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "privacy.telemetry",
+      "label": "使用统计",
+      "valueSchema": {
+        "type": "boolean"
+      },
+      "default": false,
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "updates.channel",
+      "label": "更新通道",
+      "valueSchema": {
+        "enum": [
+          "stable",
+          "preview"
+        ]
+      },
+      "default": "stable",
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "updates.checkAutomatically",
+      "label": "自动检查更新",
+      "valueSchema": {
+        "type": "boolean"
+      },
+      "default": true,
+      "scopes": [
+        "user"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "storage.runRetentionEnabled",
+      "label": "自动清理运行附件",
+      "valueSchema": {
+        "type": "boolean"
+      },
+      "default": false,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    },
+    {
+      "key": "storage.observationRetentionEnabled",
+      "label": "自动清理观察记录与截图",
+      "valueSchema": {
+        "type": "boolean"
+      },
+      "default": false,
+      "scopes": [
+        "user",
+        "workspace"
+      ],
+      "activation": "immediate",
+      "runOverrides": [],
+      "permissions": [
+        "settings.read",
+        "settings.write"
+      ]
+    }
+  ],
+  "deduplicateUpdates": "rejectRepeatedKey",
+  "reset": "removeScopeOverride",
+  "atomicity": "wholeBatchCompareAndSwap",
+  "unknownKeys": "reject",
+  "secretAndCapabilityFields": "excluded",
+  "hotkeyGrammar": {
+    "separator": "+",
+    "modifiers": [
+      "Ctrl",
+      "Alt",
+      "Shift",
+      "Win",
+      "Meta"
+    ],
+    "primaryKeys": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J",
+      "K",
+      "L",
+      "M",
+      "N",
+      "O",
+      "P",
+      "Q",
+      "R",
+      "S",
+      "T",
+      "U",
+      "V",
+      "W",
+      "X",
+      "Y",
+      "Z",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "F1",
+      "F2",
+      "F3",
+      "F4",
+      "F5",
+      "F6",
+      "F7",
+      "F8",
+      "F9",
+      "F10",
+      "F11",
+      "F12",
+      "F13",
+      "F14",
+      "F15",
+      "F16",
+      "F17",
+      "F18",
+      "F19",
+      "F20",
+      "F21",
+      "F22",
+      "F23",
+      "F24",
+      "Pause",
+      "PrintScreen",
+      "ScrollLock",
+      "Insert",
+      "Delete",
+      "Home",
+      "End",
+      "PageUp",
+      "PageDown",
+      "Left",
+      "Right",
+      "Up",
+      "Down",
+      "Space",
+      "Tab",
+      "Escape",
+      "Enter",
+      "Backspace"
+    ],
+    "requiredAnyModifiers": [
+      "Ctrl",
+      "Alt",
+      "Win",
+      "Meta"
+    ],
+    "modifierOrder": [
+      "Ctrl",
+      "Alt",
+      "Shift",
+      "Win",
+      "Meta"
+    ],
+    "asciiCaseInsensitive": true,
+    "trimCharacters": " \t",
+    "duplicateModifiers": "reject",
+    "mainKeyPosition": "last",
+    "reservedCombinations": [
+      "Ctrl+Alt+Delete",
+      "Win+L",
+      "Win+U",
+      "Win+D",
+      "Win+Tab",
+      "Win+R",
+      "Win+E",
+      "Alt+Tab",
+      "Alt+Escape",
+      "Alt+F4",
+      "Ctrl+Escape",
+      "Ctrl+Shift+Escape"
+    ],
+    "collisionScope": "allEffectiveGlobalHotkeys",
+    "nativeAdmission": "Current platform registration must succeed before config commit",
+    "reservedByPlatform": {
+      "windows": [
+        "Ctrl+Alt+Delete",
+        "Win+L",
+        "Win+U",
+        "Win+D",
+        "Win+Tab",
+        "Win+R",
+        "Win+E",
+        "Alt+Tab",
+        "Alt+Escape",
+        "Alt+F4",
+        "Ctrl+Escape",
+        "Ctrl+Shift+Escape"
+      ],
+      "macos": [
+        "Meta+Space",
+        "Ctrl+Meta+Q",
+        "Alt+Meta+Escape"
+      ],
+      "linux": [
+        "Alt+Tab",
+        "Alt+F4",
+        "Ctrl+Alt+Delete",
+        "Ctrl+Alt+F1",
+        "Ctrl+Alt+F2",
+        "Ctrl+Alt+F3",
+        "Ctrl+Alt+F4",
+        "Ctrl+Alt+F5",
+        "Ctrl+Alt+F6",
+        "Ctrl+Alt+F7",
+        "Ctrl+Alt+F8",
+        "Ctrl+Alt+F9",
+        "Ctrl+Alt+F10",
+        "Ctrl+Alt+F11",
+        "Ctrl+Alt+F12"
+      ]
+    }
+  }
+}

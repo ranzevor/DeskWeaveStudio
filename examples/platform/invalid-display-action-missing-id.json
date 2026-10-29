@@ -1,0 +1,16 @@
+{
+  "id": "moveDisplay",
+  "title": "移动指针",
+  "action": "pointer.move",
+  "params": {
+    "target": "main",
+    "position": {
+      "kind": "point",
+      "space": "displayPixels",
+      "x": 60.5,
+      "y": 200
+    },
+    "durationMs": 300
+  },
+  "on": {}
+}

@@ -1,0 +1,25 @@
+{
+  "collectionId": "collection-runFrames",
+  "kind": "runFrames",
+  "querySnapshot": {
+    "snapshotId": "query-runFrames",
+    "snapshotAt": "2026-11-05T02:00:00Z",
+    "expiresAt": "2026-11-05T02:01:00Z",
+    "sourceVersion": "1"
+  },
+  "items": [
+    {
+      "index": 0,
+      "value": {
+        "frameId": "frame-main",
+        "parentId": null,
+        "revision": "parent-r1",
+        "state": "paused",
+        "nodeId": "call"
+      }
+    }
+  ],
+  "matchedCount": 1,
+  "nextCursor": null,
+  "countState": "exact"
+}

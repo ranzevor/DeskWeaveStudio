@@ -1,0 +1,30 @@
+name: 功能建议
+description: 提出有明确使用场景与结果的能力
+title: "[Feature] "
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: 使用任务
+      description: 谁需要完成什么操作，目前在哪一步受阻？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望行为
+      description: 输入、操作、输出及必要的失败处理。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收场景
+      description: 如何通过一个具体例子确认能力满足需要？
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已有方法与影响
+      description: 可替代操作、相关需求和需要保留的行为。

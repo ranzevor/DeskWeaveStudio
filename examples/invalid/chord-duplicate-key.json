@@ -1,0 +1,14 @@
+{
+  "id": "save",
+  "title": "保存组合键",
+  "action": "keyboard.chord",
+  "params": {
+    "target": "main",
+    "keys": [
+      "ControlLeft",
+      "ControlLeft"
+    ],
+    "pressDurationMs": 10000
+  },
+  "on": {}
+}

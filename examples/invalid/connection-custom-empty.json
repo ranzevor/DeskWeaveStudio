@@ -1,0 +1,11 @@
+{
+  "provider": "custom",
+  "systemPrompt": "读取用户指定的图像区域。",
+  "defaultPrompt": "描述当前状态。",
+  "temperature": 0,
+  "maxOutputTokens": 1024,
+  "imageEncoding": "custom",
+  "imageDetail": "auto",
+  "imagePayloadTemplate": null,
+  "extraBody": {}
+}

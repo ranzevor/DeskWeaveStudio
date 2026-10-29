@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "id": 17,
+  "method": "tools/call",
+  "params": {
+    "arguments": {
+      "runId": "run-example",
+      "expectedControlVersion": 7
+    },
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+      "deskweave/requestId": "request-stop-example"
+    }
+  }
+}

@@ -1,0 +1,1033 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:operation-results:1",
+  "title": "DeskWeaveStudio 异步作业最终结果 1.0",
+  "$defs": {
+    "template.extract": {
+      "$ref": "urn:deskweave:vision:1#/$defs/extractionResult"
+    },
+    "template.commit": {
+      "$ref": "urn:deskweave:vision:1#/$defs/commitResult"
+    },
+    "template.export": {
+      "$ref": "urn:deskweave:vision:1#/$defs/exportResult"
+    },
+    "observation.export": {
+      "type": "object",
+      "properties": {
+        "exportId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "manifestResource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "exportId",
+        "count",
+        "manifestResource"
+      ],
+      "additionalProperties": false
+    },
+    "vision.observe": {
+      "$ref": "urn:deskweave:vision:1#/$defs/observationRecord"
+    },
+    "workflow.export": {
+      "type": "object",
+      "properties": {
+        "exportId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "manifestResource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "objectCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        }
+      },
+      "required": [
+        "exportId",
+        "workflowId",
+        "revision",
+        "manifestResource",
+        "manifestSha256",
+        "objectCount",
+        "totalBytes"
+      ],
+      "additionalProperties": false
+    },
+    "record.finish": {
+      "type": "object",
+      "properties": {
+        "recordingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "partial": {
+          "type": "boolean"
+        },
+        "resource": {
+          "$ref": "urn:deskweave:service:1#/$defs/asset.read/properties/result"
+        },
+        "assetId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assetVersion": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "draftId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "eventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "durationUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        }
+      },
+      "required": [
+        "recordingId",
+        "partial",
+        "resource",
+        "assetId",
+        "assetVersion",
+        "draftId",
+        "eventCount",
+        "durationUs"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "partial": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "assetId": {
+                "type": "null"
+              },
+              "assetVersion": {
+                "type": "null"
+              },
+              "draftId": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "assetId": {
+                "type": "string"
+              },
+              "assetVersion": {
+                "type": "string"
+              },
+              "draftId": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "vision.match": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "enum": [
+            "matched",
+            "notFound",
+            "ambiguous"
+          ]
+        },
+        "frame": {
+          "$ref": "urn:deskweave:agent:1#/$defs/capture.create/properties/result"
+        },
+        "imageVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "roi": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:vision:1#/$defs/roi"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scales": {
+          "$ref": "urn:deskweave:vision:1#/$defs/scales"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "selectedIndex": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locationToken": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidatesQuery": {
+          "allOf": [
+            {
+              "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "matchCandidates"
+                }
+              }
+            }
+          ]
+        },
+        "candidateCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "selected": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:query:1#/$defs/matchCandidatesItem"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "outcome",
+        "frame",
+        "imageVersion",
+        "roi",
+        "scales",
+        "durationMs",
+        "candidatesQuery",
+        "selectedIndex",
+        "locationToken",
+        "candidateCount",
+        "selected"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "matched"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "candidateCount": {
+                "minimum": 1
+              },
+              "selectedIndex": {
+                "type": "integer"
+              },
+              "selected": {
+                "$ref": "urn:deskweave:query:1#/$defs/matchCandidatesItem"
+              },
+              "locationToken": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "notFound"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "candidateCount": {
+                "minimum": 0,
+                "maximum": 0
+              },
+              "selectedIndex": {
+                "type": "null"
+              },
+              "selected": {
+                "type": "null"
+              },
+              "locationToken": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "ambiguous"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "candidateCount": {
+                "minimum": 2
+              },
+              "selectedIndex": {
+                "type": "null"
+              },
+              "selected": {
+                "type": "null"
+              },
+              "locationToken": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "asset.import": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "image",
+            "trajectory",
+            "workflow",
+            "package"
+          ]
+        },
+        "entryWorkflow": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "workflowId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "workflowId",
+                "revision"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifestResource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "按 package.schema.json 的 importManifest 定义封存的完整来源到目标映射资源。"
+        },
+        "objectsQuery": {
+          "allOf": [
+            {
+              "$ref": "urn:deskweave:query:1#/$defs/collectionRef"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "importedObjects"
+                }
+              }
+            }
+          ]
+        },
+        "objectCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "kind",
+        "objectsQuery",
+        "entryWorkflow",
+        "manifestResource",
+        "objectCount"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "image",
+                  "trajectory"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "objects": {
+                "maxItems": 1
+              },
+              "entryWorkflow": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "entryWorkflow": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "image"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "objects": {
+                "items": {
+                  "properties": {
+                    "kind": {
+                      "const": "image"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "trajectory"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "objects": {
+                "items": {
+                  "properties": {
+                    "kind": {
+                      "const": "trajectory"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "input.submit": {
+      "type": "object",
+      "properties": {
+        "intentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "receipt": {
+          "allOf": [
+            {
+              "$ref": "urn:deskweave:agent:1#/$defs/segment.status/properties/result"
+            },
+            {
+              "properties": {
+                "state": {
+                  "const": "sent"
+                },
+                "cleanup": {
+                  "enum": [
+                    "succeeded",
+                    "notRequired"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "intentId",
+        "runId",
+        "receipt"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.backup": {
+      "type": "object",
+      "properties": {
+        "backupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "formatVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "manifestResource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "objectCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "backupId",
+        "workspaceId",
+        "formatVersion",
+        "manifestResource",
+        "manifestSha256",
+        "objectCount",
+        "totalBytes",
+        "completedAt"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.restore": {
+      "type": "object",
+      "properties": {
+        "restoreId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "backupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "formatVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "manifestResource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "integrity": {
+          "const": "verified"
+        },
+        "opened": {
+          "const": false
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "restoreId",
+        "backupId",
+        "workspaceId",
+        "formatVersion",
+        "manifestResource",
+        "manifestSha256",
+        "integrity",
+        "opened",
+        "completedAt"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "retry": {
+          "enum": [
+            "never",
+            "sameRequest",
+            "afterQuery"
+          ]
+        },
+        "details": {
+          "$ref": "urn:deskweave:values:1#/$defs/raw"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retry"
+      ],
+      "additionalProperties": false
+    },
+    "operationSnapshot": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "method": {
+          "enum": [
+            "workflow.export",
+            "record.finish",
+            "vision.match",
+            "vision.observe",
+            "asset.import",
+            "input.submit",
+            "workspace.backup",
+            "workspace.restore",
+            "template.extract",
+            "template.commit",
+            "template.export",
+            "observation.export",
+            "asset.edit.commit",
+            "connection.testDraft"
+          ]
+        },
+        "state": {
+          "enum": [
+            "queued",
+            "running",
+            "cancelling",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "uncertain"
+          ]
+        },
+        "result": {
+          "$ref": "urn:deskweave:values:1#/$defs/raw"
+        },
+        "error": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:operation-results:1#/$defs/error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "method",
+        "state",
+        "result",
+        "error"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "succeeded"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "method": {
+                    "const": "workflow.export"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/workflow.export"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "record.finish"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/record.finish"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "vision.match"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/vision.match"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "vision.observe"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/vision.observe"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "asset.import"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/asset.import"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "input.submit"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/input.submit"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "workspace.backup"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/workspace.backup"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "workspace.restore"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/workspace.restore"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "template.extract"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/template.extract"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "template.commit"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/template.commit"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "template.export"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/template.export"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "observation.export"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/observation.export"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "asset.edit.commit"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/asset.edit.commit"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "method": {
+                    "const": "connection.testDraft"
+                  },
+                  "result": {
+                    "$ref": "urn:deskweave:operation-results:1#/$defs/connection.testDraft"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "queued",
+                  "running",
+                  "cancelling"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "type": "null"
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "failed",
+                  "cancelled",
+                  "uncertain"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "type": "null"
+              },
+              "error": {
+                "$ref": "urn:deskweave:operation-results:1#/$defs/error"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "uncertain"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "properties": {
+                  "retry": {
+                    "const": "afterQuery"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "cancelled"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "properties": {
+                  "code": {
+                    "const": "CANCELLED"
+                  },
+                  "retry": {
+                    "const": "never"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "asset.edit.commit": {
+      "$ref": "urn:deskweave:authoring:1#/$defs/editResult"
+    },
+    "connection.testDraft": {
+      "$ref": "urn:deskweave:authoring:1#/$defs/draftTestResult"
+    }
+  },
+  "$ref": "#/$defs/operationSnapshot"
+}

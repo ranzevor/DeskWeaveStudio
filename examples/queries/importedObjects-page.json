@@ -1,0 +1,51 @@
+{
+  "collectionId": "collection-importedObjects",
+  "kind": "importedObjects",
+  "querySnapshot": {
+    "snapshotId": "query-importedObjects",
+    "snapshotAt": "2026-11-05T02:00:00Z",
+    "expiresAt": "2026-11-05T02:05:00Z",
+    "sourceVersion": "1"
+  },
+  "items": [
+    {
+      "index": 0,
+      "value": {
+        "kind": "workflow",
+        "objectId": "imported-main",
+        "version": "target-main-r1",
+        "reused": false
+      }
+    },
+    {
+      "index": 1,
+      "value": {
+        "kind": "workflow",
+        "objectId": "imported-secondary",
+        "version": "target-secondary-r1",
+        "reused": false
+      }
+    },
+    {
+      "index": 2,
+      "value": {
+        "kind": "workflow",
+        "objectId": "imported-childOne",
+        "version": "target-childOne-r1",
+        "reused": false
+      }
+    },
+    {
+      "index": 3,
+      "value": {
+        "kind": "workflow",
+        "objectId": "imported-childTwo",
+        "version": "target-childTwo-r1",
+        "reused": false
+      }
+    }
+  ],
+  "matchedCount": 4,
+  "nextCursor": null,
+  "countState": "exact"
+}

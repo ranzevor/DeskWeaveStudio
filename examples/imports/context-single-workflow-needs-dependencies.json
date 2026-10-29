@@ -1,0 +1,13 @@
+{
+  "inputKind": "workflow",
+  "sourceFile": "imports/single-source/workflow-needs-dependencies.json",
+  "targetFiles": {
+    "input": "imports/single-target/workflow-needs-dependencies.json"
+  },
+  "targetBindings": {
+    "input": {}
+  },
+  "mappingFile": "imports/single-workflow-needs-dependencies-preview.json",
+  "currentCatalogVersion": 31,
+  "now": "2026-10-29T05:00:20Z"
+}

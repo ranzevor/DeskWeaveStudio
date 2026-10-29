@@ -1,0 +1,505 @@
+{
+  "key": "observations",
+  "name": "观察会话与记录",
+  "prefix": "B",
+  "order": 3.2,
+  "req": [
+    "DW-023",
+    "DW-024",
+    "DW-014",
+    "DW-N02"
+  ],
+  "screens": [
+    {
+      "code": "B01",
+      "id": "observations-center",
+      "title": "观察中心",
+      "view": "observations-extra",
+      "variant": "center",
+      "parent": null,
+      "purpose": "查看当前会话、最近记录和单次观察入口。",
+      "primary": "observations-config",
+      "primaryLabel": "新建持续观察",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B02",
+      "id": "observations-config",
+      "title": "持续观察配置",
+      "view": "observations-extra",
+      "variant": "config",
+      "parent": "observations-center",
+      "purpose": "固定目标、区域、连接、变化检测和记录预算。",
+      "primary": "observations-running",
+      "primaryLabel": "开始持续观察",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B03",
+      "id": "observations-running",
+      "title": "持续观察运行中",
+      "view": "observations-extra",
+      "variant": "running",
+      "parent": "observations-center",
+      "purpose": "查看当前请求、检查记录和变化检测，按需停止。",
+      "primary": "observations-stopping",
+      "primaryLabel": "停止观察",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B04",
+      "id": "observations-stopping",
+      "title": "持续观察停止中",
+      "view": "observations-extra",
+      "variant": "stopping",
+      "parent": "observations-running",
+      "purpose": "停止新触发并等待在途请求取消和收尾。",
+      "primary": "observations-center",
+      "primaryLabel": "返回概览",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "completion": "observations-stopped"
+    },
+    {
+      "code": "B05",
+      "id": "observations-stopped",
+      "title": "持续观察已结束",
+      "view": "observations-extra",
+      "variant": "stopped",
+      "parent": "observations-center",
+      "purpose": "查看会话结束原因与记录数量，配置新的观察。",
+      "primary": "observations-history",
+      "primaryLabel": "查看会话记录",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B06",
+      "id": "observations-history",
+      "title": "观察记录查询",
+      "view": "observations-extra",
+      "variant": "history",
+      "parent": "observations-center",
+      "purpose": "按时间、会话与状态筛选，分页查看固定结果集。",
+      "primary": "observations-detail",
+      "primaryLabel": "详情",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B07",
+      "id": "observations-detail",
+      "title": "观察结果详情",
+      "view": "observations-extra",
+      "variant": "detail",
+      "parent": "observations-history",
+      "purpose": "查看实际截图、采集与完成时间、配置版本及用量。",
+      "primary": "observations-export",
+      "primaryLabel": "导出本条记录",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B08",
+      "id": "observations-skipped",
+      "title": "观察跳过详情",
+      "view": "observations-extra",
+      "variant": "skipped",
+      "parent": "observations-history",
+      "purpose": "查看区域无显著变化的检查与09:40:30成功基线，区分本次空结果。",
+      "primary": "observations-baseline",
+      "primaryLabel": "查看成功基线",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B09",
+      "id": "observations-failed",
+      "title": "观察请求失败",
+      "view": "observations-extra",
+      "variant": "failed",
+      "parent": "observations-history",
+      "purpose": "查看请求超时和会话状态，返回配置建立新观察。",
+      "primary": "observations-config",
+      "primaryLabel": "新建观察",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B10",
+      "id": "observations-save-error",
+      "title": "观察结果保存失败",
+      "view": "observations-extra",
+      "variant": "save-error",
+      "parent": "observations-history",
+      "purpose": "查看尚未入库的内存结果并导出独立恢复文件。",
+      "primary": null,
+      "primaryLabel": "保存恢复文件",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "download",
+      "primaryResult": "observation-recovery.json"
+    },
+    {
+      "code": "B11",
+      "id": "observations-export",
+      "title": "观察记录导出",
+      "view": "observations-extra",
+      "variant": "export",
+      "parent": "observations-history",
+      "purpose": "确认固定记录集、输出格式、字段和截图范围。",
+      "primary": "observations-exporting",
+      "primaryLabel": "开始导出",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B12",
+      "id": "observations-empty",
+      "title": "观察记录为空",
+      "view": "observations-extra",
+      "variant": "empty",
+      "parent": "observations-center",
+      "purpose": "查看当前筛选范围并调整条件或创建观察。",
+      "primary": "observations-config",
+      "primaryLabel": "新建持续观察",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B13",
+      "id": "observations-target-error",
+      "title": "观察目标失效",
+      "view": "observations-extra",
+      "variant": "target-error",
+      "parent": "observations-center",
+      "purpose": "查看目标关闭导致的会话失败，重新绑定后新建。",
+      "primary": "observations-config",
+      "primaryLabel": "重新选择目标",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B14",
+      "id": "observations-exporting",
+      "title": "观察导出进度",
+      "view": "observations-extra",
+      "variant": "exporting",
+      "parent": "observations-export",
+      "purpose": "查看固定记录集与截图写入进度，取消本次导出。",
+      "primary": "observations-history",
+      "primaryLabel": "取消导出",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "completion": "observations-export-succeeded"
+    },
+    {
+      "code": "B15",
+      "id": "observations-export-error",
+      "title": "观察导出失败",
+      "view": "observations-extra",
+      "variant": "export-error",
+      "parent": "observations-export",
+      "purpose": "查看输出位置不可写，选择其他位置后重新导出。",
+      "primary": "observations-export",
+      "primaryLabel": "更换输出位置",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B16",
+      "id": "observations-cancelled",
+      "title": "观察请求已取消",
+      "view": "observations-extra",
+      "variant": "cancelled",
+      "parent": "observations-history",
+      "purpose": "查看本次请求取消结果和实际时间，保留所属持续会话关联。",
+      "primary": "observations-config",
+      "primaryLabel": "新建观察",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B17",
+      "id": "observations-control-conflict",
+      "title": "观察停止状态冲突",
+      "view": "observations-extra",
+      "variant": "control-conflict",
+      "parent": "observations-running",
+      "purpose": "读取最新会话状态，避免重复操作覆盖新的控制结果。",
+      "primary": "observations-stopped",
+      "primaryLabel": "读取最新状态",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B18",
+      "id": "observations-export-succeeded",
+      "title": "观察导出完成",
+      "view": "observations-extra",
+      "variant": "export-succeeded",
+      "parent": "observations-export",
+      "purpose": "查看已完成的记录、截图与清单范围，打开输出位置或返回记录。",
+      "primary": null,
+      "primaryLabel": "打开输出位置",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "显示本次输出位置"
+    },
+    {
+      "code": "B19",
+      "id": "observations-baseline",
+      "title": "观察成功基线",
+      "view": "observations-extra",
+      "variant": "baseline",
+      "parent": "observations-history",
+      "purpose": "查看09:40:30成功保存的3份可下载报表与实际截图。",
+      "primary": "observations-export",
+      "primaryLabel": "导出本条记录",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B20",
+      "id": "observations-busy",
+      "title": "观察忙碌跳过",
+      "view": "observations-extra",
+      "variant": "busy",
+      "parent": "observations-history",
+      "purpose": "查看上一请求未结束的检查记录，本次不采集图像或追加请求。",
+      "primary": "observations-history",
+      "primaryLabel": "返回记录",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B21",
+      "id": "observations-session-failed",
+      "title": "观察会话已停止",
+      "view": "observations-extra",
+      "variant": "session-failed",
+      "parent": "observations-center",
+      "purpose": "查看凭据或授权失效导致的会话停止，重新配置观察。",
+      "primary": "observations-config",
+      "primaryLabel": "重新配置观察",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "B22",
+      "id": "observations-query-expired",
+      "title": "观察查询已过期",
+      "view": "observations-extra",
+      "variant": "query-expired",
+      "parent": "observations-history",
+      "purpose": "保留筛选与排序，重新查询已过期的固定结果集。",
+      "primary": "observations-history",
+      "primaryLabel": "重新查询",
+      "primaryKind": "validate",
+      "requirements": [
+        "DW-023",
+        "DW-024",
+        "DW-014",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

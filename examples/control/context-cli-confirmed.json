@@ -1,0 +1,86 @@
+{
+  "runId": "run-demo",
+  "controlVersion": 8,
+  "pauseSnapshot": {
+    "pauseId": "pause-demo",
+    "leaseId": "lease-demo",
+    "agentEpoch": "agent-live-demo",
+    "generation": 4,
+    "createdAt": "2026-10-29T02:00:00Z",
+    "expiresAt": "2026-10-29T02:30:00Z",
+    "cursor": {
+      "segmentId": "segment-drag-demo",
+      "payloadHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "eventCount": 48,
+      "nextEventIndex": 17,
+      "activeElapsedUs": 170000,
+      "remainingDelayUs": 8000
+    },
+    "heldInputs": [
+      {
+        "kind": "button",
+        "button": "left"
+      },
+      {
+        "kind": "key",
+        "key": "Control"
+      }
+    ],
+    "pointer": {
+      "x": 840,
+      "y": 620
+    },
+    "targets": [
+      {
+        "targetToken": "target-token-demo",
+        "targetVersion": "target-v1",
+        "topologyVersion": "display-v1"
+      }
+    ],
+    "heldInputsHash": "0c1ff2e5695fd2382b99bec4e0d800160662b353cf631e87bb8ef933f53781cc",
+    "targetStateHash": "cc6d42a6a18bd11e1091702020da771cc4fdfffd6dc69d30a3553457ef82907e",
+    "checkpointHash": "d22300238d87976f9d3fe035cff6e35f8463e8c10b6d432897f36d46dad39942",
+    "inputTargetToken": "target-token-demo"
+  },
+  "preparedAt": "2026-10-29T02:00:00Z",
+  "now": "2026-10-29T02:00:20Z",
+  "currentAgentEpoch": "agent-live-demo",
+  "currentGeneration": 4,
+  "currentTargets": [
+    {
+      "targetToken": "target-token-demo",
+      "targetVersion": "target-v1",
+      "topologyVersion": "display-v1"
+    }
+  ],
+  "planState": "prepared",
+  "sameOriginalRequest": false,
+  "resumePlan": {
+    "planId": "resume-plan-demo",
+    "runId": "run-demo",
+    "controlVersion": 8,
+    "pauseId": "pause-demo",
+    "agentEpoch": "agent-live-demo",
+    "generation": 4,
+    "expiresAt": "2026-10-29T02:01:00Z",
+    "heldInputs": [
+      {
+        "kind": "button",
+        "button": "left"
+      },
+      {
+        "kind": "key",
+        "key": "Control"
+      }
+    ],
+    "pointerToRestore": {
+      "x": 840,
+      "y": 620
+    },
+    "requiresConfirmation": true,
+    "planHash": "f2d8b8812f35c8a1564e103a0e725bee7a404dad1bd3e55e052406e3d2c55d11",
+    "restoreTargetToken": "target-token-demo"
+  },
+  "registeredGrant": "local-confirmation-demo",
+  "clientKind": "cli"
+}

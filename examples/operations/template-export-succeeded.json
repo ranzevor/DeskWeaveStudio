@@ -1,0 +1,12 @@
+{
+  "operationId": "operation-template-export-demo",
+  "method": "template.export",
+  "state": "succeeded",
+  "result": {
+    "exportId": "template-export-demo",
+    "count": 1,
+    "manifestResource": "deskweave://exports/template-export-demo/manifest",
+    "state": "succeeded"
+  },
+  "error": null
+}

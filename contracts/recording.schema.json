@@ -1,0 +1,472 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:recording:1",
+  "title": "显示屏拓扑、录制来源与回放映射 1.0",
+  "$defs": {
+    "point": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "rect": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "display": {
+      "type": "object",
+      "properties": {
+        "displayId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "outputNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "bounds": {
+          "$ref": "urn:deskweave:recording:1#/$defs/rect"
+        },
+        "rotation": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "dpiX": {
+          "type": "number",
+          "minimum": 48,
+          "maximum": 768
+        },
+        "dpiY": {
+          "type": "number",
+          "minimum": 48,
+          "maximum": 768
+        },
+        "primary": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "displayId",
+        "name",
+        "outputNames",
+        "bounds",
+        "rotation",
+        "dpiX",
+        "dpiY",
+        "primary"
+      ],
+      "additionalProperties": false
+    },
+    "topology": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/physicalTopology"
+        },
+        {
+          "$ref": "urn:deskweave:platform:1#/$defs/topology"
+        }
+      ]
+    },
+    "source": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/physicalSource"
+        },
+        {
+          "$ref": "#/$defs/displaySource"
+        }
+      ]
+    },
+    "displayPair": {
+      "type": "object",
+      "properties": {
+        "sourceDisplayId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetDisplayId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "sourceDisplayId",
+        "targetDisplayId"
+      ],
+      "additionalProperties": false
+    },
+    "displayMapping": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "original"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "displayLocal"
+            },
+            "displays": {
+              "type": "array",
+              "items": {
+                "$ref": "urn:deskweave:recording:1#/$defs/displayPair"
+              },
+              "minItems": 1,
+              "maxItems": 64
+            }
+          },
+          "required": [
+            "mode",
+            "displays"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "recordingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "state": {
+          "enum": [
+            "recording",
+            "pausing",
+            "paused",
+            "interrupted",
+            "finished"
+          ]
+        },
+        "controlVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "source": {
+          "$ref": "urn:deskweave:recording:1#/$defs/source"
+        },
+        "currentTopologyVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "eventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "durationUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "partial": {
+          "type": "boolean"
+        },
+        "reason": {
+          "oneOf": [
+            {
+              "enum": [
+                "USER_PAUSED",
+                "USER_FINISHED",
+                "DISPLAY_TOPOLOGY_CHANGED",
+                "TARGET_UNAVAILABLE",
+                "AUTHORIZATION_REVOKED",
+                "SESSION_UNAVAILABLE",
+                "EVENT_LIMIT",
+                "PROCESS_INTERRUPTED",
+                "RECORDING_SCOPE_LEFT",
+                "INPUT_QUEUE_OVERFLOW",
+                "INPUT_CAPTURE_LOST"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "recordingId",
+        "state",
+        "controlVersion",
+        "source",
+        "currentTopologyVersion",
+        "eventCount",
+        "durationUs",
+        "partial",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "recording"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "null"
+              },
+              "partial": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "pausing",
+                  "paused"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "const": "USER_PAUSED"
+              },
+              "partial": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "interrupted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "enum": [
+                  "DISPLAY_TOPOLOGY_CHANGED",
+                  "TARGET_UNAVAILABLE",
+                  "AUTHORIZATION_REVOKED",
+                  "SESSION_UNAVAILABLE",
+                  "EVENT_LIMIT",
+                  "PROCESS_INTERRUPTED",
+                  "RECORDING_SCOPE_LEFT",
+                  "INPUT_QUEUE_OVERFLOW",
+                  "INPUT_CAPTURE_LOST"
+                ]
+              },
+              "partial": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "physicalTopology": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "coordinateSpace": {
+          "const": "desktopPhysicalPixels"
+        },
+        "virtualBounds": {
+          "$ref": "urn:deskweave:recording:1#/$defs/rect"
+        },
+        "displays": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:deskweave:recording:1#/$defs/display"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "version",
+        "coordinateSpace",
+        "virtualBounds",
+        "displays"
+      ],
+      "additionalProperties": false
+    },
+    "physicalSource": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "enum": [
+            "allDisplays",
+            "display",
+            "window"
+          ]
+        },
+        "topology": {
+          "$ref": "#/$defs/physicalTopology"
+        },
+        "displayIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "initialPointer": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:recording:1#/$defs/point"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputProfile": {
+          "$ref": "urn:deskweave:platform:1#/$defs/inputProfile"
+        }
+      },
+      "required": [
+        "scope",
+        "topology",
+        "displayIds",
+        "initialPointer"
+      ],
+      "additionalProperties": false
+    },
+    "displaySource": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "enum": [
+            "allDisplays",
+            "display",
+            "window"
+          ]
+        },
+        "topology": {
+          "$ref": "urn:deskweave:platform:1#/$defs/topology"
+        },
+        "displayIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "initialPointer": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:platform:1#/$defs/displayPoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputProfile": {
+          "$ref": "urn:deskweave:platform:1#/$defs/inputProfile"
+        }
+      },
+      "required": [
+        "scope",
+        "topology",
+        "displayIds",
+        "initialPointer",
+        "inputProfile"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

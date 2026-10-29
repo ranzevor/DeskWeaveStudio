@@ -1,0 +1,7 @@
+{
+  "operationId": "operation-template-extract-demo",
+  "method": "template.extract",
+  "state": "running",
+  "result": null,
+  "error": null
+}

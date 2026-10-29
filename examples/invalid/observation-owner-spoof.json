@@ -1,0 +1,31 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "observation-background-demo",
+  "session": "session-demo",
+  "method": "observation.start",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "targetToken": "target-token-demo",
+    "connectionId": "local-vision",
+    "connectionVersion": 1,
+    "plan": {
+      "intervalMs": 5000,
+      "changeDetection": {
+        "enabled": true,
+        "threshold": 3
+      },
+      "timeoutMs": 60000,
+      "maxRecords": 100,
+      "maxDurationMs": 86400000,
+      "prompt": "读取报表月份和可下载状态。",
+      "roi": null,
+      "outputMode": "text",
+      "outputSchema": null,
+      "saveFrames": true
+    },
+    "detached": true,
+    "ownerClientId": "client-other"
+  }
+}

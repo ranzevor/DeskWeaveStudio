@@ -1,0 +1,12 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "agent-lease.status",
+  "session": "session-demo",
+  "method": "lease.status",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "leaseId": "lease-demo"
+  }
+}

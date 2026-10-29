@@ -1,0 +1,12 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "operation-query-demo",
+  "session": "session-demo",
+  "workspace": "workspace-demo",
+  "method": "operation.get",
+  "deadlineMs": 5000,
+  "params": {
+    "operationId": "operation-input-submit-demo"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "agent-lease.pause",
+  "session": "session-demo",
+  "method": "lease.pause",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "leaseId": "lease-demo",
+    "generation": 4
+  }
+}

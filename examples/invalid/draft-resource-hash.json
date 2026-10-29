@@ -1,0 +1,20 @@
+{
+  "workflowId": "hello",
+  "editorId": "editor-demo",
+  "expectedEditVersion": 2,
+  "editVersion": 3,
+  "baseRevision": "revision-demo",
+  "source": {
+    "kind": "resource",
+    "resourceId": "draft-source-upload-demo",
+    "length": 31,
+    "sha256": "broken-hash"
+  },
+  "lastValidModel": {
+    "kind": "resource",
+    "resourceId": "draft-model-upload-demo",
+    "length": 4912,
+    "sha256": "5d0136436e4bad7ad246b16baf31ffa22b8927db9dceb298d1333977ff1402b1"
+  },
+  "modelEditVersion": 0
+}

@@ -1,0 +1,37 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "request-agent-segment",
+  "session": "session-demo",
+  "workspace": "workspace-demo",
+  "method": "segment.submit",
+  "deadlineMs": 5000,
+  "params": {
+    "leaseId": "lease-demo",
+    "generation": 1,
+    "segmentId": "segment-demo",
+    "payloadHash": "f565b15740b77e732ab635467f04723d37164597e7ffec20424171ff77f24622",
+    "targetToken": "target-demo",
+    "operation": {
+      "id": "click",
+      "title": "点击演示位置",
+      "action": "pointer.click",
+      "params": {
+        "target": "main",
+        "position": {
+          "$expr": {
+            "op": "path",
+            "path": [
+              "vars",
+              "point"
+            ]
+          }
+        },
+        "button": "left",
+        "clicks": 1,
+        "intervalMs": 0
+      },
+      "on": {}
+    }
+  }
+}

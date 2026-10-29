@@ -1,0 +1,1774 @@
+{
+  "formatVersion": "1.0",
+  "protocolVersion": "2026-07-28",
+  "transports": [
+    "stdio",
+    "streamableHttp",
+    "sse"
+  ],
+  "schemaPublication": {
+    "source": "urn:deskweave:service:1",
+    "rootType": "object",
+    "resolveRefs": true,
+    "retainConstraints": true,
+    "inputProjectionProperty": "publishedInputSchema",
+    "forbiddenParamsPolicy": "rejectBeforeServiceDispatch"
+  },
+  "authorization": {
+    "authenticatedWorkspace": true,
+    "permissionsAreAllRequired": true,
+    "objectChecksRequired": true,
+    "localOnlyMethods": [
+      "workspace.open",
+      "workspace.backup",
+      "workspace.restore",
+      "target.select",
+      "settings.read",
+      "settings.update",
+      "connection.configure",
+      "connection.read",
+      "connection.test",
+      "record.start",
+      "record.pause",
+      "record.resume",
+      "record.finish",
+      "emergency.rearm",
+      "bridge.configure",
+      "bridge.start",
+      "bridge.stop",
+      "bridge.status",
+      "bridge.token.issue",
+      "bridge.token.revoke",
+      "debug.step",
+      "draft.read",
+      "draft.write",
+      "draft.discard",
+      "bridge.read",
+      "bridge.token.list",
+      "run.resume.prepare",
+      "run.resume.discard",
+      "debug.breakpoints.read",
+      "debug.breakpoints.update",
+      "asset.import.prepare",
+      "bridge.token.impact",
+      "connection.list",
+      "connection.testDraft",
+      "desktop.topology",
+      "record.snapshot",
+      "expression.preview"
+    ],
+    "catalogKindPermissions": {
+      "workflow": "workflow.read",
+      "asset": "asset.read",
+      "run": "run.read"
+    },
+    "resourcePermissions": "creationSource",
+    "operationPermissions": "originalMethodAndOwner",
+    "contentPurposePermissions": {
+      "workflowModel": "workflow.write",
+      "trajectoryEdit": "asset.write"
+    }
+  },
+  "tools": [
+    {
+      "name": "deskweave_catalog",
+      "title": "列出工作空间对象",
+      "description": "列出工作空间对象。按 kind 要求 workflow.read、asset.read 或 run.read；仅返回授权对象。",
+      "method": "workspace.catalog",
+      "permissions": [],
+      "objectAuthorization": "按 kind 要求 workflow.read、asset.read 或 run.read；仅返回授权对象。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workspace.catalog/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workspace.catalog/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "pagination": {
+        "mode": "cursorQuery",
+        "defaultPageSize": 50,
+        "maxPageSize": 100,
+        "cursor": "cursor",
+        "nextCursor": "nextCursor"
+      }
+    },
+    {
+      "name": "deskweave_workflow_read",
+      "title": "读取固定流程版本",
+      "description": "读取固定流程版本。检查流程及依赖版本授权。",
+      "method": "workflow.read",
+      "permissions": [
+        "workflow.read"
+      ],
+      "objectAuthorization": "检查流程及依赖版本授权。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.read/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.read/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_workflow_validate",
+      "title": "校验流程定义",
+      "description": "校验流程定义。检查引用对象授权；定义校验不产生输入。",
+      "method": "workflow.validate",
+      "permissions": [
+        "workflow.read"
+      ],
+      "objectAuthorization": "检查引用对象授权；定义校验不产生输入。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.validate/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.validate/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_workflow_save",
+      "title": "保存流程版本",
+      "description": "保存流程版本。检查流程写入及全部依赖读取权限。",
+      "method": "workflow.save",
+      "permissions": [
+        "workflow.write"
+      ],
+      "objectAuthorization": "检查流程写入及全部依赖读取权限。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.save/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.save/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_workflow_export",
+      "title": "导出固定流程版本",
+      "description": "导出固定流程版本。检查依赖读取权限及本地授予的输出位置。",
+      "method": "workflow.export",
+      "permissions": [
+        "workflow.read"
+      ],
+      "objectAuthorization": "检查依赖读取权限及本地授予的输出位置。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.export/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.export/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_run_prepare",
+      "title": "检查运行前置条件",
+      "description": "检查运行前置条件。按引用资源、目标和动作追加读取、采集、输入或模型能力。",
+      "method": "run.prepare",
+      "permissions": [
+        "run.execute"
+      ],
+      "objectAuthorization": "按引用资源、目标和动作追加读取、采集、输入或模型能力。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.prepare/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.prepare/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_run_start",
+      "title": "启动固定版本运行",
+      "description": "启动固定版本运行。逐项校验运行计划、全部动作、目标和依赖授权。",
+      "method": "run.start",
+      "permissions": [
+        "run.execute"
+      ],
+      "objectAuthorization": "逐项校验运行计划、全部动作、目标和依赖授权。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.start/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.start/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "deskweave_run_get",
+      "title": "读取运行快照",
+      "description": "读取运行快照。仅限已授权运行。",
+      "method": "run.snapshot",
+      "permissions": [
+        "run.read"
+      ],
+      "objectAuthorization": "仅限已授权运行。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.snapshot/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.snapshot/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_run_pause",
+      "title": "请求暂停运行",
+      "description": "请求暂停运行。检查运行归属和当前控制版本。",
+      "method": "run.pause",
+      "permissions": [
+        "run.control"
+      ],
+      "objectAuthorization": "检查运行归属和当前控制版本。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.pause/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.pause/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_run_resume",
+      "title": "请求继续运行",
+      "description": "请求继续运行。允许无恢复材料的普通继续；需要恢复输入或指针时转到可信本地确认入口。",
+      "method": "run.resume",
+      "permissions": [
+        "run.control"
+      ],
+      "objectAuthorization": "检查当前控制版本并重新校验全部目标和动作授权；只接受无恢复材料的普通继续。需要恢复输入或指针时返回 LOCAL_CONFIRMATION_REQUIRED，由可信本地 Host 完成确认。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.resume/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.resume/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "forbiddenParams": [
+        "resumePlanId",
+        "confirmationGrant"
+      ],
+      "publishedInputSchema": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedControlVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "runId",
+          "expectedControlVersion"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "deskweave_run_stop",
+      "title": "请求停止运行",
+      "description": "请求停止运行。检查运行归属；停止不授予输入或重新启动能力。",
+      "method": "run.stop",
+      "permissions": [
+        "run.control"
+      ],
+      "objectAuthorization": "检查运行归属；停止不授予输入或重新启动能力。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.stop/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.stop/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_capture",
+      "title": "采集目标区域",
+      "description": "采集目标区域。检查目标令牌、区域和有效期。",
+      "method": "capture.create",
+      "permissions": [
+        "capture.read"
+      ],
+      "objectAuthorization": "检查目标令牌、区域和有效期。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/capture.create/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/capture.create/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_match",
+      "title": "匹配目标模板",
+      "description": "匹配目标模板。检查目标、模板固定版本、范围与尺度。",
+      "method": "vision.match",
+      "permissions": [
+        "vision.local",
+        "capture.read",
+        "asset.read"
+      ],
+      "objectAuthorization": "检查目标、模板固定版本、范围与尺度。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/vision.match/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/vision.match/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_observe",
+      "title": "观察一次目标区域",
+      "description": "观察一次目标区域。检查目标与已授权连接；固定请求配置。",
+      "method": "vision.observe",
+      "permissions": [
+        "vision.remote",
+        "capture.read"
+      ],
+      "objectAuthorization": "检查目标与已授权连接；固定请求配置。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/vision.observe/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/vision.observe/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "deskweave_input",
+      "title": "提交单次桌面输入",
+      "description": "提交单次桌面输入。检查目标令牌；轨迹另需 asset.read；输入完成必须释放按住状态。",
+      "method": "input.submit",
+      "permissions": [
+        "desktop.input"
+      ],
+      "objectAuthorization": "检查目标令牌；轨迹另需 asset.read；输入完成必须释放按住状态。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/input.submit/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/input.submit/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_emergency_stop",
+      "title": "紧急停止桌面输入",
+      "description": "紧急停止桌面输入。只提供停止；解除锁定通过可信本地入口。",
+      "method": "emergency.stop",
+      "permissions": [
+        "desktop.stop"
+      ],
+      "objectAuthorization": "只提供停止；解除锁定通过可信本地入口。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/emergency.stop/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/emergency.stop/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_template_extract",
+      "title": "提取模板候选",
+      "description": "提取模板候选。来源帧要求 capture.read；来源资产要求 asset.read。",
+      "method": "template.extract",
+      "permissions": [
+        "vision.local"
+      ],
+      "objectAuthorization": "来源帧要求 capture.read；来源资产要求 asset.read。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.extract/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.extract/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_template_candidates",
+      "title": "读取模板候选",
+      "description": "读取模板候选。仅限当前客户端可访问的候选集及固定版本。",
+      "method": "template.candidates",
+      "permissions": [
+        "vision.local"
+      ],
+      "objectAuthorization": "仅限当前客户端可访问的候选集及固定版本。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.candidates/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.candidates/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "pagination": {
+        "mode": "cursorQuery",
+        "defaultPageSize": 50,
+        "maxPageSize": 100,
+        "cursor": "cursor",
+        "nextCursor": "nextCursor"
+      }
+    },
+    {
+      "name": "deskweave_template_names",
+      "title": "预览批量模板名称",
+      "description": "预览批量模板名称。候选集授权；OCR 启用时仅使用已安装语言。",
+      "method": "template.names",
+      "permissions": [
+        "asset.write"
+      ],
+      "objectAuthorization": "候选集授权；OCR 启用时仅使用已安装语言。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.names/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.names/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_template_commit",
+      "title": "保存模板批次",
+      "description": "保存模板批次。检查命名预览、内容摘要、候选版本和名称占用。",
+      "method": "template.commit",
+      "permissions": [
+        "asset.write"
+      ],
+      "objectAuthorization": "检查命名预览、内容摘要、候选版本和名称占用。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.commit/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.commit/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_template_export",
+      "title": "导出模板批次",
+      "description": "导出模板批次。仅导出已授权的固定资产版本至本地授予位置。",
+      "method": "template.export",
+      "permissions": [
+        "asset.read"
+      ],
+      "objectAuthorization": "仅导出已授权的固定资产版本至本地授予位置。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.export/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.export/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_template_discard",
+      "title": "释放暂存候选",
+      "description": "释放暂存候选。仅释放已授权候选集；不删除正式资产。",
+      "method": "template.discard",
+      "permissions": [
+        "asset.write"
+      ],
+      "objectAuthorization": "仅释放已授权候选集；不删除正式资产。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.discard/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/template.discard/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_ocr_status",
+      "title": "检查 OCR 语言",
+      "description": "检查 OCR 语言。返回引擎和语言状态，不读取屏幕。",
+      "method": "ocr.status",
+      "permissions": [
+        "vision.local"
+      ],
+      "objectAuthorization": "返回引擎和语言状态，不读取屏幕。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/ocr.status/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/ocr.status/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_observation_start",
+      "title": "启动持续观察",
+      "description": "启动持续观察。检查目标和连接固定版本；预算与后台策略仍受本地授权约束。",
+      "method": "observation.start",
+      "permissions": [
+        "observation.control",
+        "vision.remote",
+        "capture.read"
+      ],
+      "objectAuthorization": "检查目标和连接固定版本；预算与后台策略仍受本地授权约束。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.start/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.start/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "deskweave_observation_stop",
+      "title": "停止持续观察",
+      "description": "停止持续观察。检查会话归属和当前控制版本。",
+      "method": "observation.stop",
+      "permissions": [
+        "observation.control"
+      ],
+      "objectAuthorization": "检查会话归属和当前控制版本。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.stop/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.stop/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_observation_session",
+      "title": "读取观察会话",
+      "description": "读取观察会话。仅限已授权会话。",
+      "method": "observation.session",
+      "permissions": [
+        "observation.read"
+      ],
+      "objectAuthorization": "仅限已授权会话。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.session/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.session/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_observation_query",
+      "title": "查询观察记录",
+      "description": "查询观察记录。按记录所属对象过滤；游标绑定查询快照。",
+      "method": "observation.query",
+      "permissions": [
+        "observation.read"
+      ],
+      "objectAuthorization": "按记录所属对象过滤；游标绑定查询快照。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.query/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.query/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "pagination": {
+        "mode": "cursorQuery",
+        "defaultPageSize": 50,
+        "maxPageSize": 100,
+        "cursor": "cursor",
+        "nextCursor": "nextCursor"
+      }
+    },
+    {
+      "name": "deskweave_observation_read",
+      "title": "读取观察记录",
+      "description": "读取观察记录。截图与附件另作独立资源授权。",
+      "method": "observation.read",
+      "permissions": [
+        "observation.read"
+      ],
+      "objectAuthorization": "截图与附件另作独立资源授权。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.read/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.read/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_observation_export",
+      "title": "导出观察记录",
+      "description": "导出观察记录。逐记录检查；含截图时要求 capture.read 及本地输出位置能力。",
+      "method": "observation.export",
+      "permissions": [
+        "observation.read"
+      ],
+      "objectAuthorization": "逐记录检查；含截图时要求 capture.read 及本地输出位置能力。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.export/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.export/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_asset_import",
+      "title": "导入资产",
+      "description": "导入资产。来源必须为可信本地入口授予的对象能力。",
+      "method": "asset.import",
+      "permissions": [
+        "asset.write"
+      ],
+      "objectAuthorization": "来源必须为可信本地入口授予的对象能力。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.import/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.import/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_asset_references",
+      "title": "查询资产引用",
+      "description": "查询指定资产全部版本或单个版本的使用引用；返回固定头版本与有期限分页快照。",
+      "method": "asset.references",
+      "permissions": [
+        "asset.read"
+      ],
+      "objectAuthorization": "检查资产读取权；引用者按各自读取权限过滤，不可读取者仅返回计数。快照不授予删除或内容访问权。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.references/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.references/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "pagination": {
+        "mode": "cursorQuery",
+        "defaultPageSize": 50,
+        "maxPageSize": 100,
+        "cursor": "cursor",
+        "nextCursor": "nextCursor"
+      }
+    },
+    {
+      "name": "deskweave_resource_read",
+      "title": "读取资源块",
+      "description": "读取资源块。依据资源创建时记录的来源权限与对象授权检查每一块；资源身份不授予访问权。",
+      "method": "resource.read",
+      "permissions": [],
+      "objectAuthorization": "依据资源创建时记录的来源权限与对象授权检查每一块；资源身份不授予访问权。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/resource.read/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/resource.read/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_operation_get",
+      "title": "查询作业状态",
+      "description": "查询作业状态。仅限当前客户端拥有或本地明确授权的作业，并要求原方法对应读取权限。",
+      "method": "operation.get",
+      "permissions": [],
+      "objectAuthorization": "仅限当前客户端拥有或本地明确授权的作业，并要求原方法对应读取权限。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/operation.get/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/operation.get/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_operation_cancel",
+      "title": "取消作业",
+      "description": "取消作业。检查作业归属和原方法控制权限；取消后仍返回实际清理状态。",
+      "method": "operation.cancel",
+      "permissions": [],
+      "objectAuthorization": "检查作业归属和原方法控制权限；取消后仍返回实际清理状态。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/operation.cancel/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/operation.cancel/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_request_status",
+      "title": "查询原请求状态",
+      "description": "查询原请求状态。仅限当前已认证客户端自己的持久请求。",
+      "method": "request.status",
+      "permissions": [],
+      "objectAuthorization": "仅限当前已认证客户端自己的持久请求。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/request.status/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/request.status/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_asset_delete",
+      "title": "删除资产",
+      "description": "删除无使用引用的整个资产与全部版本；存在引用或当前版本变化时拒绝。",
+      "method": "asset.delete",
+      "permissions": [
+        "asset.read",
+        "asset.write"
+      ],
+      "objectAuthorization": "检查逻辑资产及全部版本写权限，事务内重新裁决所有强使用引用；不级联删除引用者。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.delete/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.delete/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_content_begin",
+      "title": "暂存编辑内容",
+      "description": "暂存编辑内容。",
+      "method": "content.begin",
+      "permissions": [],
+      "objectAuthorization": "按purpose要求workflow.write或asset.write；绑定已认证创建者、工作空间、用途、长度与摘要。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.begin/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.begin/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_content_write",
+      "title": "分块写入暂存内容",
+      "description": "分块写入暂存内容。",
+      "method": "content.write",
+      "permissions": [],
+      "objectAuthorization": "核对暂存拥有者与用途所需写权限；偏移和字节摘要共同核对。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.write/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.write/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_content_seal",
+      "title": "核对并封存内容",
+      "description": "核对并封存内容。",
+      "method": "content.seal",
+      "permissions": [],
+      "objectAuthorization": "重验用途权限、完整长度和实际摘要；只产生短时内容引用。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.seal/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.seal/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_content_discard",
+      "title": "释放暂存内容",
+      "description": "释放暂存内容。",
+      "method": "content.discard",
+      "permissions": [],
+      "objectAuthorization": "仅释放调用者拥有的暂存；不删除正式资产或版本。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.discard/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/content.discard/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_workflow_revisions",
+      "title": "读取流程版本",
+      "description": "读取流程版本。",
+      "method": "workflow.revisions",
+      "permissions": [
+        "workflow.read"
+      ],
+      "objectAuthorization": "仅枚举已授权流程的固定版本元数据；游标绑定读取者。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.revisions/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.revisions/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "pagination": {
+        "mode": "cursorQuery",
+        "defaultPageSize": 50,
+        "maxPageSize": 100,
+        "cursor": "cursor",
+        "nextCursor": "nextCursor"
+      }
+    },
+    {
+      "name": "deskweave_debug_variables_read",
+      "title": "读取脱敏运行变量",
+      "description": "读取脱敏运行变量。",
+      "method": "debug.variables.read",
+      "permissions": [
+        "run.read"
+      ],
+      "objectAuthorization": "按当前运行读取权返回固定脱敏快照；不返回本地恢复材料。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/debug.variables.read/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/debug.variables.read/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "pagination": {
+        "mode": "cursorQuery",
+        "defaultPageSize": 50,
+        "maxPageSize": 100,
+        "cursor": "cursor",
+        "nextCursor": "nextCursor"
+      }
+    },
+    {
+      "name": "deskweave_asset_edit_prepare",
+      "title": "准备资产编辑",
+      "description": "准备资产编辑。",
+      "method": "asset.edit.prepare",
+      "permissions": [
+        "asset.write"
+      ],
+      "objectAuthorization": "资产来源另需asset.read；捕获帧另需capture.read及原帧读取权；固定源和目标头。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.edit.prepare/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.edit.prepare/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_asset_edit_commit",
+      "title": "提交资产编辑",
+      "description": "提交资产编辑。",
+      "method": "asset.edit.commit",
+      "permissions": [
+        "asset.write"
+      ],
+      "objectAuthorization": "重验计划、来源读取权、目标头及名称；输出新不可变版本，不修改原字节。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.edit.commit/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.edit.commit/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_asset_edit_discard",
+      "title": "取消资产编辑",
+      "description": "取消资产编辑。",
+      "method": "asset.edit.discard",
+      "permissions": [
+        "asset.write"
+      ],
+      "objectAuthorization": "取消本人的未提交编辑；在途提交通过原作业取消并查询结果。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.edit.discard/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.edit.discard/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "deskweave_query_read",
+      "title": "分页查询集合",
+      "description": "按集合类型执行服务端筛选、稳定排序和游标分页，逐页检查原对象权限。",
+      "method": "query.read",
+      "permissions": [],
+      "objectAuthorization": "检查集合来源的原方法权限、对象读取权、工作空间与实际客户端；集合身份不授予权限。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/query.read/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/query.read/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "pagination": {
+        "mode": "cursorQuery",
+        "defaultPageSize": 50,
+        "maxPageSize": 100,
+        "cursor": "cursor",
+        "nextCursor": "nextCursor"
+      }
+    },
+    {
+      "name": "deskweave_query_close",
+      "title": "关闭查询快照",
+      "description": "释放当前客户端的只读查询快照；不删除来源对象。",
+      "method": "query.close",
+      "permissions": [],
+      "objectAuthorization": "检查集合来源的原方法权限、对象读取权、工作空间与实际客户端；集合身份不授予权限。",
+      "inputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/query.close/properties/params"
+      },
+      "outputSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/query.close/properties/result"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "流程目录",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/workflows{?cursor,pageSize,nameContains,states,order}",
+      "method": "workspace.catalog",
+      "permissions": [
+        "workflow.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {},
+      "queryParameters": [
+        "cursor",
+        "pageSize",
+        "nameContains",
+        "states",
+        "order"
+      ],
+      "defaults": {
+        "kind": "workflow",
+        "cursor": null,
+        "pageSize": 50,
+        "nameContains": "",
+        "states": [],
+        "order": "updatedDesc"
+      },
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workspace.catalog/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": false,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "固定流程版本",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/workflows/{workflowId}/revisions/{revision}",
+      "method": "workflow.read",
+      "permissions": [
+        "workflow.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {
+        "workflowId": "workflowId",
+        "revision": "revision"
+      },
+      "queryParameters": [],
+      "defaults": {},
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workflow.read/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": false,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "资产目录",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/assets{?cursor,pageSize,nameContains,states,order}",
+      "method": "workspace.catalog",
+      "permissions": [
+        "asset.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {},
+      "queryParameters": [
+        "cursor",
+        "pageSize",
+        "nameContains",
+        "states",
+        "order"
+      ],
+      "defaults": {
+        "kind": "asset",
+        "cursor": null,
+        "pageSize": 50,
+        "nameContains": "",
+        "states": [],
+        "order": "updatedDesc"
+      },
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workspace.catalog/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": false,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "资产内容",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/assets/{assetVersion}{?offset,length}",
+      "method": "asset.read",
+      "permissions": [
+        "asset.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {
+        "assetVersion": "assetVersion"
+      },
+      "queryParameters": [
+        "offset",
+        "length"
+      ],
+      "defaults": {
+        "offset": 0,
+        "length": 196608
+      },
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/asset.read/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": false,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "运行目录",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/runs{?cursor,pageSize,nameContains,states,order}",
+      "method": "workspace.catalog",
+      "permissions": [
+        "run.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {},
+      "queryParameters": [
+        "cursor",
+        "pageSize",
+        "nameContains",
+        "states",
+        "order"
+      ],
+      "defaults": {
+        "kind": "run",
+        "cursor": null,
+        "pageSize": 50,
+        "nameContains": "",
+        "states": [],
+        "order": "updatedDesc"
+      },
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/workspace.catalog/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": true,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "运行快照",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/runs/{runId}/snapshot",
+      "method": "run.snapshot",
+      "permissions": [
+        "run.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {
+        "runId": "runId"
+      },
+      "queryParameters": [],
+      "defaults": {},
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/run.snapshot/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": true,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "运行事件",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/runs/{runId}/events{?instanceEpoch,afterSeq,limit}",
+      "method": "event.read",
+      "permissions": [
+        "run.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {
+        "runId": "runId"
+      },
+      "queryParameters": [
+        "instanceEpoch",
+        "afterSeq",
+        "limit"
+      ],
+      "defaults": {
+        "afterSeq": "0",
+        "limit": 100
+      },
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/event.read/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": true,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "观察会话",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/observation-sessions/{sessionId}",
+      "method": "observation.session",
+      "permissions": [
+        "observation.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {
+        "sessionId": "sessionId"
+      },
+      "queryParameters": [],
+      "defaults": {},
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.session/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": true,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "观察记录",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/observations/{recordId}",
+      "method": "observation.read",
+      "permissions": [
+        "observation.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {
+        "recordId": "recordId"
+      },
+      "queryParameters": [],
+      "defaults": {},
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.read/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": false,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "观察记录目录",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/observations{?sessionId,from,until,states,order,cursor,pageSize}",
+      "method": "observation.query",
+      "permissions": [
+        "observation.read"
+      ],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {},
+      "queryParameters": [
+        "sessionId",
+        "from",
+        "until",
+        "states",
+        "order",
+        "cursor",
+        "pageSize"
+      ],
+      "defaults": {
+        "sessionId": null,
+        "from": null,
+        "until": null,
+        "states": [],
+        "order": "newest",
+        "cursor": null,
+        "pageSize": 50
+      },
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/observation.query/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": true,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "资源内容",
+      "uriTemplate": "deskweave://workspace/{workspaceId}/resources/{resourceId}{?offset,length}",
+      "method": "resource.read",
+      "permissions": [],
+      "workspaceParameter": "workspaceId",
+      "pathBindings": {
+        "resourceId": "resourceId"
+      },
+      "queryParameters": [
+        "offset",
+        "length"
+      ],
+      "defaults": {
+        "offset": 0,
+        "length": 196608
+      },
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/resource.read/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": false,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    },
+    {
+      "name": "系统能力",
+      "uriTemplate": "deskweave://system/capabilities",
+      "method": "system.capabilities",
+      "permissions": [],
+      "workspaceParameter": null,
+      "pathBindings": {},
+      "queryParameters": [],
+      "defaults": {},
+      "resultSchema": {
+        "$ref": "urn:deskweave:service:1#/$defs/system.capabilities/properties/result"
+      },
+      "mimeType": "application/json",
+      "subscribable": false,
+      "authorization": "按已认证工作空间和对象检查；资源块沿用原资源权限。"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "deskweave_create_workflow",
+      "title": "创建流程草稿",
+      "description": "创建流程草稿",
+      "arguments": [
+        {
+          "name": "description",
+          "description": "任务描述",
+          "required": true
+        },
+        {
+          "name": "targetName",
+          "description": "目标名称",
+          "required": false
+        }
+      ],
+      "argumentSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "targetName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "additionalProperties": false
+      },
+      "defaults": {
+        "targetName": "未指定"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": {
+            "type": "text",
+            "textTemplate": "制作目标：{description}。目标名称：{targetName}。请读取可用动作，编排可审阅流程并检查输入、资源和完成条件。"
+          }
+        }
+      ],
+      "sideEffects": "none"
+    },
+    {
+      "name": "deskweave_debug_workflow",
+      "title": "诊断指定流程",
+      "description": "诊断指定流程",
+      "arguments": [
+        {
+          "name": "workflowId",
+          "description": "流程身份",
+          "required": true
+        },
+        {
+          "name": "issue",
+          "description": "待排查问题",
+          "required": true
+        }
+      ],
+      "argumentSchema": {
+        "type": "object",
+        "properties": {
+          "workflowId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "issue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "workflowId",
+          "issue"
+        ],
+        "additionalProperties": false
+      },
+      "defaults": {},
+      "messages": [
+        {
+          "role": "user",
+          "content": {
+            "type": "text",
+            "textTemplate": "检查流程 {workflowId} 的固定版本与授权运行记录，定位以下问题：{issue}。返回具体修改及验证方法。"
+          }
+        }
+      ],
+      "sideEffects": "none"
+    },
+    {
+      "name": "deskweave_extract_templates",
+      "title": "制作模板",
+      "description": "制作模板",
+      "arguments": [
+        {
+          "name": "targetName",
+          "description": "目标名称",
+          "required": true
+        },
+        {
+          "name": "elementTypes",
+          "description": "元素类型",
+          "required": false
+        }
+      ],
+      "argumentSchema": {
+        "type": "object",
+        "properties": {
+          "targetName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "elementTypes": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "targetName"
+        ],
+        "additionalProperties": false
+      },
+      "defaults": {
+        "elementTypes": "控件与图标"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": {
+            "type": "text",
+            "textTemplate": "为目标 {targetName} 制作模板，关注元素：{elementTypes}。先确定采集范围，再检查候选、命名预览和保存结果。"
+          }
+        }
+      ],
+      "sideEffects": "none"
+    }
+  ],
+  "discoveryPagination": {
+    "methods": [
+      "tools/list",
+      "resources/list",
+      "resources/templates/list",
+      "prompts/list"
+    ],
+    "pageSize": 50,
+    "cursorLifetimeSeconds": 300,
+    "binding": [
+      "authenticatedClient",
+      "workspace",
+      "catalogVersion",
+      "authorizationVersion",
+      "method"
+    ],
+    "finalPage": "omitNextCursor"
+  },
+  "collectionQueries": [
+    {
+      "method": "workflow.validate",
+      "field": "diagnosticsQuery",
+      "kind": "diagnostics"
+    },
+    {
+      "method": "run.prepare",
+      "field": "requirementsQuery",
+      "kind": "runRequirements"
+    },
+    {
+      "method": "run.prepare",
+      "field": "diagnosticsQuery",
+      "kind": "diagnostics"
+    },
+    {
+      "method": "run.snapshot",
+      "field": "framesQuery",
+      "kind": "runFrames"
+    },
+    {
+      "method": "run.snapshot",
+      "field": "effectsQuery",
+      "kind": "runEffects"
+    },
+    {
+      "method": "template.names",
+      "field": "itemsQuery",
+      "kind": "templateNames"
+    },
+    {
+      "method": "ocr.status",
+      "field": "installedLanguagesQuery",
+      "kind": "ocrLanguages"
+    },
+    {
+      "operation": "vision.match",
+      "field": "candidatesQuery",
+      "kind": "matchCandidates"
+    },
+    {
+      "operation": "template.commit",
+      "field": "assetsQuery",
+      "kind": "templateAssets"
+    },
+    {
+      "operation": "asset.import",
+      "field": "objectsQuery",
+      "kind": "importedObjects"
+    }
+  ],
+  "requestContext": {
+    "metadataSchema": {
+      "$ref": "urn:deskweave:mcp:1#/$defs/requestMetadata"
+    },
+    "requestIdKey": "deskweave/requestId",
+    "engineEnvelopeField": "id",
+    "whenOmitted": "generateBeforeDispatch",
+    "resultMetaKey": "deskweave/requestId",
+    "scope": [
+      "workspace",
+      "authenticatedClient"
+    ],
+    "statusMethod": "request.status"
+  },
+  "supportedVersions": [
+    "2026-07-28",
+    "2025-11-25"
+  ],
+  "defaultTransports": [
+    "stdio",
+    "streamableHttp"
+  ],
+  "protocolProfiles": [
+    {
+      "version": "2026-07-28",
+      "era": "modern",
+      "transports": [
+        "stdio",
+        "streamableHttp"
+      ],
+      "requestMetadataSchema": {
+        "$ref": "urn:deskweave:mcp:1#/$defs/modernRequestMetadata"
+      },
+      "requiresInitialization": false,
+      "sessionHeader": null,
+      "subscriptionMethod": "subscriptions/listen",
+      "httpDisconnect": "cancelRequest",
+      "capabilities": {
+        "tools": {},
+        "resources": {},
+        "prompts": {}
+      }
+    },
+    {
+      "version": "2025-11-25",
+      "era": "legacy",
+      "transports": [
+        "stdio",
+        "streamableHttp",
+        "sse"
+      ],
+      "requestMetadataSchema": {
+        "$ref": "urn:deskweave:mcp:1#/$defs/requestMetadata"
+      },
+      "requiresInitialization": true,
+      "sessionHeader": "MCP-Session-Id",
+      "subscriptionMethod": "resources/subscribe",
+      "httpDisconnect": "endWait",
+      "capabilities": {
+        "tools": {
+          "listChanged": true
+        },
+        "resources": {
+          "subscribe": true,
+          "listChanged": true
+        },
+        "prompts": {
+          "listChanged": true
+        }
+      }
+    }
+  ],
+  "cachePolicy": {
+    "ttlMs": 0,
+    "cacheScope": "private"
+  },
+  "subscriptions": {
+    "maxStreamsPerClient": 4,
+    "maxResourcesPerStream": 32,
+    "engineMethods": [
+      "event.subscribe",
+      "event.read",
+      "event.unsubscribe",
+      "stream.subscribe",
+      "stream.read",
+      "stream.unsubscribe"
+    ]
+  }
+}

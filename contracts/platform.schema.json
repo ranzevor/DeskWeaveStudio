@@ -1,0 +1,413 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:platform:1",
+  "title": "平台能力与逐屏坐标 1.0",
+  "$defs": {
+    "backend": {
+      "enum": [
+        "windows-win32",
+        "macos-quartz",
+        "linux-x11",
+        "linux-wayland-portal",
+        "linux-wayland-compositor"
+      ]
+    },
+    "displayPoint": {
+      "type": "object",
+      "properties": {
+        "displayId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "displayId",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "layoutRect": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "y": {
+          "type": "number",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1e-06,
+          "maximum": 2147483647
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1e-06,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "pixelSize": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "inputProfile": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "$ref": "urn:deskweave:platform:1#/$defs/backend"
+        },
+        "relativeUnit": {
+          "enum": [
+            "deviceCounts",
+            "nativePoints",
+            "x11Valuators",
+            "libeiUnits",
+            "none"
+          ]
+        }
+      },
+      "required": [
+        "backend",
+        "relativeUnit"
+      ],
+      "additionalProperties": false
+    },
+    "feature": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "available",
+            "permissionRequired",
+            "denied",
+            "unsupported",
+            "unimplemented",
+            "sessionUnavailable"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "NONE",
+            "PERMISSION_MISSING",
+            "PERMISSION_DENIED",
+            "NO_PASSIVE_CAPTURE",
+            "BACKEND_UNAVAILABLE",
+            "SESSION_INACTIVE",
+            "SELECTION_REQUIRED",
+            "CAPABILITY_NOT_IMPLEMENTED",
+            "PROTOCOL_MISSING"
+          ]
+        },
+        "nextAction": {
+          "enum": [
+            "none",
+            "grantPermission",
+            "selectSource",
+            "switchSession",
+            "updateComponent"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "reason",
+        "nextAction"
+      ],
+      "additionalProperties": false
+    },
+    "display": {
+      "type": "object",
+      "properties": {
+        "displayId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "outputNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "pixelSize": {
+          "$ref": "urn:deskweave:platform:1#/$defs/pixelSize"
+        },
+        "layoutBounds": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:platform:1#/$defs/layoutRect"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rotation": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "primary": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "pixelToNative": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -1000000000000.0,
+                "maximum": 1000000000000.0
+              },
+              "minItems": 6,
+              "maxItems": 6
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "displayId",
+        "name",
+        "outputNames",
+        "pixelSize",
+        "layoutBounds",
+        "rotation",
+        "primary",
+        "pixelToNative"
+      ],
+      "additionalProperties": false
+    },
+    "topology": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "coordinateSpace": {
+          "const": "displayLocalPixels"
+        },
+        "nativeSpace": {
+          "enum": [
+            "windowsPhysicalPixels",
+            "quartzPoints",
+            "x11RootPixels",
+            "eiRegions"
+          ]
+        },
+        "coverage": {
+          "enum": [
+            "all",
+            "selected"
+          ]
+        },
+        "displays": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:deskweave:platform:1#/$defs/display"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "version",
+        "coordinateSpace",
+        "nativeSpace",
+        "coverage",
+        "displays"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "os": {
+          "enum": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        "arch": {
+          "enum": [
+            "x64",
+            "arm64"
+          ]
+        },
+        "backend": {
+          "$ref": "urn:deskweave:platform:1#/$defs/backend"
+        },
+        "backendVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "topologyVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "topologyCoverage": {
+          "enum": [
+            "all",
+            "selected",
+            "unknown"
+          ]
+        },
+        "trajectoryVersions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "1.0",
+              "1.1"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "features": {
+          "type": "object",
+          "properties": {
+            "capture.display": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "capture.window": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "record.pointerAbsolute": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "record.pointerRelative": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "record.keyboard": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "record.allDisplays": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "input.pointerAbsolute": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "input.pointerRelative": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "input.keyboard": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "input.unicodeText": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "control.globalShortcut": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            },
+            "control.focusTarget": {
+              "$ref": "urn:deskweave:platform:1#/$defs/feature"
+            }
+          },
+          "required": [
+            "capture.display",
+            "capture.window",
+            "record.pointerAbsolute",
+            "record.pointerRelative",
+            "record.keyboard",
+            "record.allDisplays",
+            "input.pointerAbsolute",
+            "input.pointerRelative",
+            "input.keyboard",
+            "input.unicodeText",
+            "control.globalShortcut",
+            "control.focusTarget"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "os",
+        "arch",
+        "backend",
+        "backendVersion",
+        "generation",
+        "topologyVersion",
+        "topologyCoverage",
+        "trajectoryVersions",
+        "features"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

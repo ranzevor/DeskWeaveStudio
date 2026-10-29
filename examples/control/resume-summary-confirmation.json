@@ -1,0 +1,16 @@
+{
+  "availability": "needsLocalConfirmation",
+  "pauseId": "pause-demo",
+  "agentEpoch": "agent-live-demo",
+  "heldInputs": [
+    {
+      "kind": "button",
+      "button": "left"
+    },
+    {
+      "kind": "key",
+      "key": "Control"
+    }
+  ],
+  "reason": null
+}

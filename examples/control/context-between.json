@@ -1,0 +1,78 @@
+{
+  "runId": "run-demo",
+  "controlVersion": 8,
+  "pauseSnapshot": {
+    "pauseId": "pause-between-demo",
+    "leaseId": "lease-demo",
+    "agentEpoch": "agent-live-demo",
+    "generation": 4,
+    "createdAt": "2026-10-29T02:00:00Z",
+    "expiresAt": "2026-10-29T02:30:00Z",
+    "cursor": null,
+    "heldInputs": [
+      {
+        "kind": "key",
+        "key": "Control"
+      }
+    ],
+    "pointer": {
+      "x": 840,
+      "y": 620
+    },
+    "targets": [
+      {
+        "targetToken": "target-token-demo",
+        "targetVersion": "target-v1",
+        "topologyVersion": "display-v1"
+      },
+      {
+        "targetToken": "target-token-other",
+        "targetVersion": "other-v1",
+        "topologyVersion": "display-v1"
+      }
+    ],
+    "heldInputsHash": "7410b4a87f101d7e8b1a036ed31834433b9bda95a19b362230cdf61d5539ff53",
+    "targetStateHash": "b3fd53e92e2ee6ecbe1016cf2ddf680cdc2b1e42dcead0ea2f85a23fc0adcf8f",
+    "checkpointHash": "4fe526218e1f0bda2bb0bd9e6d51879f237a7faed09357bb098246f65fea4d3e",
+    "inputTargetToken": "target-token-demo"
+  },
+  "preparedAt": "2026-10-29T02:00:00Z",
+  "now": "2026-10-29T02:00:20Z",
+  "currentAgentEpoch": "agent-live-demo",
+  "currentGeneration": 4,
+  "currentTargets": [
+    {
+      "targetToken": "target-token-demo",
+      "targetVersion": "target-v1",
+      "topologyVersion": "display-v1"
+    },
+    {
+      "targetToken": "target-token-other",
+      "targetVersion": "other-v1",
+      "topologyVersion": "display-v1"
+    }
+  ],
+  "planState": "prepared",
+  "sameOriginalRequest": false,
+  "resumePlan": {
+    "planId": "resume-between-demo",
+    "runId": "run-demo",
+    "controlVersion": 8,
+    "pauseId": "pause-between-demo",
+    "agentEpoch": "agent-live-demo",
+    "generation": 4,
+    "expiresAt": "2026-10-29T02:01:00Z",
+    "heldInputs": [
+      {
+        "kind": "key",
+        "key": "Control"
+      }
+    ],
+    "pointerToRestore": null,
+    "requiresConfirmation": true,
+    "planHash": "ac51114bddae4c9f0c2e0c90b73240bf767e3cc28f10be84140eb2892aeb9d3c",
+    "restoreTargetToken": "target-token-demo"
+  },
+  "registeredGrant": "local-confirmation-demo",
+  "clientKind": "trustedHost"
+}

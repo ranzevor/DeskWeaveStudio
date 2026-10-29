@@ -1,0 +1,6 @@
+{
+  "targetToken": "desktop-recording-synthetic",
+  "coordinateMode": "event",
+  "includePointerMotion": true,
+  "expectedTopologyVersion": 41
+}

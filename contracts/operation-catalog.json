@@ -1,0 +1,112 @@
+{
+  "formatVersion": "1.0",
+  "operations": [
+    {
+      "method": "workflow.export",
+      "resultSchema": {
+        "$ref": "urn:deskweave:operation-results:1#/$defs/workflow.export"
+      }
+    },
+    {
+      "method": "record.finish",
+      "resultSchema": {
+        "$ref": "urn:deskweave:operation-results:1#/$defs/record.finish"
+      }
+    },
+    {
+      "method": "vision.match",
+      "resultSchema": {
+        "$ref": "urn:deskweave:operation-results:1#/$defs/vision.match"
+      }
+    },
+    {
+      "method": "vision.observe",
+      "resultSchema": {
+        "$ref": "urn:deskweave:vision:1#/$defs/observationRecord"
+      }
+    },
+    {
+      "method": "asset.import",
+      "resultSchema": {
+        "$ref": "urn:deskweave:operation-results:1#/$defs/asset.import"
+      }
+    },
+    {
+      "method": "input.submit",
+      "resultSchema": {
+        "$ref": "urn:deskweave:operation-results:1#/$defs/input.submit"
+      }
+    },
+    {
+      "method": "workspace.backup",
+      "resultSchema": {
+        "$ref": "urn:deskweave:operation-results:1#/$defs/workspace.backup"
+      }
+    },
+    {
+      "method": "workspace.restore",
+      "resultSchema": {
+        "$ref": "urn:deskweave:operation-results:1#/$defs/workspace.restore"
+      }
+    },
+    {
+      "method": "template.extract",
+      "resultSchema": {
+        "$ref": "urn:deskweave:vision:1#/$defs/extractionResult"
+      }
+    },
+    {
+      "method": "template.commit",
+      "resultSchema": {
+        "$ref": "urn:deskweave:vision:1#/$defs/commitResult"
+      }
+    },
+    {
+      "method": "template.export",
+      "resultSchema": {
+        "$ref": "urn:deskweave:vision:1#/$defs/exportResult"
+      }
+    },
+    {
+      "method": "observation.export",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exportId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "manifestResource": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "exportId",
+          "count",
+          "manifestResource"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "method": "asset.edit.commit",
+      "resultSchema": {
+        "$ref": "urn:deskweave:authoring:1#/$defs/editResult"
+      }
+    },
+    {
+      "method": "connection.testDraft",
+      "resultSchema": {
+        "$ref": "urn:deskweave:authoring:1#/$defs/draftTestResult"
+      }
+    }
+  ]
+}

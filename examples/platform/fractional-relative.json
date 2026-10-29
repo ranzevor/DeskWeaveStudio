@@ -1,0 +1,108 @@
+{
+  "formatVersion": "1.1",
+  "coordinateMode": "relative",
+  "source": {
+    "scope": "allDisplays",
+    "topology": {
+      "version": 7,
+      "coordinateSpace": "displayLocalPixels",
+      "nativeSpace": "quartzPoints",
+      "coverage": "all",
+      "displays": [
+        {
+          "displayId": "main",
+          "name": "内建显示屏",
+          "outputNames": [
+            "内建显示屏"
+          ],
+          "pixelSize": {
+            "width": 3024,
+            "height": 1964
+          },
+          "layoutBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1512,
+            "height": 982
+          },
+          "rotation": 0,
+          "primary": true,
+          "pixelToNative": [
+            0.5,
+            0,
+            0,
+            0.5,
+            0,
+            0
+          ]
+        },
+        {
+          "displayId": "left",
+          "name": "左侧显示屏",
+          "outputNames": [
+            "左侧显示屏"
+          ],
+          "pixelSize": {
+            "width": 1920,
+            "height": 1080
+          },
+          "layoutBounds": {
+            "x": -1920,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          },
+          "rotation": 0,
+          "primary": false,
+          "pixelToNative": [
+            1,
+            0,
+            0,
+            1,
+            -1920,
+            0
+          ]
+        }
+      ]
+    },
+    "displayIds": [
+      "main",
+      "left"
+    ],
+    "initialPointer": {
+      "displayId": "main",
+      "x": 80,
+      "y": 200
+    },
+    "inputProfile": {
+      "backend": "macos-quartz",
+      "relativeUnit": "nativePoints"
+    }
+  },
+  "events": [
+    {
+      "kind": "pointer.button",
+      "atUs": 100000,
+      "button": "left",
+      "state": "down"
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 110000,
+      "dx": 1.25,
+      "dy": -0.5
+    },
+    {
+      "kind": "pointer.delta",
+      "atUs": 120000,
+      "dx": -1.25,
+      "dy": 0.5
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 130000,
+      "button": "left",
+      "state": "up"
+    }
+  ]
+}

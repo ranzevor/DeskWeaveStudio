@@ -1,0 +1,16 @@
+{
+  "objects": [
+    {
+      "kind": "workflow",
+      "objectId": "workflow-demo",
+      "version": "revision-demo",
+      "reused": false
+    },
+    {
+      "kind": "trajectory",
+      "objectId": "trajectory-demo",
+      "version": "trajectory-version-demo",
+      "reused": true
+    }
+  ]
+}

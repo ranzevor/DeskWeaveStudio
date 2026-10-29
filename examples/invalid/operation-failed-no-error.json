@@ -1,0 +1,7 @@
+{
+  "operationId": "operation-template-export-demo",
+  "method": "template.export",
+  "state": "failed",
+  "result": null,
+  "error": null
+}

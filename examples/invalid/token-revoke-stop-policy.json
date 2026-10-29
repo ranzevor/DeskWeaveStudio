@@ -1,0 +1,9 @@
+{
+  "revoked": true,
+  "affectedSessions": 1,
+  "stoppingRuns": 1,
+  "previewState": "expired",
+  "impactVersion": 8,
+  "affectedSubscriptions": 1,
+  "revokedDirectInputPermits": 0
+}

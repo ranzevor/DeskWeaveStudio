@@ -1,0 +1,23 @@
+{
+  "query": {
+    "runId": "run-report",
+    "snapshotId": null,
+    "frameId": "frame-main",
+    "scope": "local",
+    "cursor": null,
+    "pageSize": 50
+  },
+  "dataVersion": 8,
+  "now": "2026-10-29T02:01:01Z",
+  "sensitiveNames": [
+    "token"
+  ],
+  "derivations": [
+    {
+      "name": "summary",
+      "reads": [
+        "token"
+      ]
+    }
+  ]
+}

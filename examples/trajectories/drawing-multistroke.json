@@ -1,0 +1,90 @@
+{
+  "formatVersion": "1.0",
+  "coordinateMode": "physical",
+  "events": [
+    {
+      "kind": "pointer.move",
+      "atUs": 100000,
+      "x": 100,
+      "y": 100
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 200000,
+      "button": "left",
+      "state": "down"
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 212500,
+      "x": 150,
+      "y": 150
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 225000,
+      "x": 200,
+      "y": 100
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 237500,
+      "x": 250,
+      "y": 150
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 250000,
+      "x": 300,
+      "y": 100
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 262500,
+      "button": "left",
+      "state": "up"
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 500000,
+      "x": 100,
+      "y": 250
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 600000,
+      "button": "left",
+      "state": "down"
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 700000,
+      "x": 150,
+      "y": 300
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 800000,
+      "x": 200,
+      "y": 250
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 900000,
+      "x": 250,
+      "y": 300
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1000000,
+      "x": 300,
+      "y": 250
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 1100000,
+      "button": "left",
+      "state": "up"
+    }
+  ]
+}

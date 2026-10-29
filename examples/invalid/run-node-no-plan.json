@@ -1,0 +1,26 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "start-node-invalid",
+  "session": "session-demo",
+  "method": "run.start",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "workflowId": "workflow-demo",
+    "revision": "revision-demo",
+    "inputs": {},
+    "targets": {
+      "main": "target-token-demo"
+    },
+    "detached": false,
+    "startNode": "capture",
+    "initialVariables": {
+      "month": "2026-10"
+    },
+    "runVariables": {
+      "attempts": 0
+    },
+    "interruptPolicy": "pause"
+  }
+}

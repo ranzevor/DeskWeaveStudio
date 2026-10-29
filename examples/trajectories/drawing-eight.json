@@ -1,0 +1,600 @@
+{
+  "formatVersion": "1.0",
+  "coordinateMode": "event",
+  "events": [
+    {
+      "kind": "pointer.move",
+      "atUs": 100000,
+      "x": 500,
+      "y": 350
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 200000,
+      "button": "left",
+      "state": "down"
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 212500,
+      "x": 512,
+      "y": 366
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 225000,
+      "x": 523,
+      "y": 381
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 237500,
+      "x": 535,
+      "y": 396
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 250000,
+      "x": 547,
+      "y": 410
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 262500,
+      "x": 558,
+      "y": 423
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 275000,
+      "x": 569,
+      "y": 435
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 287500,
+      "x": 580,
+      "y": 445
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 300000,
+      "x": 590,
+      "y": 454
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 312500,
+      "x": 600,
+      "y": 461
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 325000,
+      "x": 610,
+      "y": 466
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 337500,
+      "x": 619,
+      "y": 469
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 350000,
+      "x": 627,
+      "y": 470
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 362500,
+      "x": 635,
+      "y": 469
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 375000,
+      "x": 643,
+      "y": 466
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 387500,
+      "x": 650,
+      "y": 461
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 400000,
+      "x": 656,
+      "y": 454
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 412500,
+      "x": 661,
+      "y": 445
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 425000,
+      "x": 666,
+      "y": 435
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 437500,
+      "x": 670,
+      "y": 423
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 450000,
+      "x": 674,
+      "y": 410
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 462500,
+      "x": 677,
+      "y": 396
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 475000,
+      "x": 678,
+      "y": 381
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 487500,
+      "x": 680,
+      "y": 366
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 500000,
+      "x": 680,
+      "y": 350
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 512500,
+      "x": 680,
+      "y": 334
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 525000,
+      "x": 678,
+      "y": 319
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 537500,
+      "x": 677,
+      "y": 304
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 550000,
+      "x": 674,
+      "y": 290
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 562500,
+      "x": 670,
+      "y": 277
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 575000,
+      "x": 666,
+      "y": 265
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 587500,
+      "x": 661,
+      "y": 255
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 600000,
+      "x": 656,
+      "y": 246
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 612500,
+      "x": 650,
+      "y": 239
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 625000,
+      "x": 643,
+      "y": 234
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 637500,
+      "x": 635,
+      "y": 231
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 650000,
+      "x": 627,
+      "y": 230
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 662500,
+      "x": 619,
+      "y": 231
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 675000,
+      "x": 610,
+      "y": 234
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 687500,
+      "x": 600,
+      "y": 239
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 700000,
+      "x": 590,
+      "y": 246
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 712500,
+      "x": 580,
+      "y": 255
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 725000,
+      "x": 569,
+      "y": 265
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 737500,
+      "x": 558,
+      "y": 277
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 750000,
+      "x": 547,
+      "y": 290
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 762500,
+      "x": 535,
+      "y": 304
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 775000,
+      "x": 523,
+      "y": 319
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 787500,
+      "x": 512,
+      "y": 334
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 800000,
+      "x": 500,
+      "y": 350
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 812500,
+      "x": 488,
+      "y": 366
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 825000,
+      "x": 477,
+      "y": 381
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 837500,
+      "x": 465,
+      "y": 396
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 850000,
+      "x": 453,
+      "y": 410
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 862500,
+      "x": 442,
+      "y": 423
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 875000,
+      "x": 431,
+      "y": 435
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 887500,
+      "x": 420,
+      "y": 445
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 900000,
+      "x": 410,
+      "y": 454
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 912500,
+      "x": 400,
+      "y": 461
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 925000,
+      "x": 390,
+      "y": 466
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 937500,
+      "x": 381,
+      "y": 469
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 950000,
+      "x": 373,
+      "y": 470
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 962500,
+      "x": 365,
+      "y": 469
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 975000,
+      "x": 357,
+      "y": 466
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 987500,
+      "x": 350,
+      "y": 461
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1000000,
+      "x": 344,
+      "y": 454
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1012500,
+      "x": 339,
+      "y": 445
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1025000,
+      "x": 334,
+      "y": 435
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1037500,
+      "x": 330,
+      "y": 423
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1050000,
+      "x": 326,
+      "y": 410
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1062500,
+      "x": 323,
+      "y": 396
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1075000,
+      "x": 322,
+      "y": 381
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1087500,
+      "x": 320,
+      "y": 366
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1100000,
+      "x": 320,
+      "y": 350
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1112500,
+      "x": 320,
+      "y": 334
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1125000,
+      "x": 322,
+      "y": 319
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1137500,
+      "x": 323,
+      "y": 304
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1150000,
+      "x": 326,
+      "y": 290
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1162500,
+      "x": 330,
+      "y": 277
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1175000,
+      "x": 334,
+      "y": 265
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1187500,
+      "x": 339,
+      "y": 255
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1200000,
+      "x": 344,
+      "y": 246
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1212500,
+      "x": 350,
+      "y": 239
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1225000,
+      "x": 357,
+      "y": 234
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1237500,
+      "x": 365,
+      "y": 231
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1250000,
+      "x": 373,
+      "y": 230
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1262500,
+      "x": 381,
+      "y": 231
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1275000,
+      "x": 390,
+      "y": 234
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1287500,
+      "x": 400,
+      "y": 239
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1300000,
+      "x": 410,
+      "y": 246
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1312500,
+      "x": 420,
+      "y": 255
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1325000,
+      "x": 431,
+      "y": 265
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1337500,
+      "x": 442,
+      "y": 277
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1350000,
+      "x": 453,
+      "y": 290
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1362500,
+      "x": 465,
+      "y": 304
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1375000,
+      "x": 477,
+      "y": 319
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1387500,
+      "x": 488,
+      "y": 334
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1400000,
+      "x": 500,
+      "y": 350
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 1412500,
+      "button": "left",
+      "state": "up"
+    }
+  ]
+}

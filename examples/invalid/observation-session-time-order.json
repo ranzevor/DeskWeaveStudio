@@ -1,0 +1,30 @@
+{
+  "sessionId": "observation-session-demo",
+  "state": "failed",
+  "controlVersion": 2,
+  "targetName": "报表中心",
+  "connectionId": "local-vision",
+  "connectionVersion": 1,
+  "plan": {
+    "intervalMs": 5000,
+    "changeDetection": {
+      "enabled": true,
+      "threshold": 3
+    },
+    "timeoutMs": 60000,
+    "maxRecords": 100,
+    "maxDurationMs": 86400000,
+    "prompt": "读取报表月份和可下载状态。",
+    "roi": null,
+    "outputMode": "text",
+    "outputSchema": null,
+    "saveFrames": true
+  },
+  "startedAt": "2026-10-29T02:00:00Z",
+  "stoppedAt": "2026-10-29T01:59:59Z",
+  "lastSeq": "2",
+  "activeOperationId": null,
+  "lastRecordId": null,
+  "reason": "PROCESS_INTERRUPTED",
+  "detached": true
+}

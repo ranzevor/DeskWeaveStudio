@@ -1,0 +1,15 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "resume-confirmed-demo",
+  "session": "session-demo",
+  "method": "run.resume",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "runId": "run-demo",
+    "expectedControlVersion": 8,
+    "resumePlanId": "resume-plan-demo",
+    "confirmationGrant": "local-confirmation-demo"
+  }
+}

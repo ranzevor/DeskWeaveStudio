@@ -1,0 +1,391 @@
+{
+  "key": "operations",
+  "name": "安装、更新与数据维护",
+  "prefix": "O",
+  "order": 7,
+  "req": [
+    "DW-001",
+    "DW-015",
+    "DW-017",
+    "DW-018",
+    "DW-N04",
+    "DW-N05"
+  ],
+  "screens": [
+    {
+      "code": "O01",
+      "id": "backup-create",
+      "title": "创建工作空间备份",
+      "view": "modal",
+      "variant": "backup-create",
+      "parent": "settings-storage",
+      "purpose": "确认一致备份的目录与包含范围。",
+      "primary": "backup-progress",
+      "primaryLabel": "开始备份",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O02",
+      "id": "backup-restore",
+      "title": "恢复到新目录",
+      "view": "modal",
+      "variant": "backup-restore",
+      "parent": "recent",
+      "purpose": "选择备份与新目录，保留原工作空间。",
+      "primary": "backup-progress",
+      "primaryLabel": "校验并恢复",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O03",
+      "id": "backup-progress",
+      "title": "备份与恢复进度",
+      "view": "maintenance",
+      "variant": "backup",
+      "parent": null,
+      "purpose": "分别显示快照、复制、摘要和完成确认。",
+      "primary": "workspace",
+      "primaryLabel": "打开恢复的工作空间",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O04",
+      "id": "update-available",
+      "title": "发现更新",
+      "view": "modal",
+      "variant": "update",
+      "parent": "about",
+      "purpose": "查看版本、更新范围及活动运行影响。",
+      "primary": "update-preparing",
+      "primaryLabel": "准备更新",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O05",
+      "id": "update-preparing",
+      "title": "更新准备与安装",
+      "view": "maintenance",
+      "variant": "update",
+      "parent": null,
+      "purpose": "等待草稿持久化、运行停止、备份与组件切换。",
+      "primary": "migration",
+      "primaryLabel": "检查数据兼容性",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O06",
+      "id": "update-failed",
+      "title": "更新失败",
+      "view": "maintenance",
+      "variant": "update-failed",
+      "parent": null,
+      "purpose": "保留有效版本并给出具体恢复路径。",
+      "primary": "rollback",
+      "primaryLabel": "查看恢复方案",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O07",
+      "id": "permissions-elevation",
+      "title": "权限提升交接",
+      "view": "modal",
+      "variant": "elevation",
+      "parent": "target-select",
+      "purpose": "等待 Windows 权限确认，失败后保持文档。",
+      "primary": "target-select",
+      "primaryLabel": "返回目标选择",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O08",
+      "id": "installer",
+      "title": "安装向导",
+      "view": "install",
+      "variant": "welcome",
+      "parent": null,
+      "purpose": "选择每用户目录与离线依赖。",
+      "primary": "install-progress",
+      "primaryLabel": "开始安装",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O09",
+      "id": "install-progress",
+      "title": "安装进度",
+      "view": "install",
+      "variant": "progress",
+      "parent": null,
+      "purpose": "查看实际组件安装与入口创建阶段。",
+      "primary": "welcome",
+      "primaryLabel": "启动工作台",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O10",
+      "id": "install-failed",
+      "title": "安装依赖失败",
+      "view": "install",
+      "variant": "failed",
+      "parent": null,
+      "purpose": "明确 WebView2 或存储问题及恢复动作。",
+      "primary": "installer",
+      "primaryLabel": "返回安装选项",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O11",
+      "id": "uninstall",
+      "title": "卸载与保留数据",
+      "view": "install",
+      "variant": "uninstall",
+      "parent": null,
+      "purpose": "确认卸载程序，单独处理工作空间数据。",
+      "primary": "recent",
+      "primaryLabel": "确认卸载程序",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O12",
+      "id": "migration",
+      "title": "数据格式升级",
+      "view": "maintenance",
+      "variant": "migration",
+      "parent": null,
+      "purpose": "显示备份、独占转换与完整性验证。",
+      "primary": "workspace",
+      "primaryLabel": "完成并打开",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O13",
+      "id": "rollback",
+      "title": "版本恢复方案",
+      "view": "maintenance",
+      "variant": "rollback",
+      "parent": null,
+      "purpose": "区分程序回退与数据恢复，保留新增编辑。",
+      "primary": "backup-restore",
+      "primaryLabel": "恢复到新目录",
+      "requirements": [
+        "DW-001",
+        "DW-015",
+        "DW-017",
+        "DW-018",
+        "DW-N04",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O14",
+      "id": "update-trust",
+      "title": "更新来源与信任校验",
+      "view": "completion",
+      "variant": "update-trust",
+      "parent": null,
+      "purpose": "选择通道，核对签名链、已验证密钥轮换和更新包后进入安装准备。",
+      "primary": null,
+      "primaryLabel": "进入安装准备",
+      "primaryKind": "local",
+      "primaryResult": "验证通过后保存草稿、停止运行并检查备份。",
+      "requirements": [
+        "DW-017"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O15",
+      "id": "update-verification-failed",
+      "title": "更新校验失败",
+      "view": "completion",
+      "variant": "update-verification-failed",
+      "parent": null,
+      "purpose": "展示具体校验失败，重新选择有效更新包后再次验证。",
+      "primary": null,
+      "primaryLabel": "校验更新",
+      "primaryKind": "local",
+      "primaryResult": "失败保持未安装；通过后开放安装准备。",
+      "requirements": [
+        "DW-017"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "O16",
+      "id": "update-downgrade",
+      "title": "人工降级本地确认",
+      "view": "completion",
+      "variant": "update-downgrade",
+      "parent": null,
+      "purpose": "在有效信任检查和备份基础上，本地确认固定版本的人工降级计划。",
+      "primary": null,
+      "primaryLabel": "确认降级并准备",
+      "primaryKind": "local",
+      "primaryResult": "一次性确认绑定制品、信任版本、备份和有效期。",
+      "requirements": [
+        "DW-017"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

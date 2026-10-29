@@ -1,0 +1,16 @@
+{
+  "platform": "linux-x64",
+  "url": "https://example.invalid/deskweave/linux-x64",
+  "length": 1024,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "publisher": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "components": {
+    "studio": "0.1.0",
+    "engine": "0.1.0",
+    "agent": "0.1.0",
+    "bridge": "0.1.0"
+  },
+  "protocolVersion": "1.0",
+  "workspaceFormatMin": 1,
+  "workspaceFormatMax": 1
+}

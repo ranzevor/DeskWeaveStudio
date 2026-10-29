@@ -1,0 +1,1273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:query:1",
+  "title": "Collection queries",
+  "$defs": {
+    "collectionRef": {
+      "type": "object",
+      "properties": {
+        "collectionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "diagnostics",
+            "runRequirements",
+            "runFrames",
+            "runEffects",
+            "templateNames",
+            "templateAssets",
+            "matchCandidates",
+            "importedObjects",
+            "ocrLanguages"
+          ]
+        },
+        "itemCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "collectionId",
+        "kind",
+        "itemCount",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "querySnapshot": {
+      "type": "object",
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "snapshotAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "snapshotId",
+        "snapshotAt",
+        "expiresAt",
+        "sourceVersion"
+      ],
+      "additionalProperties": false
+    },
+    "readParams": {
+      "type": "object",
+      "properties": {
+        "collectionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "diagnostics",
+            "runRequirements",
+            "runFrames",
+            "runEffects",
+            "templateNames",
+            "templateAssets",
+            "matchCandidates",
+            "importedObjects",
+            "ocrLanguages"
+          ]
+        },
+        "filter": {
+          "type": "object",
+          "default": {}
+        },
+        "order": {
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "asc"
+        },
+        "cursor": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        },
+        "includeTotal": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "collectionId",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "diagnostics"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/diagnosticsFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "runRequirements"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/runRequirementsFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "runFrames"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/runFramesFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "runEffects"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/runEffectsFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "templateNames"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/templateNamesFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "templateAssets"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/templateAssetsFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "matchCandidates"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/matchCandidatesFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "importedObjects"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/importedObjectsFilter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "ocrLanguages"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "$ref": "urn:deskweave:query:1#/$defs/ocrLanguagesFilter"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "page": {
+      "type": "object",
+      "properties": {
+        "collectionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "diagnostics",
+            "runRequirements",
+            "runFrames",
+            "runEffects",
+            "templateNames",
+            "templateAssets",
+            "matchCandidates",
+            "importedObjects",
+            "ocrLanguages"
+          ]
+        },
+        "querySnapshot": {
+          "$ref": "urn:deskweave:query:1#/$defs/querySnapshot"
+        },
+        "items": {
+          "type": "array",
+          "items": {},
+          "maxItems": 100
+        },
+        "matchedCount": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextCursor": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "countState": {
+          "enum": [
+            "exact",
+            "notComputed"
+          ]
+        }
+      },
+      "required": [
+        "collectionId",
+        "kind",
+        "querySnapshot",
+        "items",
+        "matchedCount",
+        "nextCursor",
+        "countState"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "diagnostics"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/diagnosticsItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "runRequirements"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/runRequirementsItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "runFrames"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/runFramesItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "runEffects"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/runEffectsItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "templateNames"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/templateNamesItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "templateAssets"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/templateAssetsItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "matchCandidates"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/matchCandidatesItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "importedObjects"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/importedObjectsItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "ocrLanguages"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "value": {
+                      "$ref": "urn:deskweave:query:1#/$defs/ocrLanguagesItem"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "matchedCount": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "countState": {
+                "const": "notComputed"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "countState": {
+                "const": "exact"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "closeParams": {
+      "type": "object",
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "snapshotId"
+      ],
+      "additionalProperties": false
+    },
+    "closeResult": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "const": true
+        }
+      },
+      "required": [
+        "closed"
+      ],
+      "additionalProperties": false
+    },
+    "diagnosticsItem": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "nodeId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fieldPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "diagnosticsFilter": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 120,
+          "default": ""
+        },
+        "codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 32,
+          "uniqueItems": true,
+          "default": []
+        },
+        "nodeId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "runRequirementsItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "kind": {
+          "enum": [
+            "input",
+            "variable",
+            "target"
+          ]
+        },
+        "satisfied": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "satisfied"
+      ],
+      "additionalProperties": false
+    },
+    "runRequirementsFilter": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 120,
+          "default": ""
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "input",
+              "variable",
+              "target"
+            ]
+          },
+          "maxItems": 3,
+          "uniqueItems": true,
+          "default": []
+        },
+        "satisfied": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "runFramesItem": {
+      "type": "object",
+      "properties": {
+        "frameId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "parentId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "state": {
+          "enum": [
+            "waiting",
+            "running",
+            "paused",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "nodeId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "frameId",
+        "parentId",
+        "revision",
+        "state",
+        "nodeId"
+      ],
+      "additionalProperties": false
+    },
+    "runFramesFilter": {
+      "type": "object",
+      "properties": {
+        "states": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "waiting",
+              "running",
+              "paused",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "maxItems": 6,
+          "uniqueItems": true,
+          "default": []
+        },
+        "parentId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nodeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "runEffectsItem": {
+      "type": "object",
+      "properties": {
+        "segmentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "state": {
+          "enum": [
+            "not_sent",
+            "in_flight",
+            "sent",
+            "verified",
+            "rejected",
+            "uncertain"
+          ]
+        }
+      },
+      "required": [
+        "segmentId",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "runEffectsFilter": {
+      "type": "object",
+      "properties": {
+        "states": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "not_sent",
+              "in_flight",
+              "sent",
+              "verified",
+              "rejected",
+              "uncertain"
+            ]
+          },
+          "maxItems": 6,
+          "uniqueItems": true,
+          "default": []
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "templateNamesItem": {
+      "$ref": "urn:deskweave:vision:1#/$defs/nameItem"
+    },
+    "templateNamesFilter": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 120,
+          "default": ""
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ocr",
+              "rule",
+              "manual"
+            ]
+          },
+          "maxItems": 3,
+          "uniqueItems": true,
+          "default": []
+        },
+        "conflict": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "templateAssetsItem": {
+      "type": "object",
+      "properties": {
+        "candidateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "assetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "assetVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "candidateId",
+        "assetId",
+        "assetVersion",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "templateAssetsFilter": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 120,
+          "default": ""
+        },
+        "candidateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "matchCandidatesItem": {
+      "type": "object",
+      "properties": {
+        "box": {
+          "$ref": "urn:deskweave:vision:1#/$defs/roi"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 4
+        }
+      },
+      "required": [
+        "box",
+        "score",
+        "scale"
+      ],
+      "additionalProperties": false
+    },
+    "matchCandidatesFilter": {
+      "type": "object",
+      "properties": {
+        "minimumScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 4
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "importedObjectsItem": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "image",
+            "trajectory",
+            "workflow"
+          ]
+        },
+        "objectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reused": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "objectId",
+        "version",
+        "reused"
+      ],
+      "additionalProperties": false
+    },
+    "importedObjectsFilter": {
+      "type": "object",
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "image",
+              "trajectory",
+              "workflow"
+            ]
+          },
+          "maxItems": 3,
+          "uniqueItems": true,
+          "default": []
+        },
+        "reused": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "ocrLanguagesItem": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "language"
+      ],
+      "additionalProperties": false
+    },
+    "ocrLanguagesFilter": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 120,
+          "default": ""
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/readParams"
+    },
+    {
+      "$ref": "#/$defs/page"
+    },
+    {
+      "$ref": "#/$defs/collectionRef"
+    },
+    {
+      "$ref": "#/$defs/closeParams"
+    },
+    {
+      "$ref": "#/$defs/closeResult"
+    }
+  ]
+}

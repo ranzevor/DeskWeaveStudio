@@ -1,0 +1,10 @@
+{
+  "leaseId": "lease-demo",
+  "generation": 4,
+  "agentEpoch": "agent-live-demo",
+  "state": "active",
+  "cleanup": "succeeded",
+  "pauseSnapshot": null,
+  "lastResumeAttemptId": "resume-attempt-demo",
+  "reason": null
+}

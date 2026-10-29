@@ -1,0 +1,39 @@
+{
+  "formatVersion": "1.0",
+  "id": "shared-demo",
+  "name": "运行共享变量条件写入",
+  "entry": "assign",
+  "parameters": {},
+  "variables": {},
+  "targets": {},
+  "resources": {},
+  "limits": {
+    "activeMs": 600000,
+    "steps": 10000,
+    "callDepth": 8,
+    "parallelCalls": 8,
+    "inputEvents": 100000
+  },
+  "nodes": [
+    {
+      "id": "assign",
+      "title": "更新运行状态",
+      "action": "data.assign",
+      "params": {
+        "scope": "run",
+        "name": "status",
+        "path": [
+          "ready"
+        ],
+        "value": true,
+        "expectedVersion": -1
+      },
+      "on": {}
+    }
+  ],
+  "runVariables": {
+    "status": {
+      "ready": false
+    }
+  }
+}

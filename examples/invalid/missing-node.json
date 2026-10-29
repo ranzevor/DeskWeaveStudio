@@ -1,0 +1,112 @@
+{
+  "formatVersion": "1.0",
+  "id": "hello",
+  "name": "问候与断言",
+  "entry": "assign",
+  "parameters": {
+    "message": {
+      "type": "string",
+      "required": false,
+      "sensitive": false,
+      "default": "Hello DeskWeave"
+    }
+  },
+  "variables": {},
+  "targets": {},
+  "resources": {},
+  "limits": {
+    "activeMs": 600000,
+    "steps": 10000,
+    "callDepth": 8,
+    "parallelCalls": 8,
+    "inputEvents": 100000
+  },
+  "nodes": [
+    {
+      "id": "assign",
+      "title": "设置问候",
+      "action": "data.assign",
+      "params": {
+        "name": "greeting",
+        "value": {
+          "$expr": {
+            "op": "path",
+            "path": [
+              "inputs",
+              "message"
+            ]
+          }
+        }
+      },
+      "on": {
+        "next": "missing"
+      }
+    },
+    {
+      "id": "wait",
+      "title": "等待50毫秒",
+      "action": "time.wait",
+      "params": {
+        "durationMs": 50
+      },
+      "on": {
+        "next": "assert"
+      }
+    },
+    {
+      "id": "assert",
+      "title": "核对问候",
+      "action": "logic.assert",
+      "params": {
+        "condition": {
+          "$expr": {
+            "op": "equal",
+            "args": [
+              {
+                "$expr": {
+                  "op": "path",
+                  "path": [
+                    "vars",
+                    "greeting"
+                  ]
+                }
+              },
+              {
+                "$expr": {
+                  "op": "path",
+                  "path": [
+                    "inputs",
+                    "message"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "message": "问候内容不一致"
+      },
+      "on": {
+        "next": "return"
+      }
+    },
+    {
+      "id": "return",
+      "title": "返回问候",
+      "action": "flow.return",
+      "params": {
+        "values": {
+          "message": {
+            "$expr": {
+              "op": "path",
+              "path": [
+                "vars",
+                "greeting"
+              ]
+            }
+          }
+        }
+      },
+      "on": {}
+    }
+  ]
+}

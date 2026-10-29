@@ -1,0 +1,23 @@
+{
+  "formatVersion": "1.0",
+  "generation": 1,
+  "rootVersion": 1,
+  "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+  "revocationsVersion": 1,
+  "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+  "channelSequences": {
+    "stable": 8,
+    "preview": 0
+  },
+  "channelManifestHashes": {
+    "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "preview": null
+  },
+  "lastTrustedTime": "2026-10-28T23:00:00Z",
+  "rootHistory": [
+    {
+      "version": 1,
+      "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+    }
+  ]
+}

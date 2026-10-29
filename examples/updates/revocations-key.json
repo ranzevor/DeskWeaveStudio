@@ -1,0 +1,29 @@
+{
+  "signed": {
+    "role": "revocations",
+    "formatVersion": "1.0",
+    "product": "DeskWeaveStudio",
+    "rootVersion": 1,
+    "version": 2,
+    "issuedAt": "2026-10-28T22:00:00Z",
+    "expiresAt": "2026-10-29T22:00:00Z",
+    "revokedKeyIds": [
+      "e97bcbf2e3122adbc78a03702c5bd74c7edd40d6c53cd6a2d2391785509b6e69"
+    ],
+    "revokedArtifacts": [],
+    "minimumSecuritySequence": {
+      "stable": 0,
+      "preview": 0
+    }
+  },
+  "signatures": [
+    {
+      "keyId": "2f3bfc0ffff4766cf9f1e9723c1b36b37a7a62c56d5bfa8bccd1520f46738b5f",
+      "signature": "WXlYjp4Eie8PIC1bjZHmEneKHw9yhaekmSYXNBeLMBSeLKqUKpOLYmjR/rx09i3Yc3fwHynRHpNqwpz/aSeuDg=="
+    },
+    {
+      "keyId": "3040073e7b368ec9bea05af8f1a8560e4bdae9c9f4338612a91b7a412dc392ef",
+      "signature": "nI1HfiU/uVn+ogZimmTojHfb0E1zU9sPbkLbWR/DWjpAQ/Ox7+CLEI0QlWkM2hYXHj7amdUBpu9UcfXydK2nCw=="
+    }
+  ]
+}

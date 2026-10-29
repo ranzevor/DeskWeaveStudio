@@ -1,0 +1,13 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "connection-history-invalid",
+  "session": "session-demo",
+  "method": "connection.read",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "connectionId": "local-vision",
+    "version": 0
+  }
+}

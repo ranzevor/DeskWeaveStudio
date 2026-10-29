@@ -1,0 +1,23 @@
+{
+  "allowedNodes": [
+    {
+      "workflowId": "parent",
+      "revision": "parent-r1",
+      "nodeIds": [
+        "call",
+        "join",
+        "return"
+      ]
+    },
+    {
+      "workflowId": "child",
+      "revision": "child-r1",
+      "nodeIds": [
+        "return"
+      ]
+    }
+  ],
+  "currentVersion": 1,
+  "rootWorkflowId": "parent",
+  "rootRevision": "parent-r1"
+}

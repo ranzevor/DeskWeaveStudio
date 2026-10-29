@@ -1,0 +1,26 @@
+{
+  "planId": "resume-plan-demo",
+  "runId": "run-demo",
+  "controlVersion": 8,
+  "pauseId": "pause-demo",
+  "agentEpoch": "agent-live-demo",
+  "generation": 4,
+  "expiresAt": "2026-10-29T02:01:00Z",
+  "heldInputs": [
+    {
+      "kind": "button",
+      "button": "left"
+    },
+    {
+      "kind": "key",
+      "key": "Control"
+    }
+  ],
+  "pointerToRestore": {
+    "x": 840,
+    "y": 620
+  },
+  "requiresConfirmation": false,
+  "planHash": "f2d8b8812f35c8a1564e103a0e725bee7a404dad1bd3e55e052406e3d2c55d11",
+  "restoreTargetToken": "target-token-demo"
+}

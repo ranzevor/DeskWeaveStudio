@@ -1,0 +1,21 @@
+{
+  "operationId": "operation-import-mapped-demo",
+  "method": "asset.import",
+  "state": "succeeded",
+  "result": {
+    "kind": "package",
+    "entryWorkflow": {
+      "workflowId": "imported-main",
+      "revision": "target-main-r1"
+    },
+    "manifestResource": "import-mapping-resource-demo",
+    "objectCount": 4,
+    "objectsQuery": {
+      "collectionId": "collection-imports-operation-import-mapped-result",
+      "kind": "importedObjects",
+      "itemCount": 4,
+      "expiresAt": null
+    }
+  },
+  "error": null
+}

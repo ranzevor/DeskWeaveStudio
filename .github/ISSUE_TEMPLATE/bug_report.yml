@@ -1,0 +1,34 @@
+name: 缺陷报告
+description: 报告可以复现的文档、契约或应用问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞请按 SECURITY.md 的私密渠道报告。附件请移除凭据、个人截图和无关用户内容。
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际
+      description: 描述要完成的任务、预期结果和实际发生的情况。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 最小复现
+      description: 提供具体步骤与最小合成样例，或受影响的文档位置。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境与版本
+      description: 代码提交或发行版本、系统构建、显示设置及相关组件版本。
+    validations:
+      required: true
+  - type: textarea
+    id: additional_details
+    attributes:
+      label: 补充信息
+      description: 可分享的错误信息或脱敏附件。

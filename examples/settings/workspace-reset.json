@@ -1,0 +1,16 @@
+{
+  "scope": "workspace",
+  "expectedVersion": 3,
+  "expectedBaseVersion": 4,
+  "updates": [
+    {
+      "op": "reset",
+      "key": "runtime.interruptPolicy"
+    },
+    {
+      "op": "set",
+      "key": "storage.runRetentionDays",
+      "value": null
+    }
+  ]
+}

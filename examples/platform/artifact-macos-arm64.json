@@ -1,0 +1,16 @@
+{
+  "platform": "macos-arm64",
+  "url": "https://example.invalid/deskweave/macos-arm64",
+  "length": 1024,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "publisher": "EXAMPLETEAM",
+  "components": {
+    "studio": "0.1.0",
+    "engine": "0.1.0",
+    "agent": "0.1.0",
+    "bridge": "0.1.0"
+  },
+  "protocolVersion": "1.0",
+  "workspaceFormatMin": 1,
+  "workspaceFormatMax": 1
+}

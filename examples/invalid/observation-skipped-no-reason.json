@@ -1,0 +1,25 @@
+{
+  "recordId": "unchanged-no-screenshot-demo",
+  "sessionId": "observation-session-demo",
+  "operationId": "operation-demo",
+  "runId": null,
+  "state": "skipped",
+  "capturedAt": "2026-10-29T02:00:00Z",
+  "completedAt": "2026-10-29T02:00:01Z",
+  "frameId": "frame-demo",
+  "screenshotResource": null,
+  "baselineRecordId": "record-demo",
+  "connectionId": "local-vision",
+  "connectionVersion": 1,
+  "prompt": "读取报表月份和可下载状态。",
+  "output": null,
+  "durationMs": 20,
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0
+  },
+  "reason": "所选区域没有显著变化",
+  "checkedAt": "2026-10-29T02:00:00Z",
+  "skipReason": null,
+  "difference": 0
+}

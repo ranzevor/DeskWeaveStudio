@@ -1,0 +1,16 @@
+{
+  "transport": "streamableHttp",
+  "host": "0.0.0.0",
+  "port": 43127,
+  "allowedHosts": [
+    "automation.example:43127"
+  ],
+  "allowedOrigins": [
+    "https://client.example"
+  ],
+  "tls": {
+    "enabled": true,
+    "certificateGrant": "demo-cert-grant",
+    "privateKeyGrant": "demo-key-grant"
+  }
+}

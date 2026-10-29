@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:trajectory:1",
+  "title": "DeskWeave 输入轨迹 1.0 / 1.1",
+  "$defs": {
+    "pointer.move": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "pointer.move"
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "y": {
+          "type": "number",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "displayId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "kind",
+        "atUs",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false,
+      "description": "事件自身的位置：全局物理坐标，或 1.1 中带 displayId 的屏内像素；不能用处理时的当前光标查询回填。"
+    },
+    "pointer.delta": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "pointer.delta"
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "dx": {
+          "type": "number",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "dy": {
+          "type": "number",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "kind",
+        "atUs",
+        "dx",
+        "dy"
+      ],
+      "additionalProperties": false,
+      "description": "按来源单位保存的带符号相对量；1.0 为整数，1.1 允许小数并要求 inputProfile，不替换为绝对位置或累计量。"
+    },
+    "pointer.button": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "pointer.button"
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "button": {
+          "enum": [
+            "left",
+            "right",
+            "middle",
+            "x1",
+            "x2"
+          ]
+        },
+        "state": {
+          "enum": [
+            "down",
+            "up"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "atUs",
+        "button",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "pointer.scroll": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "pointer.scroll"
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "dx": {
+          "type": "number",
+          "minimum": -10000,
+          "maximum": 10000
+        },
+        "dy": {
+          "type": "number",
+          "minimum": -10000,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "kind",
+        "atUs",
+        "dx",
+        "dy"
+      ],
+      "additionalProperties": false
+    },
+    "key.down": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "key.down"
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "kind",
+        "atUs",
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "key.up": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "key.up"
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "kind",
+        "atUs",
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "text": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "text"
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 262144
+        }
+      },
+      "required": [
+        "kind",
+        "atUs",
+        "text"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "formatVersion": {
+      "enum": [
+        "1.0",
+        "1.1"
+      ]
+    },
+    "coordinateMode": {
+      "enum": [
+        "physical",
+        "relative",
+        "event",
+        "display"
+      ]
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/pointer.move"
+          },
+          {
+            "$ref": "#/$defs/pointer.delta"
+          },
+          {
+            "$ref": "#/$defs/pointer.button"
+          },
+          {
+            "$ref": "#/$defs/pointer.scroll"
+          },
+          {
+            "$ref": "#/$defs/key.down"
+          },
+          {
+            "$ref": "#/$defs/key.up"
+          },
+          {
+            "$ref": "#/$defs/text"
+          }
+        ]
+      },
+      "description": "同一 atUs 按数组下标稳定排序。按钮按住期间的全部运动组成连续笔画；相同坐标不按集合去重。"
+    },
+    "source": {
+      "$ref": "urn:deskweave:recording:1#/$defs/source"
+    }
+  },
+  "required": [
+    "formatVersion",
+    "coordinateMode",
+    "events"
+  ],
+  "additionalProperties": false,
+  "description": "完整输入事件序列；保存与回放保留每个中间位置、原始增量、时间和数组顺序，不使用预览抽样或首尾连线替代。",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "formatVersion": {
+            "const": "1.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coordinateMode": {
+            "enum": [
+              "physical",
+              "relative",
+              "event"
+            ]
+          },
+          "source": {
+            "allOf": [
+              {
+                "$ref": "urn:deskweave:recording:1#/$defs/physicalSource"
+              },
+              {
+                "not": {
+                  "required": [
+                    "inputProfile"
+                  ]
+                }
+              }
+            ]
+          },
+          "events": {
+            "items": {
+              "not": {
+                "required": [
+                  "displayId"
+                ]
+              },
+              "properties": {
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                },
+                "dx": {
+                  "type": "integer"
+                },
+                "dy": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

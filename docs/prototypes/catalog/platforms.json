@@ -1,0 +1,132 @@
+{
+  "key": "platforms",
+  "name": "跨平台与系统权限",
+  "prefix": "P",
+  "order": 20,
+  "req": [
+    "DW-030"
+  ],
+  "screens": [
+    {
+      "code": "P01",
+      "id": "platform-capabilities",
+      "title": "桌面能力",
+      "view": "platform",
+      "variant": "capabilities",
+      "parent": "settings-general",
+      "purpose": "查看当前平台的录制、采集、输入与桌面控制能力。",
+      "primary": "platform-macos-permissions",
+      "primaryLabel": "管理系统权限",
+      "requirements": [
+        "DW-030",
+        "DW-004",
+        "DW-015",
+        "DW-016",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "P02",
+      "id": "platform-macos-permissions",
+      "title": "macOS 系统权限",
+      "view": "platform",
+      "variant": "permissions",
+      "parent": "settings-general",
+      "purpose": "分别处理屏幕录制、输入监听和辅助功能授权。",
+      "primary": null,
+      "primaryLabel": "检查授权状态",
+      "requirements": [
+        "DW-030",
+        "DW-004",
+        "DW-015",
+        "DW-016",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "更新对应权限、屏幕选择或映射状态。"
+    },
+    {
+      "code": "P03",
+      "id": "platform-wayland-session",
+      "title": "Wayland 屏幕与输入",
+      "view": "platform",
+      "variant": "wayland",
+      "parent": "settings-general",
+      "purpose": "选择实际共享的屏幕，查看当前输入与录制能力。",
+      "primary": null,
+      "primaryLabel": "使用所选屏幕",
+      "requirements": [
+        "DW-030",
+        "DW-004",
+        "DW-015",
+        "DW-016",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "更新对应权限、屏幕选择或映射状态。"
+    },
+    {
+      "code": "P04",
+      "id": "platform-wayland-recording",
+      "title": "录制能力不可用",
+      "view": "platform",
+      "variant": "recording",
+      "parent": "settings-general",
+      "purpose": "显示普通桌面全局录制不可用的具体原因和可用操作。",
+      "primary": "platform-wayland-session",
+      "primaryLabel": "返回会话设置",
+      "requirements": [
+        "DW-030",
+        "DW-004",
+        "DW-015",
+        "DW-016",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "P05",
+      "id": "platform-display-mapping",
+      "title": "跨平台屏幕映射",
+      "view": "platform",
+      "variant": "mapping",
+      "parent": "settings-general",
+      "purpose": "按屏内像素映射跨平台轨迹，保持笔画形状与连续输入。",
+      "primary": null,
+      "primaryLabel": "应用显示屏映射",
+      "requirements": [
+        "DW-030",
+        "DW-004",
+        "DW-015",
+        "DW-016",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "更新对应权限、屏幕选择或映射状态。"
+    }
+  ]
+}

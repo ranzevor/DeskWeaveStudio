@@ -1,0 +1,21 @@
+{
+  "assetId": "asset-synthetic",
+  "currentVersion": "asset-v2",
+  "versionCount": 2,
+  "scope": "version",
+  "assetVersion": "asset-v2",
+  "snapshotId": "asset-ref-snapshot-1",
+  "snapshotAt": "2026-10-29T00:00:00Z",
+  "expiresAt": "2026-10-29T00:05:00Z",
+  "references": [
+    {
+      "ownerKind": "draft",
+      "ownerId": "editor-synthetic",
+      "displayName": "未完成的报表流程",
+      "assetVersion": "asset-v2"
+    }
+  ],
+  "totalReferences": 2,
+  "hiddenReferences": 1,
+  "nextCursor": null
+}

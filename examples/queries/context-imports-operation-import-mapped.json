@@ -1,0 +1,28 @@
+{
+  "objects": [
+    {
+      "kind": "workflow",
+      "objectId": "imported-main",
+      "version": "target-main-r1",
+      "reused": false
+    },
+    {
+      "kind": "workflow",
+      "objectId": "imported-secondary",
+      "version": "target-secondary-r1",
+      "reused": false
+    },
+    {
+      "kind": "workflow",
+      "objectId": "imported-childOne",
+      "version": "target-childOne-r1",
+      "reused": false
+    },
+    {
+      "kind": "workflow",
+      "objectId": "imported-childTwo",
+      "version": "target-childTwo-r1",
+      "reused": false
+    }
+  ]
+}

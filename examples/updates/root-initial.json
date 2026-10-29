@@ -1,0 +1,73 @@
+{
+  "signed": {
+    "role": "root",
+    "formatVersion": "1.0",
+    "product": "DeskWeaveStudio",
+    "version": 1,
+    "issuedAt": "2026-10-01T00:00:00Z",
+    "expiresAt": "2027-01-01T00:00:00Z",
+    "keys": [
+      {
+        "keyId": "2f3bfc0ffff4766cf9f1e9723c1b36b37a7a62c56d5bfa8bccd1520f46738b5f",
+        "algorithm": "Ed25519",
+        "publicKey": "ldw4MWLWbQxdMZPysWj6QpLNcZrOOr13c9dsa4hF/mg="
+      },
+      {
+        "keyId": "3040073e7b368ec9bea05af8f1a8560e4bdae9c9f4338612a91b7a412dc392ef",
+        "algorithm": "Ed25519",
+        "publicKey": "ox7+9XxUfC+ZGi+3OaFT1rTGJ1bXQGKDYTKb/kR79R0="
+      },
+      {
+        "keyId": "605e523f144d6e66100053bf99f03b690715c2a913f1fcd6ab0b391909e83ffa",
+        "algorithm": "Ed25519",
+        "publicKey": "LO4xBAU6nCZNNm6cZv7gMn6BLAKr4sS8dwTfwpO+6z4="
+      },
+      {
+        "keyId": "e97bcbf2e3122adbc78a03702c5bd74c7edd40d6c53cd6a2d2391785509b6e69",
+        "algorithm": "Ed25519",
+        "publicKey": "HmCq03sLxjYwOJ2Yq9QE3Ag8wm50wfuZZhLaYsBZpeA="
+      },
+      {
+        "keyId": "acd3380064d85ea7675064c91542d5a74d5e96b6bc37bbb387da6106b3f3c582",
+        "algorithm": "Ed25519",
+        "publicKey": "+RMPid/OWjKSg6bNkd4FzGHk9xIW+ihpuXaguHP8VkA="
+      }
+    ],
+    "roles": {
+      "root": {
+        "threshold": 2,
+        "keyIds": [
+          "2f3bfc0ffff4766cf9f1e9723c1b36b37a7a62c56d5bfa8bccd1520f46738b5f",
+          "3040073e7b368ec9bea05af8f1a8560e4bdae9c9f4338612a91b7a412dc392ef",
+          "605e523f144d6e66100053bf99f03b690715c2a913f1fcd6ab0b391909e83ffa"
+        ]
+      },
+      "stable": {
+        "threshold": 1,
+        "keyIds": [
+          "e97bcbf2e3122adbc78a03702c5bd74c7edd40d6c53cd6a2d2391785509b6e69"
+        ]
+      },
+      "preview": {
+        "threshold": 1,
+        "keyIds": [
+          "acd3380064d85ea7675064c91542d5a74d5e96b6bc37bbb387da6106b3f3c582"
+        ]
+      }
+    },
+    "minimumSecuritySequence": {
+      "stable": 0,
+      "preview": 0
+    }
+  },
+  "signatures": [
+    {
+      "keyId": "2f3bfc0ffff4766cf9f1e9723c1b36b37a7a62c56d5bfa8bccd1520f46738b5f",
+      "signature": "2mwBEvmbF+ptV0q4+c1VyCvrHOhg4PZqe32bFThLGqvhtu2f7MYt9RNyrxFeWqVy0iCIblvKm38w3l71g9qnCw=="
+    },
+    {
+      "keyId": "3040073e7b368ec9bea05af8f1a8560e4bdae9c9f4338612a91b7a412dc392ef",
+      "signature": "6oK1dn2xx2BNRtxiSMguJoMYIiF4tI0PJH3nkk5W0CYD/Wqjugu7OrhFVj2jT2dS5iq1WAXIj7qlpkdU1dQcAw=="
+    }
+  ]
+}

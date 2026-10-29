@@ -1,0 +1,8 @@
+{
+  "name": "流程客户端",
+  "permissions": [
+    "bridge.configure"
+  ],
+  "targets": [],
+  "expiresInSeconds": 3600
+}

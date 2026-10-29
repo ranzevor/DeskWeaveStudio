@@ -1,0 +1,15 @@
+[
+  {
+    "sourceKey": "input",
+    "sourceKind": "workflow",
+    "sourceId": "parent",
+    "sourceVersion": null,
+    "sourceSha256": "569c8f63d6b5186f28c4126b1018033d5596d23003efaa301148b40c54c8ea15",
+    "targetKind": "workflow",
+    "targetId": "single-imported-workflow-needs-dependencies",
+    "targetVersion": "single-workflow-needs-dependencies-r1",
+    "targetSha256": "6932a52f95704b3b580949413ce1ab3313dc584d1fc7889adc78d4a97f68269f",
+    "disposition": "created",
+    "displayName": "缺少依赖的流程"
+  }
+]

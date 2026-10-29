@@ -1,0 +1,14 @@
+{
+  "editId": "edit-image-1",
+  "expectedSourceSha256": "f19a16bcfae9039149a059239b55ae2da1eb1231c44c82437eadcace7d7ad823",
+  "content": {
+    "kind": "imageCrop",
+    "roi": {
+      "space": "targetPixels",
+      "x": 60,
+      "y": 8,
+      "width": 32,
+      "height": 16
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "value": {
+    "$expr": {
+      "op": "path",
+      "path": [
+        "vars",
+        "ready"
+      ]
+    }
+  },
+  "context": {
+    "vars": {
+      "ready": false
+    }
+  },
+  "expectedType": "boolean"
+}

@@ -1,0 +1,70 @@
+{
+  "formatVersion": "1.0",
+  "id": "loop-body-demo",
+  "name": "循环内共享状态与退出",
+  "entry": "increment",
+  "parameters": {},
+  "variables": {},
+  "targets": {},
+  "resources": {},
+  "limits": {
+    "activeMs": 600000,
+    "steps": 10000,
+    "callDepth": 8,
+    "parallelCalls": 8,
+    "inputEvents": 100000
+  },
+  "nodes": [
+    {
+      "id": "increment",
+      "title": "增加尝试次数",
+      "action": "data.assign",
+      "params": {
+        "scope": "run",
+        "name": "attempts",
+        "path": [],
+        "value": {
+          "$expr": {
+            "op": "add",
+            "args": [
+              {
+                "$expr": {
+                  "op": "path",
+                  "path": [
+                    "run",
+                    "attempts"
+                  ]
+                }
+              },
+              1
+            ]
+          }
+        },
+        "expectedVersion": {
+          "$expr": {
+            "op": "path",
+            "path": [
+              "runtime",
+              "runVariablesVersion"
+            ]
+          }
+        }
+      },
+      "on": {
+        "next": "exit"
+      }
+    },
+    {
+      "id": "exit",
+      "title": "结束最近一层循环",
+      "action": "flow.break",
+      "params": {
+        "values": {
+          "found": true
+        }
+      },
+      "on": {}
+    }
+  ],
+  "kind": "workflow"
+}

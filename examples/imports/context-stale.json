@@ -1,0 +1,26 @@
+{
+  "sourceManifest": "imports/source/manifest.json",
+  "targetFiles": {
+    "main": "imports/target/workflow-main.json",
+    "secondary": "imports/target/workflow-secondary.json",
+    "childOne": "imports/target/workflow-childOne.json",
+    "childTwo": "imports/target/workflow-childTwo.json"
+  },
+  "targetBindings": {
+    "main": {
+      "child": {
+        "workflowId": "imported-childOne",
+        "revision": "target-childOne-r1"
+      }
+    },
+    "secondary": {
+      "child": {
+        "workflowId": "imported-childTwo",
+        "revision": "target-childTwo-r1"
+      }
+    }
+  },
+  "mappingFile": "imports/preview-mappings.json",
+  "currentCatalogVersion": 13,
+  "now": "2026-10-29T03:00:20Z"
+}

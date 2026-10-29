@@ -1,0 +1,16 @@
+{
+  "scope": "user",
+  "expectedVersion": 4,
+  "expectedBaseVersion": null,
+  "updates": [
+    {
+      "op": "set",
+      "key": "input.hotkeys",
+      "value": {
+        "emergencyStop": "Ctrl+Alt+Pause",
+        "recordToggle": "Alt+Ctrl+Pause",
+        "runPauseResume": "Ctrl+Alt+P"
+      }
+    }
+  ]
+}

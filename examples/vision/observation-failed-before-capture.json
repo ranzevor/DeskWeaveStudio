@@ -1,0 +1,25 @@
+{
+  "recordId": "record-capture-failure",
+  "sessionId": null,
+  "operationId": "operation-demo",
+  "runId": null,
+  "state": "failed",
+  "capturedAt": null,
+  "completedAt": "2026-10-29T02:00:00Z",
+  "frameId": null,
+  "screenshotResource": null,
+  "baselineRecordId": null,
+  "connectionId": "local-vision",
+  "connectionVersion": 1,
+  "prompt": "读取报表月份和可下载状态。",
+  "output": null,
+  "durationMs": 0,
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0
+  },
+  "reason": "目标窗口在采集前关闭",
+  "checkedAt": "2026-10-29T02:00:00Z",
+  "skipReason": null,
+  "difference": null
+}

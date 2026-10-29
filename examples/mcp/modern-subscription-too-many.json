@@ -1,0 +1,49 @@
+{
+  "jsonrpc": "2.0",
+  "id": "listen-1",
+  "method": "subscriptions/listen",
+  "params": {
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {}
+    },
+    "notifications": {
+      "toolsListChanged": true,
+      "resourceSubscriptions": [
+        "deskweave://resource-0",
+        "deskweave://resource-1",
+        "deskweave://resource-2",
+        "deskweave://resource-3",
+        "deskweave://resource-4",
+        "deskweave://resource-5",
+        "deskweave://resource-6",
+        "deskweave://resource-7",
+        "deskweave://resource-8",
+        "deskweave://resource-9",
+        "deskweave://resource-10",
+        "deskweave://resource-11",
+        "deskweave://resource-12",
+        "deskweave://resource-13",
+        "deskweave://resource-14",
+        "deskweave://resource-15",
+        "deskweave://resource-16",
+        "deskweave://resource-17",
+        "deskweave://resource-18",
+        "deskweave://resource-19",
+        "deskweave://resource-20",
+        "deskweave://resource-21",
+        "deskweave://resource-22",
+        "deskweave://resource-23",
+        "deskweave://resource-24",
+        "deskweave://resource-25",
+        "deskweave://resource-26",
+        "deskweave://resource-27",
+        "deskweave://resource-28",
+        "deskweave://resource-29",
+        "deskweave://resource-30",
+        "deskweave://resource-31",
+        "deskweave://resource-32"
+      ]
+    }
+  }
+}

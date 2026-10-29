@@ -1,0 +1,81 @@
+{
+  "formatVersion": "1.0",
+  "name": "混合资产依赖演示包",
+  "entry": "main",
+  "resources": [
+    {
+      "key": "main",
+      "path": "workflow-main.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 1536,
+      "sha256": "43fbaf27104cd9839b61a3b5269d2bfc6f9c3f07254579f3858efe8e9f0e0622",
+      "sourceId": "parent",
+      "sourceVersion": "source-main-r1",
+      "displayName": "入口流程",
+      "bindings": {
+        "child": "childOne",
+        "button": "trajectoryOne",
+        "track": "trajectoryOne"
+      }
+    },
+    {
+      "key": "secondary",
+      "path": "workflow-secondary.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 1445,
+      "sha256": "9a43392123b6e1323abcb12e850cf3511a56f8fdba7b7ebdac77947a17f9af06",
+      "sourceId": "secondary",
+      "sourceVersion": "source-secondary-r1",
+      "displayName": "辅助流程",
+      "bindings": {
+        "child": "childTwo"
+      }
+    },
+    {
+      "key": "childOne",
+      "path": "workflow-childOne.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 769,
+      "sha256": "02461a45fffbdce39461fe7a5900d14eeecaaa611b2a029b1df1d8257d447a89",
+      "sourceId": "child",
+      "sourceVersion": "source-childOne-r1",
+      "displayName": "返回输入"
+    },
+    {
+      "key": "childTwo",
+      "path": "workflow-childTwo.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 775,
+      "sha256": "fb8cdacdb1704254a70335177d57f128ba9a59f70f6644ce27f873abd2b04415",
+      "sourceId": "child",
+      "sourceVersion": "source-childTwo-r1",
+      "displayName": "子流程第二版"
+    },
+    {
+      "key": "imageOne",
+      "path": "button.png",
+      "kind": "image",
+      "mediaType": "image/png",
+      "bytes": 73,
+      "sha256": "fbee9576fd1d1eaf3bc801912e502bddd83056ce81620639df09f5a6bfb9bb85",
+      "sourceId": "source-button",
+      "sourceVersion": "image-source-v1",
+      "displayName": "按钮样本"
+    },
+    {
+      "key": "trajectoryOne",
+      "path": "shortcut.json",
+      "kind": "trajectory",
+      "mediaType": "application/json",
+      "bytes": 386,
+      "sha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+      "sourceId": "source-shortcut",
+      "sourceVersion": "trajectory-source-v1",
+      "displayName": "快捷键轨迹"
+    }
+  ]
+}

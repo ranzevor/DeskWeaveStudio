@@ -1,0 +1,16 @@
+{
+  "operationId": "operation-input-submit-demo",
+  "method": "input.submit",
+  "state": "succeeded",
+  "result": {
+    "intentId": "intent-demo",
+    "runId": "input-run-demo",
+    "receipt": {
+      "segmentId": "segment-demo",
+      "state": "sent",
+      "cleanup": "succeeded",
+      "agentEpoch": "agent-epoch-demo"
+    }
+  },
+  "error": null
+}

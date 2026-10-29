@@ -1,0 +1,44 @@
+{
+  "formatVersion": "1.0",
+  "id": "mixed-imported-childTwo",
+  "name": "子流程第二版",
+  "entry": "return",
+  "parameters": {
+    "value": {
+      "type": "string",
+      "required": true,
+      "sensitive": false
+    }
+  },
+  "variables": {},
+  "targets": {},
+  "resources": {},
+  "limits": {
+    "activeMs": 600000,
+    "steps": 10000,
+    "callDepth": 8,
+    "parallelCalls": 8,
+    "inputEvents": 100000
+  },
+  "nodes": [
+    {
+      "id": "return",
+      "title": "返回值",
+      "action": "flow.return",
+      "params": {
+        "values": {
+          "value": {
+            "$expr": {
+              "op": "path",
+              "path": [
+                "inputs",
+                "value"
+              ]
+            }
+          }
+        }
+      },
+      "on": {}
+    }
+  ]
+}

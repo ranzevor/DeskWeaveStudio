@@ -1,0 +1,53 @@
+{
+  "runId": "run-demo",
+  "workflowId": "parent",
+  "revision": "parent-r1",
+  "state": "paused",
+  "controlVersion": 8,
+  "cleanup": "succeeded",
+  "lastSeq": "27",
+  "resume": {
+    "availability": "needsLocalConfirmation",
+    "pauseId": "pause-demo",
+    "agentEpoch": "agent-live-demo",
+    "heldInputs": [
+      {
+        "kind": "button",
+        "button": "left"
+      },
+      {
+        "kind": "key",
+        "key": "Control"
+      }
+    ],
+    "reason": null
+  },
+  "debug": {
+    "profileId": "breakpoint-profile-demo",
+    "profileVersion": 1,
+    "breakpointSnapshotHash": "74d289389fc53158259def334ab4829b89c5c79b78fe1069cd5c851803bd9daf",
+    "lastHit": {
+      "frameId": "frame-main",
+      "workflowId": "parent",
+      "revision": "parent-r1",
+      "nodeId": "call",
+      "visit": 1,
+      "controlVersion": 8
+    }
+  },
+  "frameCount": 1,
+  "effectCount": 1,
+  "dataVersion": 1,
+  "framesQuery": {
+    "collectionId": "collection-control-run-snapshot-paused-frames",
+    "kind": "runFrames",
+    "itemCount": 1,
+    "expiresAt": "2026-11-05T02:01:00Z"
+  },
+  "effectsQuery": {
+    "collectionId": "collection-control-run-snapshot-paused-effects",
+    "kind": "runEffects",
+    "itemCount": 1,
+    "expiresAt": "2026-11-05T02:01:00Z"
+  }
+}

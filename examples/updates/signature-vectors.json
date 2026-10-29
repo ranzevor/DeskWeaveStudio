@@ -1,0 +1,823 @@
+{
+  "formatVersion": "1.0",
+  "canonicalization": "deskweave-update-json-v1",
+  "publicKeys": [
+    {
+      "keyId": "2f3bfc0ffff4766cf9f1e9723c1b36b37a7a62c56d5bfa8bccd1520f46738b5f",
+      "rawBase64": "ldw4MWLWbQxdMZPysWj6QpLNcZrOOr13c9dsa4hF/mg=",
+      "spkiBase64": "MCowBQYDK2VwAyEAldw4MWLWbQxdMZPysWj6QpLNcZrOOr13c9dsa4hF/mg="
+    },
+    {
+      "keyId": "3040073e7b368ec9bea05af8f1a8560e4bdae9c9f4338612a91b7a412dc392ef",
+      "rawBase64": "ox7+9XxUfC+ZGi+3OaFT1rTGJ1bXQGKDYTKb/kR79R0=",
+      "spkiBase64": "MCowBQYDK2VwAyEAox7+9XxUfC+ZGi+3OaFT1rTGJ1bXQGKDYTKb/kR79R0="
+    },
+    {
+      "keyId": "605e523f144d6e66100053bf99f03b690715c2a913f1fcd6ab0b391909e83ffa",
+      "rawBase64": "LO4xBAU6nCZNNm6cZv7gMn6BLAKr4sS8dwTfwpO+6z4=",
+      "spkiBase64": "MCowBQYDK2VwAyEALO4xBAU6nCZNNm6cZv7gMn6BLAKr4sS8dwTfwpO+6z4="
+    },
+    {
+      "keyId": "58adc81487acadedeba167a96efc3ae8012186b83814958187cb2ad5edf2ada4",
+      "rawBase64": "fN/Q7jAlnsVLgbfPJbyK3DIGdcObI0PN9ReVUptvbUc=",
+      "spkiBase64": "MCowBQYDK2VwAyEAfN/Q7jAlnsVLgbfPJbyK3DIGdcObI0PN9ReVUptvbUc="
+    },
+    {
+      "keyId": "738e1f2ae3ef6be2505abe1c0bd7b584a68ef79bdc890e9d325e17187757ffc1",
+      "rawBase64": "HwrG7dq25GUKqgDa3d1+YiOjWDVs47qPA2/MLyDYgUc=",
+      "spkiBase64": "MCowBQYDK2VwAyEAHwrG7dq25GUKqgDa3d1+YiOjWDVs47qPA2/MLyDYgUc="
+    },
+    {
+      "keyId": "4a50a00e297ea2e75b9d54cd2cd57bb4fa1778ae98256c8acb6181a93d26e660",
+      "rawBase64": "exqezjDVjEjzpN0F4ywBFAbHt9agwys0hXEs4r4056s=",
+      "spkiBase64": "MCowBQYDK2VwAyEAexqezjDVjEjzpN0F4ywBFAbHt9agwys0hXEs4r4056s="
+    },
+    {
+      "keyId": "e97bcbf2e3122adbc78a03702c5bd74c7edd40d6c53cd6a2d2391785509b6e69",
+      "rawBase64": "HmCq03sLxjYwOJ2Yq9QE3Ag8wm50wfuZZhLaYsBZpeA=",
+      "spkiBase64": "MCowBQYDK2VwAyEAHmCq03sLxjYwOJ2Yq9QE3Ag8wm50wfuZZhLaYsBZpeA="
+    },
+    {
+      "keyId": "acd3380064d85ea7675064c91542d5a74d5e96b6bc37bbb387da6106b3f3c582",
+      "rawBase64": "+RMPid/OWjKSg6bNkd4FzGHk9xIW+ihpuXaguHP8VkA=",
+      "spkiBase64": "MCowBQYDK2VwAyEA+RMPid/OWjKSg6bNkd4FzGHk9xIW+ihpuXaguHP8VkA="
+    },
+    {
+      "keyId": "956a8f19baa4dce685bdb83d6586680422dad9ea0ab3e08c5c42d342c7241730",
+      "rawBase64": "bK9jYg5bHSmdOJIuJknlWpz8p710Wz2ed38mS8SfOm8=",
+      "spkiBase64": "MCowBQYDK2VwAyEAbK9jYg5bHSmdOJIuJknlWpz8p710Wz2ed38mS8SfOm8="
+    },
+    {
+      "keyId": "1743956ee8f1b02f5719044c88da7966e6863ba58a60024a0da9e534b745e82f",
+      "rawBase64": "W+z/0r3F7xh5hVrA+qEA5gsJfVe5IEzPj0oztP7cCsQ=",
+      "spkiBase64": "MCowBQYDK2VwAyEAW+z/0r3F7xh5hVrA+qEA5gsJfVe5IEzPj0oztP7cCsQ="
+    }
+  ],
+  "vectors": [
+    {
+      "name": "valid-stable",
+      "expected": "pass",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "tampered-signed-content",
+      "expected": "signatureInvalid",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-tampered.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "unknown-signing-key",
+      "expected": "signatureInvalid",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-unknown-key.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "metadata-expired",
+      "expected": "metadataExpired",
+      "asOf": "2026-11-04T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "older-channel-sequence",
+      "expected": "replayed",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 10,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "different-selected-channel",
+      "expected": "channelMismatch",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "preview",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "root-and-online-key-rotation",
+      "expected": "pass",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [
+        "root-rotated.json"
+      ],
+      "revocations": "revocations-rotated.json",
+      "release": "release-rotated.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "root-rotation-without-old-threshold",
+      "expected": "trustUnavailable",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [
+        "root-missing-old-signatures.json"
+      ],
+      "revocations": "revocations-rotated.json",
+      "release": "release-rotated.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "revoked-artifact",
+      "expected": "revoked",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-artifact.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "revoked-release-key",
+      "expected": "revoked",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-key.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "minimum-security-floor",
+      "expected": "replayed",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-floor.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "future-issued-metadata",
+      "expected": "clockInvalid",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-future.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "same-sequence-different-digest",
+      "expected": "replayed",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 9,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "missing-revocations",
+      "expected": "trustUnavailable",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": null,
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "wall-clock-rollback",
+      "expected": "clockInvalid",
+      "asOf": "2026-10-28T22:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-stable.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "duplicate-signature-counted-once",
+      "expected": "pass",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-initial.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 1,
+        "rootVersion": 1,
+        "rootSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+        "revocationsVersion": 1,
+        "revocationsSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+        "channelSequences": {
+          "stable": 8,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-28T23:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-initial.json",
+      "release": "release-duplicate-signature.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json"
+      ]
+    },
+    {
+      "name": "second-start-after-root-rotation",
+      "expected": "pass",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-rotated.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 2,
+        "rootVersion": 2,
+        "rootSha256": "9ecbf397938b13330ade20368716f526c7478039f884416f0be2f5df60108aeb",
+        "revocationsVersion": 2,
+        "revocationsSha256": "2ebd85c67e9eb5042ee15b2bdf5102ed266b30838a70b4ab4d455c9aad22c896",
+        "channelSequences": {
+          "stable": 10,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "63f05543729629732d364210566285be35e5f6a11ae71931ab3f8c35a83f74ae",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-29T00:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          },
+          {
+            "version": 2,
+            "sha256": "9ecbf397938b13330ade20368716f526c7478039f884416f0be2f5df60108aeb"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-rotated.json",
+      "release": "release-rotated.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json",
+        "root-rotated.json"
+      ]
+    },
+    {
+      "name": "second-start-missing-root-history",
+      "expected": "trustUnavailable",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-rotated.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 2,
+        "rootVersion": 2,
+        "rootSha256": "9ecbf397938b13330ade20368716f526c7478039f884416f0be2f5df60108aeb",
+        "revocationsVersion": 2,
+        "revocationsSha256": "2ebd85c67e9eb5042ee15b2bdf5102ed266b30838a70b4ab4d455c9aad22c896",
+        "channelSequences": {
+          "stable": 10,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "63f05543729629732d364210566285be35e5f6a11ae71931ab3f8c35a83f74ae",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-29T00:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          },
+          {
+            "version": 2,
+            "sha256": "9ecbf397938b13330ade20368716f526c7478039f884416f0be2f5df60108aeb"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-rotated.json",
+      "release": "release-rotated.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-rotated.json"
+      ]
+    },
+    {
+      "name": "second-start-unverified-historical-link",
+      "expected": "trustUnavailable",
+      "asOf": "2026-10-29T00:00:00Z",
+      "selectedChannel": "stable",
+      "trustedRoot": "root-rotated.json",
+      "trustState": {
+        "formatVersion": "1.0",
+        "generation": 2,
+        "rootVersion": 2,
+        "rootSha256": "9ecbf397938b13330ade20368716f526c7478039f884416f0be2f5df60108aeb",
+        "revocationsVersion": 2,
+        "revocationsSha256": "2ebd85c67e9eb5042ee15b2bdf5102ed266b30838a70b4ab4d455c9aad22c896",
+        "channelSequences": {
+          "stable": 10,
+          "preview": 0
+        },
+        "channelManifestHashes": {
+          "stable": "63f05543729629732d364210566285be35e5f6a11ae71931ab3f8c35a83f74ae",
+          "preview": null
+        },
+        "lastTrustedTime": "2026-10-29T00:00:00Z",
+        "rootHistory": [
+          {
+            "version": 1,
+            "sha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef"
+          },
+          {
+            "version": 2,
+            "sha256": "9ecbf397938b13330ade20368716f526c7478039f884416f0be2f5df60108aeb"
+          }
+        ]
+      },
+      "rootUpdates": [],
+      "revocations": "revocations-rotated.json",
+      "release": "release-rotated.json",
+      "embeddedRoot": "root-initial.json",
+      "rootHistoryFiles": [
+        "root-initial.json",
+        "root-missing-old-signatures.json"
+      ]
+    }
+  ],
+  "encodingVectors": [
+    {
+      "file": "root-initial.json",
+      "canonicalBase64": "eyJleHBpcmVzQXQiOiIyMDI3LTAxLTAxVDAwOjAwOjAwWiIsImZvcm1hdFZlcnNpb24iOiIxLjAiLCJpc3N1ZWRBdCI6IjIwMjYtMTAtMDFUMDA6MDA6MDBaIiwia2V5cyI6W3siYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiMmYzYmZjMGZmZmY0NzY2Y2Y5ZjFlOTcyM2MxYjM2YjM3YTdhNjJjNTZkNWJmYThiY2NkMTUyMGY0NjczOGI1ZiIsInB1YmxpY0tleSI6ImxkdzRNV0xXYlF4ZE1aUHlzV2o2UXBMTmNack9PcjEzYzlkc2E0aEYvbWc9In0seyJhbGdvcml0aG0iOiJFZDI1NTE5Iiwia2V5SWQiOiIzMDQwMDczZTdiMzY4ZWM5YmVhMDVhZjhmMWE4NTYwZTRiZGFlOWM5ZjQzMzg2MTJhOTFiN2E0MTJkYzM5MmVmIiwicHVibGljS2V5Ijoib3g3KzlYeFVmQytaR2krM09hRlQxclRHSjFiWFFHS0RZVEtiL2tSNzlSMD0ifSx7ImFsZ29yaXRobSI6IkVkMjU1MTkiLCJrZXlJZCI6IjYwNWU1MjNmMTQ0ZDZlNjYxMDAwNTNiZjk5ZjAzYjY5MDcxNWMyYTkxM2YxZmNkNmFiMGIzOTE5MDllODNmZmEiLCJwdWJsaWNLZXkiOiJMTzR4QkFVNm5DWk5ObTZjWnY3Z01uNkJMQUtyNHNTOGR3VGZ3cE8rNno0PSJ9LHsiYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiZTk3YmNiZjJlMzEyMmFkYmM3OGEwMzcwMmM1YmQ3NGM3ZWRkNDBkNmM1M2NkNmEyZDIzOTE3ODU1MDliNmU2OSIsInB1YmxpY0tleSI6IkhtQ3EwM3NMeGpZd09KMllxOVFFM0FnOHdtNTB3ZnVaWmhMYVlzQlpwZUE9In0seyJhbGdvcml0aG0iOiJFZDI1NTE5Iiwia2V5SWQiOiJhY2QzMzgwMDY0ZDg1ZWE3Njc1MDY0YzkxNTQyZDVhNzRkNWU5NmI2YmMzN2JiYjM4N2RhNjEwNmIzZjNjNTgyIiwicHVibGljS2V5IjoiK1JNUGlkL09XaktTZzZiTmtkNEZ6R0hrOXhJVytpaHB1WGFndUhQOFZrQT0ifV0sIm1pbmltdW1TZWN1cml0eVNlcXVlbmNlIjp7InByZXZpZXciOjAsInN0YWJsZSI6MH0sInByb2R1Y3QiOiJEZXNrV2VhdmVTdHVkaW8iLCJyb2xlIjoicm9vdCIsInJvbGVzIjp7InByZXZpZXciOnsia2V5SWRzIjpbImFjZDMzODAwNjRkODVlYTc2NzUwNjRjOTE1NDJkNWE3NGQ1ZTk2YjZiYzM3YmJiMzg3ZGE2MTA2YjNmM2M1ODIiXSwidGhyZXNob2xkIjoxfSwicm9vdCI6eyJrZXlJZHMiOlsiMmYzYmZjMGZmZmY0NzY2Y2Y5ZjFlOTcyM2MxYjM2YjM3YTdhNjJjNTZkNWJmYThiY2NkMTUyMGY0NjczOGI1ZiIsIjMwNDAwNzNlN2IzNjhlYzliZWEwNWFmOGYxYTg1NjBlNGJkYWU5YzlmNDMzODYxMmE5MWI3YTQxMmRjMzkyZWYiLCI2MDVlNTIzZjE0NGQ2ZTY2MTAwMDUzYmY5OWYwM2I2OTA3MTVjMmE5MTNmMWZjZDZhYjBiMzkxOTA5ZTgzZmZhIl0sInRocmVzaG9sZCI6Mn0sInN0YWJsZSI6eyJrZXlJZHMiOlsiZTk3YmNiZjJlMzEyMmFkYmM3OGEwMzcwMmM1YmQ3NGM3ZWRkNDBkNmM1M2NkNmEyZDIzOTE3ODU1MDliNmU2OSJdLCJ0aHJlc2hvbGQiOjF9fSwidmVyc2lvbiI6MX0=",
+      "signedBytesBase64": "RGVza1dlYXZlU3R1ZGlvL3VwZGF0ZS92MQpyb290CnsiZXhwaXJlc0F0IjoiMjAyNy0wMS0wMVQwMDowMDowMFoiLCJmb3JtYXRWZXJzaW9uIjoiMS4wIiwiaXNzdWVkQXQiOiIyMDI2LTEwLTAxVDAwOjAwOjAwWiIsImtleXMiOlt7ImFsZ29yaXRobSI6IkVkMjU1MTkiLCJrZXlJZCI6IjJmM2JmYzBmZmZmNDc2NmNmOWYxZTk3MjNjMWIzNmIzN2E3YTYyYzU2ZDViZmE4YmNjZDE1MjBmNDY3MzhiNWYiLCJwdWJsaWNLZXkiOiJsZHc0TVdMV2JReGRNWlB5c1dqNlFwTE5jWnJPT3IxM2M5ZHNhNGhGL21nPSJ9LHsiYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiMzA0MDA3M2U3YjM2OGVjOWJlYTA1YWY4ZjFhODU2MGU0YmRhZTljOWY0MzM4NjEyYTkxYjdhNDEyZGMzOTJlZiIsInB1YmxpY0tleSI6Im94Nys5WHhVZkMrWkdpKzNPYUZUMXJUR0oxYlhRR0tEWVRLYi9rUjc5UjA9In0seyJhbGdvcml0aG0iOiJFZDI1NTE5Iiwia2V5SWQiOiI2MDVlNTIzZjE0NGQ2ZTY2MTAwMDUzYmY5OWYwM2I2OTA3MTVjMmE5MTNmMWZjZDZhYjBiMzkxOTA5ZTgzZmZhIiwicHVibGljS2V5IjoiTE80eEJBVTZuQ1pOTm02Y1p2N2dNbjZCTEFLcjRzUzhkd1Rmd3BPKzZ6ND0ifSx7ImFsZ29yaXRobSI6IkVkMjU1MTkiLCJrZXlJZCI6ImU5N2JjYmYyZTMxMjJhZGJjNzhhMDM3MDJjNWJkNzRjN2VkZDQwZDZjNTNjZDZhMmQyMzkxNzg1NTA5YjZlNjkiLCJwdWJsaWNLZXkiOiJIbUNxMDNzTHhqWXdPSjJZcTlRRTNBZzh3bTUwd2Z1WlpoTGFZc0JacGVBPSJ9LHsiYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiYWNkMzM4MDA2NGQ4NWVhNzY3NTA2NGM5MTU0MmQ1YTc0ZDVlOTZiNmJjMzdiYmIzODdkYTYxMDZiM2YzYzU4MiIsInB1YmxpY0tleSI6IitSTVBpZC9PV2pLU2c2Yk5rZDRGekdIazl4SVcraWhwdVhhZ3VIUDhWa0E9In1dLCJtaW5pbXVtU2VjdXJpdHlTZXF1ZW5jZSI6eyJwcmV2aWV3IjowLCJzdGFibGUiOjB9LCJwcm9kdWN0IjoiRGVza1dlYXZlU3R1ZGlvIiwicm9sZSI6InJvb3QiLCJyb2xlcyI6eyJwcmV2aWV3Ijp7ImtleUlkcyI6WyJhY2QzMzgwMDY0ZDg1ZWE3Njc1MDY0YzkxNTQyZDVhNzRkNWU5NmI2YmMzN2JiYjM4N2RhNjEwNmIzZjNjNTgyIl0sInRocmVzaG9sZCI6MX0sInJvb3QiOnsia2V5SWRzIjpbIjJmM2JmYzBmZmZmNDc2NmNmOWYxZTk3MjNjMWIzNmIzN2E3YTYyYzU2ZDViZmE4YmNjZDE1MjBmNDY3MzhiNWYiLCIzMDQwMDczZTdiMzY4ZWM5YmVhMDVhZjhmMWE4NTYwZTRiZGFlOWM5ZjQzMzg2MTJhOTFiN2E0MTJkYzM5MmVmIiwiNjA1ZTUyM2YxNDRkNmU2NjEwMDA1M2JmOTlmMDNiNjkwNzE1YzJhOTEzZjFmY2Q2YWIwYjM5MTkwOWU4M2ZmYSJdLCJ0aHJlc2hvbGQiOjJ9LCJzdGFibGUiOnsia2V5SWRzIjpbImU5N2JjYmYyZTMxMjJhZGJjNzhhMDM3MDJjNWJkNzRjN2VkZDQwZDZjNTNjZDZhMmQyMzkxNzg1NTA5YjZlNjkiXSwidGhyZXNob2xkIjoxfX0sInZlcnNpb24iOjF9",
+      "signedSha256": "c9b33953aede41bfb45a8e425aa1a5161de320026985cbc0c66bf475d052d7ef",
+      "messageSha256": "d7e06fcb643a5bcfcc307180df016e245b21deb958f121ea2fe6ae4d5b512261"
+    },
+    {
+      "file": "root-rotated.json",
+      "canonicalBase64": "eyJleHBpcmVzQXQiOiIyMDI3LTAxLTAxVDAwOjAwOjAwWiIsImZvcm1hdFZlcnNpb24iOiIxLjAiLCJpc3N1ZWRBdCI6IjIwMjYtMTAtMDFUMDA6MDA6MDBaIiwia2V5cyI6W3siYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiNThhZGM4MTQ4N2FjYWRlZGViYTE2N2E5NmVmYzNhZTgwMTIxODZiODM4MTQ5NTgxODdjYjJhZDVlZGYyYWRhNCIsInB1YmxpY0tleSI6ImZOL1E3akFsbnNWTGdiZlBKYnlLM0RJR2RjT2JJMFBOOVJlVlVwdHZiVWM9In0seyJhbGdvcml0aG0iOiJFZDI1NTE5Iiwia2V5SWQiOiI3MzhlMWYyYWUzZWY2YmUyNTA1YWJlMWMwYmQ3YjU4NGE2OGVmNzliZGM4OTBlOWQzMjVlMTcxODc3NTdmZmMxIiwicHVibGljS2V5IjoiSHdyRzdkcTI1R1VLcWdEYTNkMStZaU9qV0RWczQ3cVBBMi9NTHlEWWdVYz0ifSx7ImFsZ29yaXRobSI6IkVkMjU1MTkiLCJrZXlJZCI6IjRhNTBhMDBlMjk3ZWEyZTc1YjlkNTRjZDJjZDU3YmI0ZmExNzc4YWU5ODI1NmM4YWNiNjE4MWE5M2QyNmU2NjAiLCJwdWJsaWNLZXkiOiJleHFlempEVmpFanpwTjBGNHl3QkZBYkh0OWFnd3lzMGhYRXM0cjQwNTZzPSJ9LHsiYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiOTU2YThmMTliYWE0ZGNlNjg1YmRiODNkNjU4NjY4MDQyMmRhZDllYTBhYjNlMDhjNWM0MmQzNDJjNzI0MTczMCIsInB1YmxpY0tleSI6ImJLOWpZZzViSFNtZE9KSXVKa25sV3B6OHA3MTBXejJlZDM4bVM4U2ZPbTg9In0seyJhbGdvcml0aG0iOiJFZDI1NTE5Iiwia2V5SWQiOiIxNzQzOTU2ZWU4ZjFiMDJmNTcxOTA0NGM4OGRhNzk2NmU2ODYzYmE1OGE2MDAyNGEwZGE5ZTUzNGI3NDVlODJmIiwicHVibGljS2V5IjoiVyt6LzByM0Y3eGg1aFZyQStxRUE1Z3NKZlZlNUlFelBqMG96dFA3Y0NzUT0ifV0sIm1pbmltdW1TZWN1cml0eVNlcXVlbmNlIjp7InByZXZpZXciOjAsInN0YWJsZSI6MH0sInByb2R1Y3QiOiJEZXNrV2VhdmVTdHVkaW8iLCJyb2xlIjoicm9vdCIsInJvbGVzIjp7InByZXZpZXciOnsia2V5SWRzIjpbIjE3NDM5NTZlZThmMWIwMmY1NzE5MDQ0Yzg4ZGE3OTY2ZTY4NjNiYTU4YTYwMDI0YTBkYTllNTM0Yjc0NWU4MmYiXSwidGhyZXNob2xkIjoxfSwicm9vdCI6eyJrZXlJZHMiOlsiNThhZGM4MTQ4N2FjYWRlZGViYTE2N2E5NmVmYzNhZTgwMTIxODZiODM4MTQ5NTgxODdjYjJhZDVlZGYyYWRhNCIsIjczOGUxZjJhZTNlZjZiZTI1MDVhYmUxYzBiZDdiNTg0YTY4ZWY3OWJkYzg5MGU5ZDMyNWUxNzE4Nzc1N2ZmYzEiLCI0YTUwYTAwZTI5N2VhMmU3NWI5ZDU0Y2QyY2Q1N2JiNGZhMTc3OGFlOTgyNTZjOGFjYjYxODFhOTNkMjZlNjYwIl0sInRocmVzaG9sZCI6Mn0sInN0YWJsZSI6eyJrZXlJZHMiOlsiOTU2YThmMTliYWE0ZGNlNjg1YmRiODNkNjU4NjY4MDQyMmRhZDllYTBhYjNlMDhjNWM0MmQzNDJjNzI0MTczMCJdLCJ0aHJlc2hvbGQiOjF9fSwidmVyc2lvbiI6Mn0=",
+      "signedBytesBase64": "RGVza1dlYXZlU3R1ZGlvL3VwZGF0ZS92MQpyb290CnsiZXhwaXJlc0F0IjoiMjAyNy0wMS0wMVQwMDowMDowMFoiLCJmb3JtYXRWZXJzaW9uIjoiMS4wIiwiaXNzdWVkQXQiOiIyMDI2LTEwLTAxVDAwOjAwOjAwWiIsImtleXMiOlt7ImFsZ29yaXRobSI6IkVkMjU1MTkiLCJrZXlJZCI6IjU4YWRjODE0ODdhY2FkZWRlYmExNjdhOTZlZmMzYWU4MDEyMTg2YjgzODE0OTU4MTg3Y2IyYWQ1ZWRmMmFkYTQiLCJwdWJsaWNLZXkiOiJmTi9RN2pBbG5zVkxnYmZQSmJ5SzNESUdkY09iSTBQTjlSZVZVcHR2YlVjPSJ9LHsiYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiNzM4ZTFmMmFlM2VmNmJlMjUwNWFiZTFjMGJkN2I1ODRhNjhlZjc5YmRjODkwZTlkMzI1ZTE3MTg3NzU3ZmZjMSIsInB1YmxpY0tleSI6Ikh3ckc3ZHEyNUdVS3FnRGEzZDErWWlPaldEVnM0N3FQQTIvTUx5RFlnVWM9In0seyJhbGdvcml0aG0iOiJFZDI1NTE5Iiwia2V5SWQiOiI0YTUwYTAwZTI5N2VhMmU3NWI5ZDU0Y2QyY2Q1N2JiNGZhMTc3OGFlOTgyNTZjOGFjYjYxODFhOTNkMjZlNjYwIiwicHVibGljS2V5IjoiZXhxZXpqRFZqRWp6cE4wRjR5d0JGQWJIdDlhZ3d5czBoWEVzNHI0MDU2cz0ifSx7ImFsZ29yaXRobSI6IkVkMjU1MTkiLCJrZXlJZCI6Ijk1NmE4ZjE5YmFhNGRjZTY4NWJkYjgzZDY1ODY2ODA0MjJkYWQ5ZWEwYWIzZTA4YzVjNDJkMzQyYzcyNDE3MzAiLCJwdWJsaWNLZXkiOiJiSzlqWWc1YkhTbWRPSkl1SmtubFdwejhwNzEwV3oyZWQzOG1TOFNmT204PSJ9LHsiYWxnb3JpdGhtIjoiRWQyNTUxOSIsImtleUlkIjoiMTc0Mzk1NmVlOGYxYjAyZjU3MTkwNDRjODhkYTc5NjZlNjg2M2JhNThhNjAwMjRhMGRhOWU1MzRiNzQ1ZTgyZiIsInB1YmxpY0tleSI6Ilcrei8wcjNGN3hoNWhWckErcUVBNWdzSmZWZTVJRXpQajBvenRQN2NDc1E9In1dLCJtaW5pbXVtU2VjdXJpdHlTZXF1ZW5jZSI6eyJwcmV2aWV3IjowLCJzdGFibGUiOjB9LCJwcm9kdWN0IjoiRGVza1dlYXZlU3R1ZGlvIiwicm9sZSI6InJvb3QiLCJyb2xlcyI6eyJwcmV2aWV3Ijp7ImtleUlkcyI6WyIxNzQzOTU2ZWU4ZjFiMDJmNTcxOTA0NGM4OGRhNzk2NmU2ODYzYmE1OGE2MDAyNGEwZGE5ZTUzNGI3NDVlODJmIl0sInRocmVzaG9sZCI6MX0sInJvb3QiOnsia2V5SWRzIjpbIjU4YWRjODE0ODdhY2FkZWRlYmExNjdhOTZlZmMzYWU4MDEyMTg2YjgzODE0OTU4MTg3Y2IyYWQ1ZWRmMmFkYTQiLCI3MzhlMWYyYWUzZWY2YmUyNTA1YWJlMWMwYmQ3YjU4NGE2OGVmNzliZGM4OTBlOWQzMjVlMTcxODc3NTdmZmMxIiwiNGE1MGEwMGUyOTdlYTJlNzViOWQ1NGNkMmNkNTdiYjRmYTE3NzhhZTk4MjU2YzhhY2I2MTgxYTkzZDI2ZTY2MCJdLCJ0aHJlc2hvbGQiOjJ9LCJzdGFibGUiOnsia2V5SWRzIjpbIjk1NmE4ZjE5YmFhNGRjZTY4NWJkYjgzZDY1ODY2ODA0MjJkYWQ5ZWEwYWIzZTA4YzVjNDJkMzQyYzcyNDE3MzAiXSwidGhyZXNob2xkIjoxfX0sInZlcnNpb24iOjJ9",
+      "signedSha256": "9ecbf397938b13330ade20368716f526c7478039f884416f0be2f5df60108aeb",
+      "messageSha256": "3cb677af89e91ca54053c5b48eadd080705b99dd34a7d15252cd16ecc0b09845"
+    },
+    {
+      "file": "release-stable.json",
+      "canonicalBase64": "eyJhcnRpZmFjdCI6eyJjb21wb25lbnRzIjp7ImFnZW50IjoiMS4wLjkiLCJicmlkZ2UiOiIxLjAuOSIsImVuZ2luZSI6IjEuMC45Iiwic3R1ZGlvIjoiMS4wLjkifSwibGVuZ3RoIjo0MSwicGxhdGZvcm0iOiJ3aW5kb3dzLXg2NCIsInByb3RvY29sVmVyc2lvbiI6IjEuMCIsInB1Ymxpc2hlciI6IkRlc2tXZWF2ZVN0dWRpbyBTeW50aGV0aWMgUHVibGlzaGVyIiwic2hhMjU2IjoiNDZmODVmZjk1NTdhNTVkNTg4ODY2YzE5Y2Q1YmYzYTk2Mjk1MTA1ZDI4MDUzNjJmNjQ2NjlmNDdiNjdiNTEwMSIsInVybCI6Imh0dHBzOi8vZG93bmxvYWRzLmV4YW1wbGUuaW52YWxpZC9EZXNrV2VhdmVTdHVkaW8tMS4wLjkuZXhlIiwid29ya3NwYWNlRm9ybWF0TWF4IjoxLCJ3b3Jrc3BhY2VGb3JtYXRNaW4iOjF9LCJjaGFubmVsIjoic3RhYmxlIiwiZXhwaXJlc0F0IjoiMjAyNi0xMS0wMlQwMDowMDowMFoiLCJmb3JtYXRWZXJzaW9uIjoiMS4wIiwiaXNzdWVkQXQiOiIyMDI2LTEwLTI4VDAwOjAwOjAwWiIsInByb2R1Y3QiOiJEZXNrV2VhdmVTdHVkaW8iLCJyb2xlIjoicmVsZWFzZSIsInJvb3RWZXJzaW9uIjoxLCJzZXF1ZW5jZSI6OSwidmVyc2lvbiI6IjEuMC45In0=",
+      "signedBytesBase64": "RGVza1dlYXZlU3R1ZGlvL3VwZGF0ZS92MQpyZWxlYXNlCnsiYXJ0aWZhY3QiOnsiY29tcG9uZW50cyI6eyJhZ2VudCI6IjEuMC45IiwiYnJpZGdlIjoiMS4wLjkiLCJlbmdpbmUiOiIxLjAuOSIsInN0dWRpbyI6IjEuMC45In0sImxlbmd0aCI6NDEsInBsYXRmb3JtIjoid2luZG93cy14NjQiLCJwcm90b2NvbFZlcnNpb24iOiIxLjAiLCJwdWJsaXNoZXIiOiJEZXNrV2VhdmVTdHVkaW8gU3ludGhldGljIFB1Ymxpc2hlciIsInNoYTI1NiI6IjQ2Zjg1ZmY5NTU3YTU1ZDU4ODg2NmMxOWNkNWJmM2E5NjI5NTEwNWQyODA1MzYyZjY0NjY5ZjQ3YjY3YjUxMDEiLCJ1cmwiOiJodHRwczovL2Rvd25sb2Fkcy5leGFtcGxlLmludmFsaWQvRGVza1dlYXZlU3R1ZGlvLTEuMC45LmV4ZSIsIndvcmtzcGFjZUZvcm1hdE1heCI6MSwid29ya3NwYWNlRm9ybWF0TWluIjoxfSwiY2hhbm5lbCI6InN0YWJsZSIsImV4cGlyZXNBdCI6IjIwMjYtMTEtMDJUMDA6MDA6MDBaIiwiZm9ybWF0VmVyc2lvbiI6IjEuMCIsImlzc3VlZEF0IjoiMjAyNi0xMC0yOFQwMDowMDowMFoiLCJwcm9kdWN0IjoiRGVza1dlYXZlU3R1ZGlvIiwicm9sZSI6InJlbGVhc2UiLCJyb290VmVyc2lvbiI6MSwic2VxdWVuY2UiOjksInZlcnNpb24iOiIxLjAuOSJ9",
+      "signedSha256": "46a649d996b729efecfea001783333907c59cd84b2d61410441f24b3bf0b57ee",
+      "messageSha256": "df0c09aa8c9cb6ed85607e2af93d13ddf363481afcbc270fba39fd550324d44d"
+    },
+    {
+      "file": "release-rotated.json",
+      "canonicalBase64": "eyJhcnRpZmFjdCI6eyJjb21wb25lbnRzIjp7ImFnZW50IjoiMS4wLjkiLCJicmlkZ2UiOiIxLjAuOSIsImVuZ2luZSI6IjEuMC45Iiwic3R1ZGlvIjoiMS4wLjkifSwibGVuZ3RoIjo0MSwicGxhdGZvcm0iOiJ3aW5kb3dzLXg2NCIsInByb3RvY29sVmVyc2lvbiI6IjEuMCIsInB1Ymxpc2hlciI6IkRlc2tXZWF2ZVN0dWRpbyBTeW50aGV0aWMgUHVibGlzaGVyIiwic2hhMjU2IjoiNDZmODVmZjk1NTdhNTVkNTg4ODY2YzE5Y2Q1YmYzYTk2Mjk1MTA1ZDI4MDUzNjJmNjQ2NjlmNDdiNjdiNTEwMSIsInVybCI6Imh0dHBzOi8vZG93bmxvYWRzLmV4YW1wbGUuaW52YWxpZC9EZXNrV2VhdmVTdHVkaW8tMS4wLjkuZXhlIiwid29ya3NwYWNlRm9ybWF0TWF4IjoxLCJ3b3Jrc3BhY2VGb3JtYXRNaW4iOjF9LCJjaGFubmVsIjoic3RhYmxlIiwiZXhwaXJlc0F0IjoiMjAyNi0xMS0wMlQwMDowMDowMFoiLCJmb3JtYXRWZXJzaW9uIjoiMS4wIiwiaXNzdWVkQXQiOiIyMDI2LTEwLTI4VDAwOjAwOjAwWiIsInByb2R1Y3QiOiJEZXNrV2VhdmVTdHVkaW8iLCJyb2xlIjoicmVsZWFzZSIsInJvb3RWZXJzaW9uIjoyLCJzZXF1ZW5jZSI6MTAsInZlcnNpb24iOiIxLjAuOSJ9",
+      "signedBytesBase64": "RGVza1dlYXZlU3R1ZGlvL3VwZGF0ZS92MQpyZWxlYXNlCnsiYXJ0aWZhY3QiOnsiY29tcG9uZW50cyI6eyJhZ2VudCI6IjEuMC45IiwiYnJpZGdlIjoiMS4wLjkiLCJlbmdpbmUiOiIxLjAuOSIsInN0dWRpbyI6IjEuMC45In0sImxlbmd0aCI6NDEsInBsYXRmb3JtIjoid2luZG93cy14NjQiLCJwcm90b2NvbFZlcnNpb24iOiIxLjAiLCJwdWJsaXNoZXIiOiJEZXNrV2VhdmVTdHVkaW8gU3ludGhldGljIFB1Ymxpc2hlciIsInNoYTI1NiI6IjQ2Zjg1ZmY5NTU3YTU1ZDU4ODg2NmMxOWNkNWJmM2E5NjI5NTEwNWQyODA1MzYyZjY0NjY5ZjQ3YjY3YjUxMDEiLCJ1cmwiOiJodHRwczovL2Rvd25sb2Fkcy5leGFtcGxlLmludmFsaWQvRGVza1dlYXZlU3R1ZGlvLTEuMC45LmV4ZSIsIndvcmtzcGFjZUZvcm1hdE1heCI6MSwid29ya3NwYWNlRm9ybWF0TWluIjoxfSwiY2hhbm5lbCI6InN0YWJsZSIsImV4cGlyZXNBdCI6IjIwMjYtMTEtMDJUMDA6MDA6MDBaIiwiZm9ybWF0VmVyc2lvbiI6IjEuMCIsImlzc3VlZEF0IjoiMjAyNi0xMC0yOFQwMDowMDowMFoiLCJwcm9kdWN0IjoiRGVza1dlYXZlU3R1ZGlvIiwicm9sZSI6InJlbGVhc2UiLCJyb290VmVyc2lvbiI6Miwic2VxdWVuY2UiOjEwLCJ2ZXJzaW9uIjoiMS4wLjkifQ==",
+      "signedSha256": "63f05543729629732d364210566285be35e5f6a11ae71931ab3f8c35a83f74ae",
+      "messageSha256": "4fbd68e898b1709a00c03ecd06d8f8a8425cf644bc971ff3271271549adee612"
+    },
+    {
+      "file": "revocations-initial.json",
+      "canonicalBase64": "eyJleHBpcmVzQXQiOiIyMDI2LTEwLTI5VDIyOjAwOjAwWiIsImZvcm1hdFZlcnNpb24iOiIxLjAiLCJpc3N1ZWRBdCI6IjIwMjYtMTAtMjhUMjI6MDA6MDBaIiwibWluaW11bVNlY3VyaXR5U2VxdWVuY2UiOnsicHJldmlldyI6MCwic3RhYmxlIjowfSwicHJvZHVjdCI6IkRlc2tXZWF2ZVN0dWRpbyIsInJldm9rZWRBcnRpZmFjdHMiOltdLCJyZXZva2VkS2V5SWRzIjpbXSwicm9sZSI6InJldm9jYXRpb25zIiwicm9vdFZlcnNpb24iOjEsInZlcnNpb24iOjF9",
+      "signedBytesBase64": "RGVza1dlYXZlU3R1ZGlvL3VwZGF0ZS92MQpyZXZvY2F0aW9ucwp7ImV4cGlyZXNBdCI6IjIwMjYtMTAtMjlUMjI6MDA6MDBaIiwiZm9ybWF0VmVyc2lvbiI6IjEuMCIsImlzc3VlZEF0IjoiMjAyNi0xMC0yOFQyMjowMDowMFoiLCJtaW5pbXVtU2VjdXJpdHlTZXF1ZW5jZSI6eyJwcmV2aWV3IjowLCJzdGFibGUiOjB9LCJwcm9kdWN0IjoiRGVza1dlYXZlU3R1ZGlvIiwicmV2b2tlZEFydGlmYWN0cyI6W10sInJldm9rZWRLZXlJZHMiOltdLCJyb2xlIjoicmV2b2NhdGlvbnMiLCJyb290VmVyc2lvbiI6MSwidmVyc2lvbiI6MX0=",
+      "signedSha256": "11e26674980661571df98e3a86d9b3b90822a99de62834ab63009251680bb0d3",
+      "messageSha256": "86d72faf40d4f2820c97bc193025633044fd79403b0858ab90a32201e61abfc4"
+    },
+    {
+      "file": "revocations-rotated.json",
+      "canonicalBase64": "eyJleHBpcmVzQXQiOiIyMDI2LTEwLTI5VDIyOjAwOjAwWiIsImZvcm1hdFZlcnNpb24iOiIxLjAiLCJpc3N1ZWRBdCI6IjIwMjYtMTAtMjhUMjI6MDA6MDBaIiwibWluaW11bVNlY3VyaXR5U2VxdWVuY2UiOnsicHJldmlldyI6MCwic3RhYmxlIjowfSwicHJvZHVjdCI6IkRlc2tXZWF2ZVN0dWRpbyIsInJldm9rZWRBcnRpZmFjdHMiOltdLCJyZXZva2VkS2V5SWRzIjpbImU5N2JjYmYyZTMxMjJhZGJjNzhhMDM3MDJjNWJkNzRjN2VkZDQwZDZjNTNjZDZhMmQyMzkxNzg1NTA5YjZlNjkiXSwicm9sZSI6InJldm9jYXRpb25zIiwicm9vdFZlcnNpb24iOjIsInZlcnNpb24iOjJ9",
+      "signedBytesBase64": "RGVza1dlYXZlU3R1ZGlvL3VwZGF0ZS92MQpyZXZvY2F0aW9ucwp7ImV4cGlyZXNBdCI6IjIwMjYtMTAtMjlUMjI6MDA6MDBaIiwiZm9ybWF0VmVyc2lvbiI6IjEuMCIsImlzc3VlZEF0IjoiMjAyNi0xMC0yOFQyMjowMDowMFoiLCJtaW5pbXVtU2VjdXJpdHlTZXF1ZW5jZSI6eyJwcmV2aWV3IjowLCJzdGFibGUiOjB9LCJwcm9kdWN0IjoiRGVza1dlYXZlU3R1ZGlvIiwicmV2b2tlZEFydGlmYWN0cyI6W10sInJldm9rZWRLZXlJZHMiOlsiZTk3YmNiZjJlMzEyMmFkYmM3OGEwMzcwMmM1YmQ3NGM3ZWRkNDBkNmM1M2NkNmEyZDIzOTE3ODU1MDliNmU2OSJdLCJyb2xlIjoicmV2b2NhdGlvbnMiLCJyb290VmVyc2lvbiI6MiwidmVyc2lvbiI6Mn0=",
+      "signedSha256": "2ebd85c67e9eb5042ee15b2bdf5102ed266b30838a70b4ab4d455c9aad22c896",
+      "messageSha256": "ef02de5549efeb3246c76cc693734e98633817ffbf58b7d93dd3cb469b691b36"
+    }
+  ]
+}

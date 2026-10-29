@@ -1,0 +1,3546 @@
+[
+  {
+    "file": "workflows/hello.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "pass"
+  },
+  {
+    "file": "workflows/child.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "pass"
+  },
+  {
+    "file": "workflows/parent.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "pass"
+  },
+  {
+    "file": "trajectories/shortcut.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/request.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/response.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass",
+    "request": "messages/request.json"
+  },
+  {
+    "file": "messages/event.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/input.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "values.json",
+    "schema": "values.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/missing-node.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/bad-message.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/bad-expression.json",
+    "schema": "workflow.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/graph-cycle.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/unpaired-trajectory.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/bad-time.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/bad-calendar.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/bad-method.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/bad-params.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/input-store.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/input-target.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "manifest.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/package-device.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/package-colon.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/agent-lease.json",
+    "schema": "agent.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/agent-segment.json",
+    "schema": "agent.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/agent-expression.json",
+    "schema": "agent.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "vision/template-options.json",
+    "schema": "vision.schema.json#/$defs/extractionOptions",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "extractionOptions"
+  },
+  {
+    "file": "invalid/template-zero-weights.json",
+    "schema": "vision.schema.json#/$defs/extractionOptions",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/template-area-order.json",
+    "schema": "vision.schema.json#/$defs/extractionOptions",
+    "semantic": "vision",
+    "expected": "semantic-fail",
+    "visionType": "extractionOptions"
+  },
+  {
+    "file": "invalid/template-aspect-order.json",
+    "schema": "vision.schema.json#/$defs/extractionOptions",
+    "semantic": "vision",
+    "expected": "semantic-fail",
+    "visionType": "extractionOptions"
+  },
+  {
+    "file": "vision/extraction-empty.json",
+    "schema": "vision.schema.json#/$defs/extractionResult",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "vision/extraction-image.json",
+    "schema": "vision.schema.json#/$defs/extractionResult",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/extraction-no-digest.json",
+    "schema": "vision.schema.json#/$defs/extractionResult",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "vision/template-names.json",
+    "schema": "vision.schema.json#/$defs/nameProposal",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "vision/template-name-conflict.json",
+    "schema": "vision.schema.json#/$defs/nameProposal",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "vision/observation-text.json",
+    "schema": "vision.schema.json#/$defs/observationPlan",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationPlan"
+  },
+  {
+    "file": "vision/observation-json.json",
+    "schema": "vision.schema.json#/$defs/observationPlan",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationPlan"
+  },
+  {
+    "file": "invalid/observation-fast-period.json",
+    "schema": "vision.schema.json#/$defs/observationPlan",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-text-schema.json",
+    "schema": "vision.schema.json#/$defs/observationPlan",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-remote-schema.json",
+    "schema": "vision.schema.json#/$defs/observationPlan",
+    "semantic": "vision",
+    "expected": "semantic-fail",
+    "visionType": "observationPlan"
+  },
+  {
+    "file": "vision/observation-record.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "vision/observation-run-record.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "vision/observation-skipped.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "vision/connection-default.json",
+    "schema": "vision.schema.json#/$defs/connectionOptions",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "connectionOptions"
+  },
+  {
+    "file": "vision/connection-custom.json",
+    "schema": "vision.schema.json#/$defs/connectionOptions",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "connectionOptions"
+  },
+  {
+    "file": "invalid/connection-unknown-placeholder.json",
+    "schema": "vision.schema.json#/$defs/connectionOptions",
+    "semantic": "vision",
+    "expected": "semantic-fail",
+    "visionType": "connectionOptions"
+  },
+  {
+    "file": "invalid/connection-body-override.json",
+    "schema": "vision.schema.json#/$defs/connectionOptions",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/connection-custom-empty.json",
+    "schema": "vision.schema.json#/$defs/connectionOptions",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "workflows/condition-loop.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "pass"
+  },
+  {
+    "file": "workflows/loop-body.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/loop-signal-without-body.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/loop-missing-resource.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/loop-zero-budget.json",
+    "schema": "workflow.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "workflows/shared-state.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/shared-negative-version.json",
+    "schema": "workflow.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "actions/chord-boundary.json",
+    "schema": "actions.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/chord-duplicate-key.json",
+    "schema": "actions.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/chord-over-duration.json",
+    "schema": "actions.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/run-prepare-node.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/run-start-node.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/run-node-no-plan.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/run-invalid-interruption.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/template-extract.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/observation-start.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/mcp-http.json",
+    "schema": "mcp.schema.json#/$defs/serverConfig",
+    "semantic": "mcp",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/mcp-stdio.json",
+    "schema": "mcp.schema.json#/$defs/serverConfig",
+    "semantic": "mcp",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/mcp-tls.json",
+    "schema": "mcp.schema.json#/$defs/serverConfig",
+    "semantic": "mcp",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/mcp-nonloopback.json",
+    "schema": "mcp.schema.json#/$defs/serverConfig",
+    "semantic": "mcp",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/mcp-origin.json",
+    "schema": "mcp.schema.json#/$defs/serverConfig",
+    "semantic": "mcp",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/mcp-tls-grant.json",
+    "schema": "mcp.schema.json#/$defs/serverConfig",
+    "semantic": "mcp",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "messages/mcp-token.json",
+    "schema": "mcp.schema.json#/$defs/tokenGrant",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/mcp-token-scope.json",
+    "schema": "mcp.schema.json#/$defs/tokenGrant",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "vision/observation-busy.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "invalid/observation-busy-forged-capture.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-busy-forged-difference.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-busy-forged-baseline.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-busy-reused-output.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "vision/observation-unchanged-zero.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "invalid/observation-unchanged-no-baseline.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-unchanged-no-difference.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-difference-over-limit.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-skipped-no-reason.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-unchanged-no-capture.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-success-difference.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-no-check-time.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "vision/observation-failed-before-capture.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "invalid/observation-frame-without-capture.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-completed-before-check.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "semantic-fail",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "invalid/observation-captured-before-check.json",
+    "schema": "vision.schema.json#/$defs/observationRecord",
+    "semantic": "vision",
+    "expected": "semantic-fail",
+    "visionType": "observationRecord"
+  },
+  {
+    "file": "messages/observation-background.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/observation-detached-type.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-owner-spoof.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "vision/observation-background-session.json",
+    "schema": "vision.schema.json#/$defs/observationSession",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationSession"
+  },
+  {
+    "file": "vision/observation-interrupted-session.json",
+    "schema": "vision.schema.json#/$defs/observationSession",
+    "semantic": "vision",
+    "expected": "pass",
+    "visionType": "observationSession"
+  },
+  {
+    "file": "invalid/observation-running-end-time.json",
+    "schema": "vision.schema.json#/$defs/observationSession",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-failed-no-reason.json",
+    "schema": "vision.schema.json#/$defs/observationSession",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/observation-session-time-order.json",
+    "schema": "vision.schema.json#/$defs/observationSession",
+    "semantic": "vision",
+    "expected": "semantic-fail",
+    "visionType": "observationSession"
+  },
+  {
+    "file": "messages/connection-read-version.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/connection-version-zero.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/connection-keep-credential.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/connection-keep-revoke.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/connection-replace-revoke.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/connection-no-credential.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/workflow-export-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/record-finish-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/vision-match-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/vision-observe-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/asset-import-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass",
+    "context": "queries/context-operations-asset-import-succeeded.json"
+  },
+  {
+    "file": "operations/input-submit-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/workspace-backup-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/workspace-restore-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/template-extract-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/template-commit-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/template-export-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/observation-export-succeeded.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/record-finish-partial.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/vision-match-not-found.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/input-uncertain.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/template-extract-running.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/template-export-failed.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "operations/observation-export-cancelled.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/operation-method-result.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-receipt-as-result.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-success-no-result.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-unknown-method.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-pending-result.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-failed-no-error.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-uncertain-retry.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-input-cleanup-pending.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/operation-partial-as-asset.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/operation-get-request.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/operation-get-response.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass",
+    "request": "messages/operation-get-request.json"
+  },
+  {
+    "file": "invalid/operation-match-index.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/operation-import-entry.json",
+    "schema": "operation-results.schema.json",
+    "semantic": "operation",
+    "expected": "semantic-fail",
+    "context": "queries/context-invalid-operation-import-entry.json"
+  },
+  {
+    "file": "drafts/model-content.json",
+    "schema": "draft.schema.json#/$defs/modelContent",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "drafts/write-valid.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "pass"
+  },
+  {
+    "file": "drafts/write-invalid-source.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "pass"
+  },
+  {
+    "file": "drafts/write-first-invalid.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "pass"
+  },
+  {
+    "file": "drafts/write-unconnected.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "pass"
+  },
+  {
+    "file": "drafts/write-resource.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/draft-model-newer-than-edit.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/draft-version-not-advanced.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/draft-model-source-mismatch.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/draft-current-source-mismatch.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/draft-model-workflow-id.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "draft",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/draft-claims-valid.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/draft-resource-hash.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/draft-null-model-version.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/draft-negative-edit.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/draft-missing-source.json",
+    "schema": "draft.schema.json#/$defs/writeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "drafts/snapshot-invalid-source.json",
+    "schema": "draft.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/draft-missing-full-diagnostics.json",
+    "schema": "draft.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "drafts/discard-result.json",
+    "schema": "service.schema.json#/$defs/draft.discard/properties/result",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/draft-discard-no-version.json",
+    "schema": "service.schema.json#/$defs/draft.discard/properties/result",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/draft-read.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/draft-write.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "messages/draft-discard.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/root-initial.json",
+    "schema": "updates.schema.json#/$defs/rootEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/root-rotated.json",
+    "schema": "updates.schema.json#/$defs/rootEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/release-stable.json",
+    "schema": "updates.schema.json#/$defs/releaseEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/release-rotated.json",
+    "schema": "updates.schema.json#/$defs/releaseEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/revocations-initial.json",
+    "schema": "updates.schema.json#/$defs/revocationsEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/revocations-rotated.json",
+    "schema": "updates.schema.json#/$defs/revocationsEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/release-tampered.json",
+    "schema": "updates.schema.json#/$defs/releaseEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/release-unknown-key.json",
+    "schema": "updates.schema.json#/$defs/releaseEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/root-missing-old-signatures.json",
+    "schema": "updates.schema.json#/$defs/rootEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/revocations-artifact.json",
+    "schema": "updates.schema.json#/$defs/revocationsEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/revocations-key.json",
+    "schema": "updates.schema.json#/$defs/revocationsEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/revocations-floor.json",
+    "schema": "updates.schema.json#/$defs/revocationsEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/release-future.json",
+    "schema": "updates.schema.json#/$defs/releaseEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/signature-size-invalid.json",
+    "schema": "updates.schema.json#/$defs/releaseEnvelope",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "updates/trust-state.json",
+    "schema": "updates.schema.json#/$defs/trustState",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "updates/release-duplicate-signature.json",
+    "schema": "updates.schema.json#/$defs/releaseEnvelope",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "settings/user-mixed-update.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "pass",
+    "semantic": "settings"
+  },
+  {
+    "file": "settings/workspace-reset.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "pass",
+    "semantic": "settings"
+  },
+  {
+    "file": "settings/user-snapshot.json",
+    "schema": "settings.schema.json#/$defs/snapshot",
+    "expected": "pass",
+    "semantic": "settings"
+  },
+  {
+    "file": "settings/mixed-result.json",
+    "schema": "settings.schema.json#/$defs/updateResult",
+    "expected": "pass",
+    "semantic": "settings"
+  },
+  {
+    "file": "invalid/settings-unknown-key.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/settings-value-type.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/settings-out-of-range.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/settings-workspace-ui.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/settings-duplicate-key.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "semantic-fail",
+    "semantic": "settings"
+  },
+  {
+    "file": "invalid/settings-hotkey-collision.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "semantic-fail",
+    "semantic": "settings"
+  },
+  {
+    "file": "invalid/settings-user-source.json",
+    "schema": "settings.schema.json#/$defs/snapshot",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/settings-pending-version.json",
+    "schema": "settings.schema.json#/$defs/snapshot",
+    "expected": "semantic-fail",
+    "semantic": "settings"
+  },
+  {
+    "file": "management/bridge-read.json",
+    "schema": "bridge-management.schema.json#/$defs/bridgeSnapshot",
+    "expected": "pass",
+    "semantic": "none"
+  },
+  {
+    "file": "management/token-list-params.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenListParams",
+    "expected": "pass",
+    "semantic": "none"
+  },
+  {
+    "file": "management/token-page.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenPage",
+    "expected": "pass",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/bridge-read-secret.json",
+    "schema": "bridge-management.schema.json#/$defs/bridgeSnapshot",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/token-metadata-secret.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenMetadata",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "management/asset-delete.json",
+    "schema": "asset-management.schema.json#/$defs/deleteParams",
+    "expected": "pass",
+    "semantic": "none"
+  },
+  {
+    "file": "management/asset-delete-result.json",
+    "schema": "asset-management.schema.json#/$defs/deleteResult",
+    "expected": "pass",
+    "semantic": "none"
+  },
+  {
+    "file": "management/asset-references.json",
+    "schema": "asset-management.schema.json#/$defs/referencesResult",
+    "expected": "pass",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/asset-delete-version-only.json",
+    "schema": "asset-management.schema.json#/$defs/deleteParams",
+    "expected": "schema-fail",
+    "semantic": "none"
+  },
+  {
+    "file": "invalid/settings-hotkey-unknown.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "semantic-fail",
+    "semantic": "settings"
+  },
+  {
+    "file": "invalid/settings-hotkey-reserved.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "expected": "semantic-fail",
+    "semantic": "settings"
+  },
+  {
+    "file": "control/pause-held.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "pauseSnapshot"
+  },
+  {
+    "file": "control/pause-idle.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "pauseSnapshot"
+  },
+  {
+    "file": "control/lease-paused.json",
+    "schema": "execution-control.schema.json#/$defs/leaseSnapshot",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "leaseSnapshot"
+  },
+  {
+    "file": "control/lease-uncertain.json",
+    "schema": "execution-control.schema.json#/$defs/leaseSnapshot",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "leaseSnapshot"
+  },
+  {
+    "file": "control/lease-resumed.json",
+    "schema": "execution-control.schema.json#/$defs/leaseSnapshot",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "leaseSnapshot"
+  },
+  {
+    "file": "control/invalid-paused-cleanup.json",
+    "schema": "execution-control.schema.json#/$defs/leaseSnapshot",
+    "semantic": "execution",
+    "expected": "schema-fail",
+    "executionType": "leaseSnapshot"
+  },
+  {
+    "file": "control/invalid-cursor-overflow.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "pauseSnapshot"
+  },
+  {
+    "file": "control/invalid-held-digest.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "pauseSnapshot"
+  },
+  {
+    "file": "control/invalid-lease-generation.json",
+    "schema": "execution-control.schema.json#/$defs/leaseSnapshot",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "leaseSnapshot"
+  },
+  {
+    "file": "control/resume-plan-held.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "resumePlan",
+    "context": "control/context-held.json"
+  },
+  {
+    "file": "control/resume-plan-idle.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "resumePlan",
+    "context": "control/context-idle.json"
+  },
+  {
+    "file": "control/invalid-confirmation-false.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "schema-fail",
+    "executionType": "resumePlan"
+  },
+  {
+    "file": "control/invalid-plan-hash.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumePlan",
+    "context": "control/context-held.json"
+  },
+  {
+    "file": "control/invalid-plan-expired.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumePlan",
+    "context": "control/context-expired.json"
+  },
+  {
+    "file": "control/invalid-plan-epoch.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumePlan",
+    "context": "control/context-epoch.json"
+  },
+  {
+    "file": "control/invalid-plan-generation.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumePlan",
+    "context": "control/context-generation.json"
+  },
+  {
+    "file": "control/invalid-plan-consumed.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumePlan",
+    "context": "control/context-consumed.json"
+  },
+  {
+    "file": "control/resume-confirmed.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "resumeRequest",
+    "context": "control/context-held.json"
+  },
+  {
+    "file": "control/invalid-resume-no-grant.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumeRequest",
+    "context": "control/context-held.json"
+  },
+  {
+    "file": "control/invalid-resume-foreign-grant.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumeRequest",
+    "context": "control/context-held.json"
+  },
+  {
+    "file": "control/resume-direct.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "resumeRequest",
+    "context": "control/context-idle.json"
+  },
+  {
+    "file": "control/agent-lease-pause.json",
+    "schema": "agent.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "control/agent-lease-status.json",
+    "schema": "agent.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "control/agent-lease-resume.json",
+    "schema": "agent.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "control/breakpoint-profile.json",
+    "schema": "execution-control.schema.json#/$defs/breakpointProfile",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "breakpointProfile",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/breakpoint-empty.json",
+    "schema": "execution-control.schema.json#/$defs/breakpointProfile",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "breakpointProfile",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/invalid-breakpoint-duplicate.json",
+    "schema": "execution-control.schema.json#/$defs/breakpointProfile",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "breakpointProfile",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/invalid-breakpoint-revision.json",
+    "schema": "execution-control.schema.json#/$defs/breakpointProfile",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "breakpointProfile",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/breakpoint-toggle.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "breakpointUpdate",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/breakpoint-remove.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "breakpointUpdate",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/breakpoint-add.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "breakpointUpdate",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/invalid-breakpoint-stale.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "breakpointUpdate",
+    "context": "control/context-breakpoints.json"
+  },
+  {
+    "file": "control/run-start-debug.json",
+    "schema": "service.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "imports/source/manifest.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "pass"
+  },
+  {
+    "file": "imports/source/manifest-invalid-missing.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "imports/source/manifest-invalid-extra.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "imports/source/manifest-invalid-source-id.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "imports/import-manifest.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "pass",
+    "importType": "manifest",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "imports/import-plan.json",
+    "schema": "package.schema.json#/$defs/importPlan",
+    "semantic": "import",
+    "expected": "pass",
+    "importType": "plan",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "imports/invalid-mapping-source-hash.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "manifest",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "imports/invalid-mapping-target-id.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "manifest",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "imports/invalid-mapping-target-hash.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "manifest",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "imports/invalid-mapping-missing.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "manifest",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "imports/invalid-mapping-duplicate.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "manifest",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "imports/invalid-plan-stale.json",
+    "schema": "package.schema.json#/$defs/importPlan",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "plan",
+    "context": "imports/context-stale.json"
+  },
+  {
+    "file": "imports/invalid-plan-expired.json",
+    "schema": "package.schema.json#/$defs/importPlan",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "plan",
+    "context": "imports/context-expired.json"
+  },
+  {
+    "file": "imports/invalid-mapping-kind.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "schema-fail",
+    "importType": "manifest",
+    "context": "imports/context.json"
+  },
+  {
+    "file": "control/resume-summary-ready.json",
+    "schema": "execution-control.schema.json#/$defs/resumeSummary",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "control/resume-summary-confirmation.json",
+    "schema": "execution-control.schema.json#/$defs/resumeSummary",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "control/resume-summary-unavailable.json",
+    "schema": "execution-control.schema.json#/$defs/resumeSummary",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "control/run-snapshot-paused.json",
+    "schema": "service.schema.json#/$defs/run.snapshot/properties/result",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "imports/operation-import-mapped.json",
+    "schema": "operation-results.schema.json#/$defs/operationSnapshot",
+    "semantic": "operation",
+    "expected": "pass",
+    "context": "queries/context-imports-operation-import-mapped.json"
+  },
+  {
+    "file": "control/invalid-mcp-local-grant.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumeRequest",
+    "context": "control/context-mcp-confirmed.json"
+  },
+  {
+    "file": "control/invalid-cli-local-grant.json",
+    "schema": "service.schema.json",
+    "semantic": "execution",
+    "expected": "semantic-fail",
+    "executionType": "resumeRequest",
+    "context": "control/context-cli-confirmed.json"
+  },
+  {
+    "file": "imports/mixed-source/manifest.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "pass"
+  },
+  {
+    "file": "imports/import-mixed-manifest.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "pass",
+    "importType": "manifest",
+    "context": "imports/context-mixed.json"
+  },
+  {
+    "file": "imports/invalid-mixed-asset-binding.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "expected": "semantic-fail",
+    "importType": "manifest",
+    "context": "imports/context-mixed-wrong-binding.json"
+  },
+  {
+    "file": "imports/mixed-source/manifest-invalid-kind-binding.json",
+    "schema": "package.schema.json",
+    "semantic": "package",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "control/pause-between-held-multitarget.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "executionType": "pauseSnapshot",
+    "expected": "pass"
+  },
+  {
+    "file": "control/resume-between-held-multitarget.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "executionType": "resumePlan",
+    "expected": "pass",
+    "context": "control/context-between.json"
+  },
+  {
+    "file": "control/invalid-pause-target-outside.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "executionType": "pauseSnapshot",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "control/invalid-pause-target-null.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "executionType": "pauseSnapshot",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "control/invalid-resume-target-substituted.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "executionType": "resumePlan",
+    "expected": "semantic-fail",
+    "context": "control/context-between.json"
+  },
+  {
+    "file": "control/invalid-resume-target-outside.json",
+    "schema": "execution-control.schema.json#/$defs/resumePlan",
+    "semantic": "execution",
+    "executionType": "resumePlan",
+    "expected": "semantic-fail",
+    "context": "control/context-between.json"
+  },
+  {
+    "file": "imports/import-single-image.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "importType": "manifest",
+    "expected": "pass",
+    "context": "imports/context-single-image.json"
+  },
+  {
+    "file": "imports/plan-single-image.json",
+    "schema": "package.schema.json#/$defs/importPlan",
+    "semantic": "import",
+    "importType": "plan",
+    "expected": "pass",
+    "context": "imports/context-single-image.json"
+  },
+  {
+    "file": "imports/invalid-single-source-hash.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "importType": "manifest",
+    "expected": "semantic-fail",
+    "context": "imports/context-single-image.json"
+  },
+  {
+    "file": "imports/import-single-trajectory.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "importType": "manifest",
+    "expected": "pass",
+    "context": "imports/context-single-trajectory.json"
+  },
+  {
+    "file": "imports/plan-single-trajectory.json",
+    "schema": "package.schema.json#/$defs/importPlan",
+    "semantic": "import",
+    "importType": "plan",
+    "expected": "pass",
+    "context": "imports/context-single-trajectory.json"
+  },
+  {
+    "file": "imports/import-single-workflow.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "importType": "manifest",
+    "expected": "pass",
+    "context": "imports/context-single-workflow.json"
+  },
+  {
+    "file": "imports/plan-single-workflow.json",
+    "schema": "package.schema.json#/$defs/importPlan",
+    "semantic": "import",
+    "importType": "plan",
+    "expected": "pass",
+    "context": "imports/context-single-workflow.json"
+  },
+  {
+    "file": "imports/import-single-workflow-needs-dependencies.json",
+    "schema": "package.schema.json#/$defs/importManifest",
+    "semantic": "import",
+    "importType": "manifest",
+    "expected": "semantic-fail",
+    "context": "imports/context-single-workflow-needs-dependencies.json"
+  },
+  {
+    "file": "management/asset-reference-query-all.json",
+    "schema": "asset-management.schema.json#/$defs/referencesParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "management/asset-reference-query-version.json",
+    "schema": "asset-management.schema.json#/$defs/referencesParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "management/asset-reference-page-all.json",
+    "schema": "asset-management.schema.json#/$defs/referencesResult",
+    "semantic": "management",
+    "expected": "pass",
+    "managementType": "assetReferencePage",
+    "context": "management/asset-reference-query-all.json"
+  },
+  {
+    "file": "invalid/asset-reference-two-scopes.json",
+    "schema": "asset-management.schema.json#/$defs/referencesParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/asset-reference-no-scope.json",
+    "schema": "asset-management.schema.json#/$defs/referencesParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/asset-reference-version-null.json",
+    "schema": "asset-management.schema.json#/$defs/referencesResult",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "management/token-impact-query.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenImpactParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "management/token-impact-page.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenImpactPage",
+    "semantic": "management",
+    "expected": "pass",
+    "managementType": "tokenImpactPage",
+    "context": "management/token-impact-query.json"
+  },
+  {
+    "file": "management/token-revoke-stale-preview.json",
+    "schema": "service.schema.json#/$defs/bridge.token.revoke/properties/result",
+    "semantic": "management",
+    "expected": "pass",
+    "managementType": "tokenRevoke",
+    "context": "management/token-revoke-stale-params.json"
+  },
+  {
+    "file": "management/token-revoke-expired-preview.json",
+    "schema": "service.schema.json#/$defs/bridge.token.revoke/properties/result",
+    "semantic": "management",
+    "expected": "pass",
+    "managementType": "tokenRevoke",
+    "context": "management/token-revoke-expired-params.json"
+  },
+  {
+    "file": "invalid/token-impact-secret.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenImpactPage",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/asset-reference-version-count.json",
+    "schema": "asset-management.schema.json#/$defs/referencesResult",
+    "semantic": "management",
+    "managementType": "assetReferencePage",
+    "expected": "semantic-fail",
+    "context": "management/asset-reference-query-all.json"
+  },
+  {
+    "file": "invalid/asset-reference-wrong-version-members.json",
+    "schema": "asset-management.schema.json#/$defs/referencesResult",
+    "semantic": "management",
+    "managementType": "assetReferencePage",
+    "expected": "semantic-fail",
+    "context": "management/asset-reference-query-version.json"
+  },
+  {
+    "file": "invalid/asset-reference-total.json",
+    "schema": "asset-management.schema.json#/$defs/referencesResult",
+    "semantic": "management",
+    "managementType": "assetReferencePage",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/asset-reference-expiry.json",
+    "schema": "asset-management.schema.json#/$defs/referencesResult",
+    "semantic": "management",
+    "managementType": "assetReferencePage",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/token-impact-terminal-run.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenImpactPage",
+    "semantic": "management",
+    "managementType": "tokenImpactPage",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/token-impact-count.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenImpactPage",
+    "semantic": "management",
+    "managementType": "tokenImpactPage",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/token-impact-expiry.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenImpactPage",
+    "semantic": "management",
+    "managementType": "tokenImpactPage",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/token-impact-duplicate-run.json",
+    "schema": "bridge-management.schema.json#/$defs/tokenImpactPage",
+    "semantic": "management",
+    "managementType": "tokenImpactPage",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "invalid/token-revoke-stop-policy.json",
+    "schema": "service.schema.json#/$defs/bridge.token.revoke/properties/result",
+    "semantic": "management",
+    "managementType": "tokenRevoke",
+    "expected": "semantic-fail",
+    "context": "management/token-revoke-expired-params.json"
+  },
+  {
+    "file": "invalid/token-revoke-preview-binding.json",
+    "schema": "service.schema.json#/$defs/bridge.token.revoke/properties/result",
+    "semantic": "management",
+    "managementType": "tokenRevoke",
+    "expected": "semantic-fail",
+    "context": "management/token-revoke-no-preview-params.json"
+  },
+  {
+    "file": "management/token-revoke-stale-params.json",
+    "schema": "service.schema.json#/$defs/bridge.token.revoke/properties/params",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "management/token-revoke-expired-params.json",
+    "schema": "service.schema.json#/$defs/bridge.token.revoke/properties/params",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "management/token-revoke-no-preview-params.json",
+    "schema": "service.schema.json#/$defs/bridge.token.revoke/properties/params",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/content-reference.json",
+    "schema": "content.schema.json#/$defs/contentRef",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "contentRef",
+    "context": "authoring/context-content-reference.json"
+  },
+  {
+    "file": "authoring/content-begin.json",
+    "schema": "content.schema.json#/$defs/beginParams",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "contentBegin",
+    "context": "authoring/context-content-begin.json"
+  },
+  {
+    "file": "authoring/content-upload.json",
+    "schema": "content.schema.json#/$defs/upload",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/content-write.json",
+    "schema": "content.schema.json#/$defs/writeParams",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "contentWrite",
+    "context": "authoring/context-content-write.json"
+  },
+  {
+    "file": "authoring/content-write-replay.json",
+    "schema": "content.schema.json#/$defs/writeParams",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "contentWrite",
+    "context": "authoring/context-content-write-replay.json"
+  },
+  {
+    "file": "authoring/content-write-out-of-order.json",
+    "schema": "content.schema.json#/$defs/writeParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "contentWrite",
+    "context": "authoring/context-content-write-out-of-order.json"
+  },
+  {
+    "file": "authoring/content-write-hash.json",
+    "schema": "content.schema.json#/$defs/writeParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "contentWrite",
+    "context": "authoring/context-content-write-hash.json"
+  },
+  {
+    "file": "authoring/content-write-base64.json",
+    "schema": "content.schema.json#/$defs/writeParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "contentWrite",
+    "context": "authoring/context-content-write-base64.json"
+  },
+  {
+    "file": "authoring/content-write-conflict.json",
+    "schema": "content.schema.json#/$defs/writeParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "contentWrite",
+    "context": "authoring/context-content-write-conflict.json"
+  },
+  {
+    "file": "authoring/content-sealed.json",
+    "schema": "content.schema.json#/$defs/sealResult",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/content-reference-mismatch.json",
+    "schema": "content.schema.json#/$defs/contentRef",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "contentRef",
+    "context": "authoring/context-content-reference-mismatch.json"
+  },
+  {
+    "file": "authoring/workflow-save-reference.json",
+    "schema": "service.schema.json#/$defs/workflow.save/properties/params",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "workflowReference",
+    "context": "authoring/context-workflow-save-reference.json"
+  },
+  {
+    "file": "authoring/workflow-save-two-sources.json",
+    "schema": "service.schema.json#/$defs/workflow.save/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "authoring/workflow-save-wrong-resource.json",
+    "schema": "service.schema.json#/$defs/workflow.save/properties/params",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "workflowReference",
+    "context": "authoring/context-workflow-save-wrong-resource.json"
+  },
+  {
+    "file": "authoring/workflow-read-resource.json",
+    "schema": "service.schema.json#/$defs/workflow.read/properties/result",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/revisions-page.json",
+    "schema": "inspection.schema.json#/$defs/revisionPage",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "revisionPage",
+    "context": "authoring/context-revisions-page.json"
+  },
+  {
+    "file": "authoring/revisions-duplicate.json",
+    "schema": "inspection.schema.json#/$defs/revisionPage",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "revisionPage",
+    "context": "authoring/context-revisions-duplicate.json"
+  },
+  {
+    "file": "authoring/revisions-expired.json",
+    "schema": "inspection.schema.json#/$defs/revisionPage",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "revisionPage",
+    "context": "authoring/context-revisions-expired.json"
+  },
+  {
+    "file": "authoring/connections-page.json",
+    "schema": "inspection.schema.json#/$defs/connectionPage",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "connectionPage",
+    "context": "authoring/context-connections-page.json"
+  },
+  {
+    "file": "authoring/connections-secret.json",
+    "schema": "inspection.schema.json#/$defs/connectionPage",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "authoring/variables-page.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-page.json"
+  },
+  {
+    "file": "authoring/variables-redacted-leak.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "authoring/variables-derived-leak.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-derived-leak.json"
+  },
+  {
+    "file": "authoring/variables-control-dependency.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-control-dependency.json"
+  },
+  {
+    "file": "authoring/variables-control-leak.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-control-leak.json"
+  },
+  {
+    "file": "authoring/variables-wrong-version.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-wrong-version.json"
+  },
+  {
+    "file": "authoring/variables-expired.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-expired.json"
+  },
+  {
+    "file": "authoring/variables-type.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-type.json"
+  },
+  {
+    "file": "authoring/variables-shared.json",
+    "schema": "inspection.schema.json#/$defs/variablesPage",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "variablesPage",
+    "context": "authoring/context-variables-shared.json"
+  },
+  {
+    "file": "authoring/connection-test-draft.json",
+    "schema": "authoring.schema.json#/$defs/draftTestParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/connection-test-result.json",
+    "schema": "authoring.schema.json#/$defs/draftTestResult",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "draftTestResult",
+    "context": "authoring/context-connection-test-result.json"
+  },
+  {
+    "file": "authoring/connection-test-old-edit.json",
+    "schema": "authoring.schema.json#/$defs/draftTestResult",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "draftTestResult",
+    "context": "authoring/context-connection-test-old-edit.json"
+  },
+  {
+    "file": "authoring/connection-test-inconsistent.json",
+    "schema": "authoring.schema.json#/$defs/draftTestResult",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "draftTestResult",
+    "context": "authoring/context-connection-test-inconsistent.json"
+  },
+  {
+    "file": "authoring/connection-test-network-failed.json",
+    "schema": "authoring.schema.json#/$defs/draftTestResult",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "draftTestResult",
+    "context": "authoring/context-connection-test-network-failed.json"
+  },
+  {
+    "file": "authoring/connection-test-secret-echo.json",
+    "schema": "authoring.schema.json#/$defs/draftTestParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "authoring/asset-image-plan.json",
+    "schema": "authoring.schema.json#/$defs/editPlan",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/asset-image-commit.json",
+    "schema": "authoring.schema.json#/$defs/editCommitParams",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "editCommit",
+    "context": "authoring/context-asset-image-commit.json"
+  },
+  {
+    "file": "authoring/asset-edit-head-conflict.json",
+    "schema": "authoring.schema.json#/$defs/editCommitParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "editCommit",
+    "context": "authoring/context-asset-edit-head-conflict.json"
+  },
+  {
+    "file": "authoring/asset-edit-expired.json",
+    "schema": "authoring.schema.json#/$defs/editCommitParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "editCommit",
+    "context": "authoring/context-asset-edit-expired.json"
+  },
+  {
+    "file": "authoring/asset-crop-outside.json",
+    "schema": "authoring.schema.json#/$defs/editCommitParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "editCommit",
+    "context": "authoring/context-asset-crop-outside.json"
+  },
+  {
+    "file": "authoring/asset-image-result.json",
+    "schema": "authoring.schema.json#/$defs/editResult",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "editResult",
+    "context": "authoring/context-asset-image-result.json"
+  },
+  {
+    "file": "authoring/asset-result-version-relation.json",
+    "schema": "authoring.schema.json#/$defs/editResult",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "editResult"
+  },
+  {
+    "file": "authoring/asset-trajectory-plan.json",
+    "schema": "authoring.schema.json#/$defs/editPlan",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/asset-trajectory-commit.json",
+    "schema": "authoring.schema.json#/$defs/editCommitParams",
+    "semantic": "authoring",
+    "expected": "pass",
+    "authoringType": "editCommit",
+    "context": "authoring/context-asset-trajectory-commit.json"
+  },
+  {
+    "file": "authoring/asset-trajectory-time-outside.json",
+    "schema": "authoring.schema.json#/$defs/editCommitParams",
+    "semantic": "authoring",
+    "expected": "semantic-fail",
+    "authoringType": "editCommit",
+    "context": "authoring/context-asset-trajectory-time-outside.json"
+  },
+  {
+    "file": "authoring/asset-edit-discard.json",
+    "schema": "authoring.schema.json#/$defs/editDiscardResult",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/asset-edit-operation.json",
+    "schema": "operation-results.schema.json#/$defs/operationSnapshot",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/connection-test-operation.json",
+    "schema": "operation-results.schema.json#/$defs/operationSnapshot",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/variables-value-resource.json",
+    "schema": "inspection.schema.json#/$defs/variableEntry",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/variables-change-event.json",
+    "schema": "inspection.schema.json#/$defs/variablesChanged",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/variables-changed.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/variables-changed-value.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "authoring/variables-changed-shared.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/variables-changed-shared-frame.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "recording/topology.json",
+    "schema": "recording.schema.json#/$defs/topology",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "topology"
+  },
+  {
+    "file": "recording/source.json",
+    "schema": "recording.schema.json#/$defs/source",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "source"
+  },
+  {
+    "file": "recording/cross-screen-drag.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "recording/mirrored-topology.json",
+    "schema": "recording.schema.json#/$defs/topology",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "topology"
+  },
+  {
+    "file": "recording/invalid-bounds.json",
+    "schema": "recording.schema.json#/$defs/topology",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "topology"
+  },
+  {
+    "file": "recording/invalid-duplicate-display.json",
+    "schema": "recording.schema.json#/$defs/topology",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "topology"
+  },
+  {
+    "file": "recording/invalid-primary.json",
+    "schema": "recording.schema.json#/$defs/topology",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "topology"
+  },
+  {
+    "file": "recording/invalid-missing-display.json",
+    "schema": "recording.schema.json#/$defs/source",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "source"
+  },
+  {
+    "file": "recording/invalid-pointer-gap.json",
+    "schema": "recording.schema.json#/$defs/source",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "source"
+  },
+  {
+    "file": "recording/invalid-crossing-gap.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "recording/invalid-dpi.json",
+    "schema": "recording.schema.json#/$defs/topology",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "recording/start-all-displays.json",
+    "schema": "service.schema.json#/$defs/record.start/properties/params",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "start",
+    "context": "recording/context-start-all-displays.json"
+  },
+  {
+    "file": "recording/invalid-stale-start.json",
+    "schema": "service.schema.json#/$defs/record.start/properties/params",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "start",
+    "context": "recording/context-invalid-stale-start.json"
+  },
+  {
+    "file": "recording/invalid-purpose.json",
+    "schema": "service.schema.json#/$defs/record.start/properties/params",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "start",
+    "context": "recording/context-invalid-purpose.json"
+  },
+  {
+    "file": "recording/start-result.json",
+    "schema": "service.schema.json#/$defs/record.start/properties/result",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "startResult"
+  },
+  {
+    "file": "recording/desktop-target.json",
+    "schema": "service.schema.json#/$defs/target.select/properties/result",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "recording/invalid-target-no-topology.json",
+    "schema": "service.schema.json#/$defs/target.select/properties/result",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "recording/snapshot-recording.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/snapshot-paused.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/snapshot-topology-changed.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/invalid-live-topology.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/replay-original.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "replay",
+    "context": "recording/context-replay-original.json"
+  },
+  {
+    "file": "recording/replay-mapped.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "replay",
+    "context": "recording/context-replay-mapped.json"
+  },
+  {
+    "file": "recording/invalid-map-missing.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "replay",
+    "context": "recording/context-invalid-map-missing.json"
+  },
+  {
+    "file": "recording/invalid-map-duplicate.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "replay",
+    "context": "recording/context-invalid-map-duplicate.json"
+  },
+  {
+    "file": "recording/invalid-relative-remap.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "replay",
+    "context": "recording/context-invalid-relative-remap.json"
+  },
+  {
+    "file": "recording/invalid-map-unauthorized.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "replay",
+    "context": "recording/context-invalid-map-unauthorized.json"
+  },
+  {
+    "file": "recording/replay-translated.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "recordingType": "replay",
+    "expected": "pass",
+    "context": "recording/context-replay-translated.json"
+  },
+  {
+    "file": "recording/invalid-original-moved.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "recordingType": "replay",
+    "expected": "semantic-fail",
+    "context": "recording/context-invalid-original-moved.json"
+  },
+  {
+    "file": "recording/invalid-map-outside.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "recordingType": "replay",
+    "expected": "semantic-fail",
+    "context": "recording/context-invalid-map-outside.json"
+  },
+  {
+    "file": "recording/invalid-map-rotation.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "recordingType": "replay",
+    "expected": "semantic-fail",
+    "context": "recording/context-invalid-map-rotation.json"
+  },
+  {
+    "file": "recording/invalid-unknown-start.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "recordingType": "replay",
+    "expected": "semantic-fail",
+    "context": "recording/context-invalid-unknown-start.json"
+  },
+  {
+    "file": "workflows/desktop-recording.json",
+    "schema": "workflow.schema.json",
+    "semantic": "workflow",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/diagnostics-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-diagnostics-page.json"
+  },
+  {
+    "file": "queries/runRequirements-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-runRequirements-page.json"
+  },
+  {
+    "file": "queries/runFrames-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-runFrames-page.json"
+  },
+  {
+    "file": "queries/runEffects-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-runEffects-page.json"
+  },
+  {
+    "file": "queries/templateNames-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-templateNames-page.json"
+  },
+  {
+    "file": "queries/templateAssets-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-templateAssets-page.json"
+  },
+  {
+    "file": "queries/matchCandidates-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-matchCandidates-page.json"
+  },
+  {
+    "file": "queries/importedObjects-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-importedObjects-page.json"
+  },
+  {
+    "file": "queries/ocrLanguages-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-ocrLanguages-page.json"
+  },
+  {
+    "file": "queries/first-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-first-page.json"
+  },
+  {
+    "file": "queries/first-request.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "request",
+    "context": "queries/context-first-request.json"
+  },
+  {
+    "file": "queries/next-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-next-page.json"
+  },
+  {
+    "file": "queries/next-request.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "request",
+    "context": "queries/context-next-request.json"
+  },
+  {
+    "file": "queries/last-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-last-page.json"
+  },
+  {
+    "file": "queries/conflict-filter.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-conflict-filter.json"
+  },
+  {
+    "file": "queries/false-filter.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-false-filter.json"
+  },
+  {
+    "file": "queries/text-filter.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-text-filter.json"
+  },
+  {
+    "file": "queries/empty-filter.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-empty-filter.json"
+  },
+  {
+    "file": "queries/descending-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-descending-page.json"
+  },
+  {
+    "file": "queries/default-request.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "request",
+    "context": "queries/context-default-request.json"
+  },
+  {
+    "file": "queries/default-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-default-page.json"
+  },
+  {
+    "file": "queries/stable-snapshot-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "pass",
+    "queryType": "page",
+    "context": "queries/context-stable-snapshot-page.json"
+  },
+  {
+    "file": "queries/zero-page-size.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/negative-page-size.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/unbounded-page-size.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/null-page-size.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/offset-param.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/unknown-filter.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/wrong-kind-filter.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/changed-filter.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-changed-filter.json"
+  },
+  {
+    "file": "queries/changed-order.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-changed-order.json"
+  },
+  {
+    "file": "queries/changed-page-size.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-changed-page-size.json"
+  },
+  {
+    "file": "queries/changed-collection.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-changed-collection.json"
+  },
+  {
+    "file": "queries/unknown-cursor.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-unknown-cursor.json"
+  },
+  {
+    "file": "queries/other-client.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-other-client.json"
+  },
+  {
+    "file": "queries/other-workspace.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-other-workspace.json"
+  },
+  {
+    "file": "queries/changed-authorization.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-changed-authorization.json"
+  },
+  {
+    "file": "queries/revoked-source.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-revoked-source.json"
+  },
+  {
+    "file": "queries/expired-cursor.json",
+    "schema": "query.schema.json#/$defs/readParams",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "request",
+    "context": "queries/context-expired-cursor.json"
+  },
+  {
+    "file": "queries/over-request-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "page",
+    "context": "queries/context-over-request-page.json"
+  },
+  {
+    "file": "queries/duplicate-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "page",
+    "context": "queries/context-duplicate-page.json"
+  },
+  {
+    "file": "queries/missing-next-cursor.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "page",
+    "context": "queries/context-missing-next-cursor.json"
+  },
+  {
+    "file": "queries/replayed-members.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "page",
+    "context": "queries/context-replayed-members.json"
+  },
+  {
+    "file": "queries/renewed-expiry.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "page",
+    "context": "queries/context-renewed-expiry.json"
+  },
+  {
+    "file": "queries/incorrect-filter-count.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "expected": "semantic-fail",
+    "queryType": "page",
+    "context": "queries/context-incorrect-filter-count.json"
+  },
+  {
+    "file": "queries/over-maximum-page.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/close-request.json",
+    "schema": "query.schema.json#/$defs/closeParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/close-result.json",
+    "schema": "query.schema.json#/$defs/closeResult",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/total-not-computed.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "queryType": "page",
+    "expected": "pass",
+    "context": "queries/context-total-not-computed.json"
+  },
+  {
+    "file": "queries/missing-requested-total.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "queryType": "page",
+    "expected": "semantic-fail",
+    "context": "queries/context-missing-requested-total.json"
+  },
+  {
+    "file": "queries/invalid-count-state.json",
+    "schema": "query.schema.json#/$defs/page",
+    "semantic": "query",
+    "queryType": "page",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/producer-count-mismatch.json",
+    "schema": "vision.schema.json#/$defs/nameProposal",
+    "semantic": "query",
+    "queryType": "producer",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "queries/producer-hidden-conflict.json",
+    "schema": "vision.schema.json#/$defs/nameProposal",
+    "semantic": "query",
+    "queryType": "producer",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "trajectories/drawing-corners.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "trajectories/drawing-loop.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "trajectories/drawing-eight.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "trajectories/drawing-multistroke.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "trajectories/drawing-relative.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "trajectories/drawing-cross-screen.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "recording/snapshot-queue-overflow.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/snapshot-queue-overflow-finished.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/invalid-queue-overflow-complete.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "schema-fail",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/snapshot-capture-lost.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/snapshot-capture-lost-finished.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "recording/invalid-capture-lost-complete.json",
+    "schema": "recording.schema.json#/$defs/snapshot",
+    "semantic": "recording",
+    "expected": "schema-fail",
+    "recordingType": "snapshot"
+  },
+  {
+    "file": "control/lease-timing-overrun.json",
+    "schema": "execution-control.schema.json#/$defs/leaseSnapshot",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "leaseSnapshot"
+  },
+  {
+    "file": "platform/windows-capabilities.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "pass",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/macos-capabilities.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "pass",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/x11-capabilities.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "pass",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/wayland-capabilities.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "pass",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/macos-permissions.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "pass",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/compositor-unimplemented.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "pass",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/invalid-os-backend.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "semantic-fail",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/invalid-partial-all-displays.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "semantic-fail",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/invalid-portal-passive-recording.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "semantic-fail",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/invalid-available-permission.json",
+    "schema": "platform.schema.json#/$defs/capabilities",
+    "semantic": "platform",
+    "expected": "semantic-fail",
+    "platformType": "capabilities"
+  },
+  {
+    "file": "platform/macos-topology.json",
+    "schema": "platform.schema.json#/$defs/topology",
+    "semantic": "platform",
+    "expected": "pass",
+    "platformType": "topology"
+  },
+  {
+    "file": "platform/invalid-singular-transform.json",
+    "schema": "platform.schema.json#/$defs/topology",
+    "semantic": "platform",
+    "expected": "semantic-fail",
+    "platformType": "topology"
+  },
+  {
+    "file": "platform/macos-source.json",
+    "schema": "recording.schema.json#/$defs/source",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "source"
+  },
+  {
+    "file": "platform/invalid-selected-all-source.json",
+    "schema": "recording.schema.json#/$defs/source",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "source"
+  },
+  {
+    "file": "platform/macos-cross-display.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/invalid-display-missing-id.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "platform/invalid-display-outside.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "platform/invalid-legacy-display.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "platform/invalid-display-physical-mode.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "platform/fractional-relative.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/invalid-relative-unit.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "semantic-fail"
+  },
+  {
+    "file": "platform/replay-original.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "replay",
+    "context": "platform/context-original.json"
+  },
+  {
+    "file": "platform/replay-cross-backend.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "pass",
+    "recordingType": "replay",
+    "context": "platform/context-cross-backend.json"
+  },
+  {
+    "file": "platform/invalid-original-backend.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "replay",
+    "context": "platform/context-invalid-original-backend.json"
+  },
+  {
+    "file": "platform/invalid-relative-backend.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "replay",
+    "context": "platform/context-invalid-relative-backend.json"
+  },
+  {
+    "file": "platform/invalid-missing-input-map.json",
+    "schema": "recording.schema.json#/$defs/displayMapping",
+    "semantic": "recording",
+    "expected": "semantic-fail",
+    "recordingType": "replay",
+    "context": "platform/context-missing-input-map.json"
+  },
+  {
+    "file": "platform/physical-v11.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/invalid-v10-fractional.json",
+    "schema": "trajectory.schema.json",
+    "semantic": "trajectory",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "platform/pause-display-position.json",
+    "schema": "execution-control.schema.json#/$defs/pauseSnapshot",
+    "semantic": "execution",
+    "expected": "pass",
+    "executionType": "pauseSnapshot"
+  },
+  {
+    "file": "platform/display-move-action.json",
+    "schema": "actions.schema.json#/$defs/pointer.move",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/invalid-display-action-missing-id.json",
+    "schema": "actions.schema.json#/$defs/pointer.move",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "platform/agent-capabilities-request.json",
+    "schema": "agent.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/system-capabilities.json",
+    "schema": "service.schema.json#/$defs/system.capabilities/properties/result",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/artifact-windows-x64.json",
+    "schema": "updates.schema.json#/$defs/artifact",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/artifact-macos-x64.json",
+    "schema": "updates.schema.json#/$defs/artifact",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/artifact-macos-arm64.json",
+    "schema": "updates.schema.json#/$defs/artifact",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/artifact-linux-x64.json",
+    "schema": "updates.schema.json#/$defs/artifact",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/artifact-linux-arm64.json",
+    "schema": "updates.schema.json#/$defs/artifact",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/invalid-artifact-platform.json",
+    "schema": "updates.schema.json#/$defs/artifact",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "platform/macos-default-settings.json",
+    "schema": "settings.schema.json#/$defs/snapshot",
+    "semantic": "settings",
+    "expected": "pass"
+  },
+  {
+    "file": "platform/macos-meta-hotkeys.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "semantic": "settings",
+    "expected": "pass",
+    "platform": "macos"
+  },
+  {
+    "file": "platform/invalid-macos-reserved-hotkey.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "semantic": "settings",
+    "expected": "semantic-fail",
+    "platform": "macos"
+  },
+  {
+    "file": "platform/invalid-macos-win-hotkey.json",
+    "schema": "settings.schema.json#/$defs/updateParams",
+    "semantic": "settings",
+    "expected": "semantic-fail",
+    "platform": "macos"
+  },
+  {
+    "file": "platform/record-start-display.json",
+    "schema": "service.schema.json#/$defs/record.start/properties/params",
+    "semantic": "recording",
+    "recordingType": "start",
+    "expected": "pass",
+    "context": "platform/context-record-start-display.json"
+  },
+  {
+    "file": "platform/invalid-record-permission.json",
+    "schema": "service.schema.json#/$defs/record.start/properties/params",
+    "semantic": "recording",
+    "recordingType": "start",
+    "expected": "semantic-fail",
+    "context": "platform/context-invalid-record-permission.json"
+  },
+  {
+    "file": "platform/invalid-record-wayland-coverage.json",
+    "schema": "service.schema.json#/$defs/record.start/properties/params",
+    "semantic": "recording",
+    "recordingType": "start",
+    "expected": "semantic-fail",
+    "context": "platform/context-invalid-record-wayland-coverage.json"
+  },
+  {
+    "file": "mcp/request-metadata.json",
+    "schema": "mcp.schema.json#/$defs/requestMetadata",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/request-metadata-optional.json",
+    "schema": "mcp.schema.json#/$defs/requestMetadata",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/request-metadata-max.json",
+    "schema": "mcp.schema.json#/$defs/requestMetadata",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/invalid-request-id-empty.json",
+    "schema": "mcp.schema.json#/$defs/requestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/invalid-request-id-number.json",
+    "schema": "mcp.schema.json#/$defs/requestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/invalid-request-id-length.json",
+    "schema": "mcp.schema.json#/$defs/requestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/invalid-request-id-null.json",
+    "schema": "mcp.schema.json#/$defs/requestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "expressions/preview-context.json",
+    "schema": "service.schema.json#/$defs/expression.preview/properties/params",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "expressions/preview-literal.json",
+    "schema": "service.schema.json#/$defs/expression.preview/properties/params",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "expressions/preview-false.json",
+    "schema": "service.schema.json#/$defs/expression.preview/properties/result",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "expressions/invalid-preview-root.json",
+    "schema": "service.schema.json#/$defs/expression.preview/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "expressions/invalid-preview-arity.json",
+    "schema": "service.schema.json#/$defs/expression.preview/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "expressions/invalid-preview-type.json",
+    "schema": "service.schema.json#/$defs/expression.preview/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "expressions/invalid-preview-result.json",
+    "schema": "service.schema.json#/$defs/expression.preview/properties/result",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-request-metadata.json",
+    "schema": "mcp.schema.json#/$defs/modernRequestMetadata",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-tool-call.json",
+    "schema": "mcp.schema.json#/$defs/modernToolCall",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-discover-request.json",
+    "schema": "mcp.schema.json#/$defs/modernRequest",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-discover-result.json",
+    "schema": "mcp.schema.json#/$defs/discoverResult",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-tools-last-page.json",
+    "schema": "mcp.schema.json#/$defs/modernToolsPage",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-listen-request.json",
+    "schema": "mcp.schema.json#/$defs/listenRequest",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-listen-acknowledged.json",
+    "schema": "mcp.schema.json#/$defs/subscriptionAcknowledged",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-resource-updated.json",
+    "schema": "mcp.schema.json#/$defs/subscriptionUpdated",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-listen-complete.json",
+    "schema": "mcp.schema.json#/$defs/subscriptionComplete",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/legacy-initialize.json",
+    "schema": "mcp.schema.json#/$defs/legacyInitialize",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/stdio-cancel.json",
+    "schema": "mcp.schema.json#/$defs/cancelNotification",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "mcp/modern-missing-version.json",
+    "schema": "mcp.schema.json#/$defs/modernRequestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-missing-capabilities.json",
+    "schema": "mcp.schema.json#/$defs/modernRequestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-wrong-version.json",
+    "schema": "mcp.schema.json#/$defs/modernRequestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-invalid-capabilities.json",
+    "schema": "mcp.schema.json#/$defs/modernRequestMetadata",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-null-rpc-id.json",
+    "schema": "mcp.schema.json#/$defs/modernToolCall",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-tool-no-name.json",
+    "schema": "mcp.schema.json#/$defs/modernToolCall",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-tools-no-cache.json",
+    "schema": "mcp.schema.json#/$defs/modernToolsPage",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-result-no-type.json",
+    "schema": "mcp.schema.json#/$defs/discoverResult",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-subscription-no-id.json",
+    "schema": "mcp.schema.json#/$defs/subscriptionAcknowledged",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-subscription-too-many.json",
+    "schema": "mcp.schema.json#/$defs/listenRequest",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "mcp/modern-notification-with-id.json",
+    "schema": "mcp.schema.json#/$defs/subscriptionAcknowledged",
+    "semantic": "none",
+    "expected": "schema-fail"
+  }
+]

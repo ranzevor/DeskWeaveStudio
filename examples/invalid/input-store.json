@@ -1,0 +1,32 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "request-demo-input",
+  "session": "session-demo",
+  "workspace": "workspace-demo",
+  "method": "input.submit",
+  "deadlineMs": 5000,
+  "params": {
+    "intentId": "intent-demo-1",
+    "targetToken": "target-demo",
+    "operation": {
+      "id": "click",
+      "title": "点击演示位置",
+      "action": "pointer.click",
+      "params": {
+        "target": "main",
+        "position": {
+          "kind": "point",
+          "space": "desktopPhysical",
+          "x": 100,
+          "y": 100
+        },
+        "button": "left",
+        "clicks": 1,
+        "intervalMs": 0
+      },
+      "on": {},
+      "store": "value"
+    }
+  }
+}

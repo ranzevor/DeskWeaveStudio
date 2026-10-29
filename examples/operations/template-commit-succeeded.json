@@ -1,0 +1,17 @@
+{
+  "operationId": "operation-template-commit-demo",
+  "method": "template.commit",
+  "state": "succeeded",
+  "result": {
+    "batchId": "batch-demo",
+    "manifestResource": "deskweave://templates/batch-demo/manifest",
+    "assetCount": 1,
+    "assetsQuery": {
+      "collectionId": "collection-operations-template-commit-succeeded-result",
+      "kind": "templateAssets",
+      "itemCount": 1,
+      "expiresAt": null
+    }
+  },
+  "error": null
+}

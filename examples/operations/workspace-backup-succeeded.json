@@ -1,0 +1,16 @@
+{
+  "operationId": "operation-workspace-backup-demo",
+  "method": "workspace.backup",
+  "state": "succeeded",
+  "result": {
+    "backupId": "backup-demo",
+    "workspaceId": "workspace-demo",
+    "formatVersion": "1.0",
+    "manifestResource": "deskweave://backups/backup-demo/manifest",
+    "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "objectCount": 4,
+    "totalBytes": 65536,
+    "completedAt": "2026-10-29T02:00:01Z"
+  },
+  "error": null
+}

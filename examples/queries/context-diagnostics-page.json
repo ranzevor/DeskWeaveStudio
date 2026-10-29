@@ -1,0 +1,39 @@
+{
+  "params": {
+    "collectionId": "collection-diagnostics",
+    "kind": "diagnostics",
+    "filter": {},
+    "order": "asc",
+    "cursor": null,
+    "pageSize": 100
+  },
+  "source": {
+    "collectionId": "collection-diagnostics",
+    "kind": "diagnostics",
+    "itemCount": 2,
+    "expiresAt": "2026-11-05T02:05:00Z"
+  },
+  "rows": [
+    {
+      "code": "INPUT_REQUIRED",
+      "message": "请选择本次运行的月份。",
+      "nodeId": null
+    },
+    {
+      "code": "MISSING_RESOURCE",
+      "message": "下载按钮模板版本不存在。",
+      "nodeId": "locate"
+    }
+  ],
+  "principal": "client-synthetic",
+  "workspace": "workspace-demo",
+  "authorizationVersion": 1,
+  "authorized": true,
+  "now": "2026-11-05T02:00:20Z",
+  "querySnapshot": {
+    "snapshotId": "query-diagnostics",
+    "snapshotAt": "2026-11-05T02:00:00Z",
+    "expiresAt": "2026-11-05T02:05:00Z",
+    "sourceVersion": "1"
+  }
+}

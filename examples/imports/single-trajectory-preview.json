@@ -1,0 +1,15 @@
+[
+  {
+    "sourceKey": "input",
+    "sourceKind": "trajectory",
+    "sourceId": null,
+    "sourceVersion": null,
+    "sourceSha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+    "targetKind": "trajectory",
+    "targetId": "single-trajectory",
+    "targetVersion": "single-trajectory-v1",
+    "targetSha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+    "disposition": "created",
+    "displayName": "快捷键轨迹"
+  }
+]

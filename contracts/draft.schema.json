@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:draft:1",
+  "title": "DeskWeaveStudio 文档草稿 1.0",
+  "$defs": {
+    "contentRef": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "resource"
+        },
+        "resourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "resourceId",
+        "length",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "modelContent": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "maxLength": 33554432
+        },
+        "definition": {
+          "$ref": "urn:deskweave:workflow:1"
+        },
+        "dependencies": {
+          "$ref": "urn:deskweave:service:1#/$defs/workflow.save/properties/params/properties/dependencies"
+        }
+      },
+      "required": [
+        "source",
+        "definition",
+        "dependencies"
+      ],
+      "additionalProperties": false
+    },
+    "sourceInput": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "inline"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 262144
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "urn:deskweave:draft:1#/$defs/contentRef"
+        }
+      ]
+    },
+    "modelInput": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "inline"
+            },
+            "value": {
+              "$ref": "urn:deskweave:draft:1#/$defs/modelContent"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "urn:deskweave:draft:1#/$defs/contentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "writeParams": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "editorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedEditVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "editVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "baseRevision": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "inline"
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 262144
+                }
+              },
+              "required": [
+                "kind",
+                "text"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "urn:deskweave:draft:1#/$defs/contentRef"
+            }
+          ]
+        },
+        "lastValidModel": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "inline"
+                },
+                "value": {
+                  "$ref": "urn:deskweave:draft:1#/$defs/modelContent"
+                }
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "urn:deskweave:draft:1#/$defs/contentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modelEditVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "workflowId",
+        "editorId",
+        "expectedEditVersion",
+        "editVersion",
+        "baseRevision",
+        "source",
+        "lastValidModel",
+        "modelEditVersion"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "lastValidModel": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "modelEditVersion": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "modelEditVersion": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "draftSnapshot": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "editorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "editVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "baseRevision": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceResource": {
+          "$ref": "urn:deskweave:service:1#/$defs/asset.read/properties/result"
+        },
+        "lastValidModelResource": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:service:1#/$defs/asset.read/properties/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modelEditVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validationState": {
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:deskweave:query:1#/$defs/diagnosticsItem"
+          },
+          "maxItems": 100
+        },
+        "savedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "diagnosticCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "diagnosticsResource": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:service:1#/$defs/asset.read/properties/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "workflowId",
+        "editorId",
+        "editVersion",
+        "baseRevision",
+        "sourceResource",
+        "lastValidModelResource",
+        "modelEditVersion",
+        "validationState",
+        "diagnostics",
+        "savedAt",
+        "diagnosticCount",
+        "diagnosticsResource"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "lastValidModelResource": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "modelEditVersion": {
+                "type": "null"
+              },
+              "validationState": {
+                "const": "invalid"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "modelEditVersion": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "diagnosticCount": {
+                "minimum": 101
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "diagnosticsResource": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/draftSnapshot"
+}

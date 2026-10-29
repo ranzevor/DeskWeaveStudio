@@ -1,0 +1,41 @@
+# 制作、测试与资产提交
+
+## 临时模型连接测试
+
+已保存连接继续使用 connection.test(connectionId)。未保存配置通过 connection.testDraft 创建可取消的测试作业，输入为 editorId、editVersion、endpoint、model、options、credential 和可选 timeoutMs（100～30000ms，默认 5000ms）。结构见[编辑契约](../../contracts/authoring.schema.json)。
+
+credential 为 none、saved 或 ephemeral。saved 固定已授权连接和版本，发送前重新核对凭据可用性；ephemeral 使用可信 Host 登记的一次性 secretGrant，绑定测试用途、工作空间、实际调用者和 60 秒期限。该能力不经 MCP、URL 或普通日志传递。准入消费并保留本作业必要的受保护材料，结束即清理，不写入正式连接或凭据历史。
+
+connection.testDraft 仅供可信本地管理客户端，要求 workspace.manage。网络请求使用合成小消息，不附带屏幕；沿用证书、回环 HTTP、同源重定向和参数白名单。操作接收只返回 operationId；最终结果区分配置有效、端点可达、模型可用和具体原因，并绑定原 editorId、editVersion 与配置摘要。
+
+修改配置、关闭编辑器或重新测试会使旧界面结果失效，并请求取消旧作业；迟到结果只能进入原作业，不能把新编辑标为测试通过。用户保存时仍按当前内容和 expectedVersion 配置，不从测试结果复制密钥或绕过 CAS。列表、读取与测试均不能暗中保存配置。
+
+## 编辑计划
+
+asset.edit.prepare 固定来源与目标。来源为已授权资产版本或捕获帧；资产另需 asset.read，帧另需 capture.read 和原帧读取权。计划返回 editId、assetKind、sourceSha256、来源版本、实际像素尺寸或源时长、目标方式及有效期。源内容通过强引用保留，最长 30 分钟，不因编辑续期。
+
+目标方式为 create（新逻辑资产及名称）或 newVersion（现有 assetId 和 expectedCurrentVersion）。帧来源只生成图像；轨迹来源必须为可读取的固定轨迹资产。准备不占用正式名称，不改变头版本；来源读取权或目标写权限被撤销后不能提交。
+
+## 提交与原子性
+
+asset.edit.commit 固定 editId 和 expectedSourceSha256，创建原作业。图像提交 imageCrop 的 targetPixels 矩形，Engine 对固定源像素执行裁剪并编码，不把客户端缩略图当成正式图像；矩形越界或源摘要变化时拒绝。输出保存实际源帧/资产关联和裁剪矩形。
+
+轨迹提交 trajectory 类型的 contentRef 与 durationUs。Engine 重新读取实际 JSON，验证结构、时序、配对、坐标模式及所有 atUs < durationUs。正式轨迹文件保持原 Trajectory 格式；时长、源版本、编辑关联和生成事件的来源保存在资产版本元数据中，不伪装成原始捕获事件。
+
+完成像素或事件验证后发布不可变对象，再在一个短事务中重新核对权限、来源身份、目标头、名称占用和原请求收据。create 分配独立身份；newVersion 只追加不可变版本并移动该资产头，保留旧版本与全部既有绑定。任一冲突整笔失败，原资产和原流程绑定保持原样。
+
+最终结果返回实际 assetId/assetVersion、previousVersion、类型、名称、来源摘要、输出摘要与长度。createdNewVersion 与 previousVersion 成对对应。工作台仅在作业 succeeded 后应用正式结果；绑定流程时还比较当前文档编辑代次，不覆盖用户期间改选的字段。
+
+## 冲突、取消与中断
+
+头变化返回 ASSET_EDIT_CONFLICT，名称变化返回 NAME_CONFLICT，源、授权或期限失效返回对应具体原因。界面保留编辑内容，重新读取并由用户选择以新计划继续或保存独立副本；不能自动覆盖新头。
+
+asset.edit.discard 取消未提交计划并释放暂存引用。提交已经准入时通过 operation.cancel 收尾；原子提交已完成仍返回原 succeeded，不能把已保存版本伪报为已取消。Engine 中断后按原 editId、作业与请求收据核对：完整登记则读取原结果，未登记不另造版本；效果未核定保留 uncertain 并查询原作业。
+
+## 名称与删除
+
+名称占用与资产版本在同一事务登记。整对象删除成功后释放该逻辑资产名称；物理内容等待全局强引用归零。当前设计不引入资产回收区，版本仍被正式流程、运行或其他使用引用固定时整笔拒绝删除。名称重用不能使旧引用指向新资产。
+
+## 验收
+
+Q43 覆盖未保存配置测试、临时凭据、原配置保持、取消与迟到结果。Q44 覆盖图像裁剪、轨迹时序/配对、源与目标冲突、名称竞争、原子提交、重复请求和取消。Q47 核对名称占用、整对象删除、延迟回收及各文档规则一致。

@@ -1,0 +1,35 @@
+{
+  "sourceManifest": "imports/mixed-source/manifest.json",
+  "targetFiles": {
+    "main": "imports/mixed-target/workflow-main.json",
+    "secondary": "imports/mixed-target/workflow-secondary.json",
+    "childOne": "imports/mixed-target/workflow-childOne.json",
+    "childTwo": "imports/mixed-target/workflow-childTwo.json",
+    "imageOne": "imports/mixed-target/button.png",
+    "trajectoryOne": "imports/mixed-target/shortcut.json"
+  },
+  "targetBindings": {
+    "main": {
+      "child": {
+        "workflowId": "mixed-imported-childOne",
+        "revision": "mixed-target-childOne-r1"
+      },
+      "button": {
+        "assetVersion": "asset-button-v1"
+      },
+      "track": {
+        "assetVersion": "asset-shortcut-v3"
+      }
+    },
+    "secondary": {
+      "child": {
+        "workflowId": "mixed-imported-childTwo",
+        "revision": "mixed-target-childTwo-r1"
+      }
+    },
+    "childOne": {},
+    "childTwo": {}
+  },
+  "currentCatalogVersion": 21,
+  "now": "2026-10-29T04:00:20Z"
+}

@@ -1,0 +1,21 @@
+{
+  "profileId": "breakpoint-profile-demo",
+  "workflowId": "parent",
+  "revision": "parent-r1",
+  "version": 1,
+  "breakpoints": [
+    {
+      "workflowId": "parent",
+      "revision": "parent-r1",
+      "nodeId": "call",
+      "enabled": true
+    },
+    {
+      "workflowId": "child",
+      "revision": "child-r2",
+      "nodeId": "return",
+      "enabled": false
+    }
+  ],
+  "updatedAt": "2026-10-29T01:55:00Z"
+}

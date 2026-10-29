@@ -1,0 +1,464 @@
+{
+  "key": "templates",
+  "name": "模板生产与批次",
+  "prefix": "T",
+  "order": 3.1,
+  "req": [
+    "DW-021",
+    "DW-022",
+    "DW-005",
+    "DW-012"
+  ],
+  "screens": [
+    {
+      "code": "T01",
+      "id": "templates-source",
+      "title": "批量提取设置",
+      "view": "templates-extra",
+      "variant": "source",
+      "parent": "assets",
+      "purpose": "选择固定图像来源与范围，设置候选检测、去重和容量。",
+      "primary": "templates-progress",
+      "primaryLabel": "开始提取",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T02",
+      "id": "templates-progress",
+      "title": "模板提取进度",
+      "view": "templates-extra",
+      "variant": "progress",
+      "parent": "templates-source",
+      "purpose": "查看检测和融合阶段，取消作业后保留来源设置。",
+      "primary": "templates-cancelled",
+      "primaryLabel": "取消提取",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "completion": "templates-candidates"
+    },
+    {
+      "code": "T03",
+      "id": "templates-candidates",
+      "title": "候选筛选",
+      "view": "templates-extra",
+      "variant": "candidates",
+      "parent": "templates-source",
+      "purpose": "按评分筛选和选择候选，查看尺寸、来源与评分。",
+      "primary": "templates-naming",
+      "primaryLabel": "为所选命名",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "T04",
+      "id": "templates-candidate",
+      "title": "候选区域详情",
+      "view": "templates-extra",
+      "variant": "candidate",
+      "parent": "templates-candidates",
+      "purpose": "检查固定裁剪边界与原始像素，返回来源调整范围。",
+      "primary": "templates-candidates",
+      "primaryLabel": "保留此候选",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T05",
+      "id": "templates-naming",
+      "title": "批量命名预览",
+      "view": "templates-extra",
+      "variant": "naming",
+      "parent": "templates-candidates",
+      "purpose": "配置 OCR 或规则命名，逐项查看实际来源并覆盖名称。",
+      "primary": "templates-review",
+      "primaryLabel": "确认名称",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "T06",
+      "id": "templates-conflict",
+      "title": "模板名称冲突",
+      "view": "templates-extra",
+      "variant": "conflict",
+      "parent": "templates-naming",
+      "purpose": "核对已占用名称，追加后缀或手工修改后重新预览。",
+      "primary": "templates-naming",
+      "primaryLabel": "重新生成预览",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "T07",
+      "id": "templates-ocr",
+      "title": "OCR 不可用",
+      "view": "templates-extra",
+      "variant": "ocr",
+      "parent": "templates-naming",
+      "purpose": "确认缺少的语言包，选择规则命名或结束命名。",
+      "primary": "templates-naming",
+      "primaryLabel": "使用规则命名",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T08",
+      "id": "templates-review",
+      "title": "模板批次保存确认",
+      "view": "templates-extra",
+      "variant": "review",
+      "parent": "templates-naming",
+      "purpose": "核对选集、命名来源和完整批次后保存。",
+      "primary": "templates-saving",
+      "primaryLabel": "保存整个批次",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "T09",
+      "id": "templates-batch",
+      "title": "模板资产批次",
+      "view": "templates-extra",
+      "variant": "batch",
+      "parent": "assets",
+      "purpose": "查看已提交资产与清单，进入批量导出。",
+      "primary": "templates-export",
+      "primaryLabel": "导出批次",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T10",
+      "id": "templates-export",
+      "title": "模板批量导出",
+      "view": "templates-extra",
+      "variant": "export",
+      "parent": "templates-batch",
+      "purpose": "选择固定资产版本和输出位置，预览图像与清单。",
+      "primary": "templates-exporting",
+      "primaryLabel": "开始导出",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T11",
+      "id": "templates-empty",
+      "title": "提取无候选",
+      "view": "templates-extra",
+      "variant": "empty",
+      "parent": "templates-source",
+      "purpose": "区分有效空结果与检测错误，调整筛选条件后重试。",
+      "primary": "templates-source",
+      "primaryLabel": "调整提取条件",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T12",
+      "id": "templates-cancelled",
+      "title": "模板提取已取消",
+      "view": "templates-extra",
+      "variant": "cancelled",
+      "parent": "templates-source",
+      "purpose": "查看取消结果，复用保留的来源与参数重新提取。",
+      "primary": "templates-source",
+      "primaryLabel": "重新设置",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T13",
+      "id": "templates-error",
+      "title": "模板提取失败",
+      "view": "templates-extra",
+      "variant": "error",
+      "parent": "templates-source",
+      "purpose": "查看计算超时原因，调整预算或范围后创建新作业。",
+      "primary": "templates-source",
+      "primaryLabel": "修改提取设置",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T14",
+      "id": "templates-save-error",
+      "title": "模板批次保存失败",
+      "view": "templates-extra",
+      "variant": "save-error",
+      "parent": "templates-review",
+      "purpose": "保留有效候选和命名预览，释放存储后重试提交。",
+      "primary": "templates-review",
+      "primaryLabel": "检查并重试",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T15",
+      "id": "templates-exporting",
+      "title": "模板导出进度",
+      "view": "templates-extra",
+      "variant": "exporting",
+      "parent": "templates-export",
+      "purpose": "查看图像和清单写入阶段，取消只影响本次导出。",
+      "primary": "templates-export",
+      "primaryLabel": "取消导出",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "completion": "templates-export-succeeded"
+    },
+    {
+      "code": "T16",
+      "id": "templates-export-error",
+      "title": "模板导出失败",
+      "view": "templates-extra",
+      "variant": "export-error",
+      "parent": "templates-export",
+      "purpose": "查看输出目录写入失败，重新选择位置后导出。",
+      "primary": "templates-export",
+      "primaryLabel": "更换导出位置",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T17",
+      "id": "templates-export-succeeded",
+      "title": "模板导出完成",
+      "view": "templates-extra",
+      "variant": "export-succeeded",
+      "parent": "templates-export",
+      "purpose": "查看已完成的模板图像与清单范围，打开输出位置或返回批次。",
+      "primary": null,
+      "primaryLabel": "打开输出位置",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "显示本次输出位置"
+    },
+    {
+      "code": "T18",
+      "id": "templates-saving",
+      "title": "模板批次保存中",
+      "view": "templates-extra",
+      "variant": "saving",
+      "parent": "templates-review",
+      "purpose": "跟踪已接收保存作业，完成登记后显示资产批次。",
+      "primary": "templates-receipt-unknown",
+      "primaryLabel": "查询保存结果",
+      "completion": "templates-batch",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T19",
+      "id": "templates-receipt-unknown",
+      "title": "模板保存回执查询",
+      "view": "templates-extra",
+      "variant": "receipt-unknown",
+      "parent": "templates-saving",
+      "purpose": "使用原保存请求查询结果，避免重复创建批次。",
+      "primary": "templates-saving",
+      "primaryLabel": "查询原请求结果",
+      "primaryKind": "validate",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "T20",
+      "id": "templates-expired",
+      "title": "模板候选已过期",
+      "view": "templates-extra",
+      "variant": "expired",
+      "parent": "templates-candidates",
+      "purpose": "保留来源与提取条件，重新提取过期候选。",
+      "primary": "templates-source",
+      "primaryLabel": "重新提取",
+      "requirements": [
+        "DW-021",
+        "DW-022",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

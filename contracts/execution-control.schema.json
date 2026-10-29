@@ -1,0 +1,814 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:execution-control:1",
+  "title": "DeskWeaveStudio 运行暂停与断点 1.0",
+  "$defs": {
+    "physicalPoint": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            },
+            "y": {
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "urn:deskweave:platform:1#/$defs/displayPoint"
+        }
+      ],
+      "description": "全局物理位置或带 displayId 的屏内像素位置；恢复使用同一坐标表达和已绑定目标。"
+    },
+    "heldInput": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "key"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            }
+          },
+          "required": [
+            "kind",
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "button"
+            },
+            "button": {
+              "enum": [
+                "left",
+                "right",
+                "middle",
+                "x1",
+                "x2"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "button"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "targetState": {
+      "type": "object",
+      "properties": {
+        "targetToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "topologyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "targetToken",
+        "targetVersion",
+        "topologyVersion"
+      ],
+      "additionalProperties": false
+    },
+    "segmentCursor": {
+      "type": "object",
+      "properties": {
+        "segmentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "payloadHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "eventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "nextEventIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "activeElapsedUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        },
+        "remainingDelayUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000000
+        }
+      },
+      "required": [
+        "segmentId",
+        "payloadHash",
+        "eventCount",
+        "nextEventIndex",
+        "activeElapsedUs",
+        "remainingDelayUs"
+      ],
+      "additionalProperties": false
+    },
+    "pauseSnapshot": {
+      "type": "object",
+      "properties": {
+        "pauseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "leaseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "agentEpoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "cursor": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:execution-control:1#/$defs/segmentCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "heldInputs": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "urn:deskweave:execution-control:1#/$defs/heldInput"
+          }
+        },
+        "pointer": {
+          "$ref": "urn:deskweave:execution-control:1#/$defs/physicalPoint"
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "urn:deskweave:execution-control:1#/$defs/targetState"
+          }
+        },
+        "checkpointHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "heldInputsHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "targetStateHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "inputTargetToken": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "pauseId",
+        "leaseId",
+        "agentEpoch",
+        "generation",
+        "createdAt",
+        "expiresAt",
+        "cursor",
+        "heldInputs",
+        "pointer",
+        "targets",
+        "checkpointHash",
+        "heldInputsHash",
+        "targetStateHash",
+        "inputTargetToken"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "heldInputs": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "cursor": {
+                    "type": "object"
+                  }
+                }
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "inputTargetToken": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "leaseSnapshot": {
+      "type": "object",
+      "properties": {
+        "leaseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "agentEpoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "state": {
+          "enum": [
+            "active",
+            "pausing",
+            "paused",
+            "released",
+            "uncertain"
+          ]
+        },
+        "cleanup": {
+          "enum": [
+            "pending",
+            "succeeded",
+            "failed",
+            "notRequired"
+          ]
+        },
+        "pauseSnapshot": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:execution-control:1#/$defs/pauseSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastResumeAttemptId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "leaseId",
+        "generation",
+        "agentEpoch",
+        "state",
+        "cleanup",
+        "pauseSnapshot",
+        "lastResumeAttemptId",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "paused"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pauseSnapshot": {
+                "type": "object"
+              },
+              "cleanup": {
+                "enum": [
+                  "succeeded",
+                  "notRequired"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "pauseSnapshot": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "resumePlan": {
+      "type": "object",
+      "properties": {
+        "planId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "controlVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pauseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "agentEpoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "heldInputs": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "urn:deskweave:execution-control:1#/$defs/heldInput"
+          }
+        },
+        "pointerToRestore": {
+          "oneOf": [
+            {
+              "$ref": "urn:deskweave:execution-control:1#/$defs/physicalPoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requiresConfirmation": {
+          "type": "boolean"
+        },
+        "planHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "restoreTargetToken": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "planId",
+        "runId",
+        "controlVersion",
+        "pauseId",
+        "agentEpoch",
+        "generation",
+        "expiresAt",
+        "heldInputs",
+        "pointerToRestore",
+        "requiresConfirmation",
+        "planHash",
+        "restoreTargetToken"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "heldInputs": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "pointerToRestore": {
+                    "type": "object"
+                  }
+                }
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "requiresConfirmation": {
+                "const": true
+              },
+              "restoreTargetToken": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "restoreTargetToken": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requiresConfirmation": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "resumeSummary": {
+      "type": "object",
+      "properties": {
+        "availability": {
+          "enum": [
+            "notPaused",
+            "ready",
+            "needsLocalConfirmation",
+            "unavailable"
+          ]
+        },
+        "pauseId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agentEpoch": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "heldInputs": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "urn:deskweave:execution-control:1#/$defs/heldInput"
+          }
+        },
+        "reason": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "availability",
+        "pauseId",
+        "agentEpoch",
+        "heldInputs",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "breakpoint": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "nodeId": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "workflowId",
+        "revision",
+        "nodeId",
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "breakpointProfile": {
+      "type": "object",
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "breakpoints": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "urn:deskweave:execution-control:1#/$defs/breakpoint"
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "profileId",
+        "workflowId",
+        "revision",
+        "version",
+        "breakpoints",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "debugStart": {
+      "type": "object",
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "profileVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pauseOnEntry": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "profileId",
+        "profileVersion",
+        "pauseOnEntry"
+      ],
+      "additionalProperties": false
+    },
+    "debugSnapshot": {
+      "type": "object",
+      "properties": {
+        "profileId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profileVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "breakpointSnapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "lastHit": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "frameId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "workflowId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "nodeId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "visit": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "controlVersion": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "frameId",
+                "workflowId",
+                "revision",
+                "nodeId",
+                "visit",
+                "controlVersion"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "profileId",
+        "profileVersion",
+        "breakpointSnapshotHash",
+        "lastHit"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profileId": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "profileVersion": {
+                "type": "null"
+              },
+              "lastHit": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "profileVersion": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

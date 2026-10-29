@@ -1,0 +1,6 @@
+{
+  "uploadId": "upload-demo",
+  "nextOffset": 0,
+  "maxChunkBytes": 196608,
+  "expiresAt": "2026-10-29T02:05:00Z"
+}

@@ -1,0 +1,555 @@
+{
+  "key": "actions",
+  "name": "动作属性与专用输入",
+  "prefix": "F",
+  "order": 2.5,
+  "req": [
+    "DW-002",
+    "DW-006",
+    "DW-007"
+  ],
+  "screens": [
+    {
+      "code": "F01",
+      "id": "action-time-wait",
+      "title": "等待属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "time.wait",
+      "purpose": "配置“等待”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F02",
+      "id": "action-data-assign",
+      "title": "赋值属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "data.assign",
+      "purpose": "配置“赋值”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F03",
+      "id": "action-logic-branch",
+      "title": "条件分支属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "logic.branch",
+      "purpose": "配置“条件分支”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F04",
+      "id": "action-logic-assert",
+      "title": "断言属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "logic.assert",
+      "purpose": "配置“断言”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F05",
+      "id": "action-flow-call",
+      "title": "调用子流程属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "flow.call",
+      "purpose": "配置“调用子流程”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F06",
+      "id": "action-flow-join",
+      "title": "等待子流程属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "flow.join",
+      "purpose": "配置“等待子流程”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F07",
+      "id": "action-flow-repeat",
+      "title": "重复子流程属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "flow.repeat",
+      "purpose": "配置“重复子流程”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F08",
+      "id": "action-flow-return",
+      "title": "返回属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "flow.return",
+      "purpose": "配置“返回”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F09",
+      "id": "action-screen-capture",
+      "title": "截图属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "screen.capture",
+      "purpose": "配置“截图”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F10",
+      "id": "action-vision-match",
+      "title": "图像匹配属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "vision.match",
+      "purpose": "配置“图像匹配”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F11",
+      "id": "action-vision-observe",
+      "title": "模型观察属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "vision.observe",
+      "purpose": "配置“模型观察”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F12",
+      "id": "action-pointer-move",
+      "title": "移动指针属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "pointer.move",
+      "purpose": "配置“移动指针”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F13",
+      "id": "action-pointer-delta",
+      "title": "相对移动属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "pointer.delta",
+      "purpose": "配置“相对移动”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F14",
+      "id": "action-pointer-click",
+      "title": "点击属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "pointer.click",
+      "purpose": "配置“点击”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F15",
+      "id": "action-pointer-drag",
+      "title": "拖拽属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "pointer.drag",
+      "purpose": "配置“拖拽”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F16",
+      "id": "action-pointer-scroll",
+      "title": "滚动属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "pointer.scroll",
+      "purpose": "配置“滚动”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F17",
+      "id": "action-pointer-button",
+      "title": "鼠标按钮属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "pointer.button",
+      "purpose": "配置“鼠标按钮”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F18",
+      "id": "action-keyboard-down",
+      "title": "按下按键属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "keyboard.down",
+      "purpose": "配置“按下按键”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F19",
+      "id": "action-keyboard-up",
+      "title": "释放按键属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "keyboard.up",
+      "purpose": "配置“释放按键”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F20",
+      "id": "action-keyboard-text",
+      "title": "输入文本属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "keyboard.text",
+      "purpose": "配置“输入文本”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F21",
+      "id": "action-input-trajectory",
+      "title": "输入轨迹属性",
+      "view": "action-properties",
+      "variant": "properties",
+      "parent": null,
+      "action": "input.trajectory",
+      "purpose": "配置“输入轨迹”的全部参数与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-002",
+        "DW-006",
+        "DW-007"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "F22",
+      "id": "action-flow-loop",
+      "title": "条件循环属性",
+      "view": "action-properties",
+      "variant": "flow.loop",
+      "parent": null,
+      "purpose": "编辑条件循环参数、执行边界与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-026"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "action": "flow.loop"
+    },
+    {
+      "code": "F23",
+      "id": "action-flow-break",
+      "title": "退出循环属性",
+      "view": "action-properties",
+      "variant": "flow.break",
+      "parent": null,
+      "purpose": "编辑退出循环参数、执行边界与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-026"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "action": "flow.break"
+    },
+    {
+      "code": "F24",
+      "id": "action-flow-continue",
+      "title": "跳过本轮属性",
+      "view": "action-properties",
+      "variant": "flow.continue",
+      "parent": null,
+      "purpose": "编辑跳过本轮参数、执行边界与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-026"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "action": "flow.continue"
+    },
+    {
+      "code": "F25",
+      "id": "action-keyboard-chord",
+      "title": "组合键属性",
+      "view": "action-properties",
+      "variant": "keyboard.chord",
+      "parent": null,
+      "purpose": "编辑组合键参数、执行边界与产出。",
+      "primary": "editor-graph",
+      "primaryLabel": "应用配置",
+      "requirements": [
+        "DW-029"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "action": "keyboard.chord"
+    }
+  ]
+}

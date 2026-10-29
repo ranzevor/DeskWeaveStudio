@@ -1,0 +1,13 @@
+{
+  "inputKind": "image",
+  "sourceFile": "imports/single-source/button.png",
+  "targetFiles": {
+    "input": "imports/single-target/button.png"
+  },
+  "targetBindings": {
+    "input": {}
+  },
+  "mappingFile": "imports/single-image-preview.json",
+  "currentCatalogVersion": 31,
+  "now": "2026-10-29T05:00:20Z"
+}

@@ -1,0 +1,65 @@
+{
+  "importId": "import-demo",
+  "planId": "import-plan-demo",
+  "sourceManifestHash": "07433d6f8de9584811c4df9dcb8c085ca9da353d2408e886ea1ce5cd33034db4",
+  "catalogVersion": 12,
+  "mappings": [
+    {
+      "sourceKey": "main",
+      "sourceKind": "workflow",
+      "sourceId": "parent",
+      "sourceVersion": "source-main-r1",
+      "sourceSha256": "0678aadb43a959e6ae980b0b4591ffcbf6a33058ade1f15c0476092917ddd029",
+      "targetKind": "workflow",
+      "targetId": "imported-main",
+      "targetVersion": "target-main-r1",
+      "targetSha256": "d9f7c4c50ccda6b2234ec19ee771dc3d50f498e242411e92796731635c2f5414",
+      "disposition": "created",
+      "displayName": "入口流程"
+    },
+    {
+      "sourceKey": "main",
+      "sourceKind": "workflow",
+      "sourceId": "secondary",
+      "sourceVersion": "source-secondary-r1",
+      "sourceSha256": "9a43392123b6e1323abcb12e850cf3511a56f8fdba7b7ebdac77947a17f9af06",
+      "targetKind": "workflow",
+      "targetId": "imported-secondary",
+      "targetVersion": "target-secondary-r1",
+      "targetSha256": "033a66772325ff42b0a173e1ca77d7c1e6c1b92b99b859315d020c9c5135b3af",
+      "disposition": "created",
+      "displayName": "辅助流程"
+    },
+    {
+      "sourceKey": "childOne",
+      "sourceKind": "workflow",
+      "sourceId": "child",
+      "sourceVersion": "source-childOne-r1",
+      "sourceSha256": "02461a45fffbdce39461fe7a5900d14eeecaaa611b2a029b1df1d8257d447a89",
+      "targetKind": "workflow",
+      "targetId": "imported-childOne",
+      "targetVersion": "target-childOne-r1",
+      "targetSha256": "123e52caf780f58608105695527cb706bffc9d16d8c01fb53292e04fb768ef86",
+      "disposition": "created",
+      "displayName": "返回输入"
+    },
+    {
+      "sourceKey": "childTwo",
+      "sourceKind": "workflow",
+      "sourceId": "child",
+      "sourceVersion": "source-childTwo-r1",
+      "sourceSha256": "fb8cdacdb1704254a70335177d57f128ba9a59f70f6644ce27f873abd2b04415",
+      "targetKind": "workflow",
+      "targetId": "imported-childTwo",
+      "targetVersion": "target-childTwo-r1",
+      "targetSha256": "f6a7fc7ea8a59ac4290c92e0e38c018f8f2aae105ec7405c4d577a1662fbbc81",
+      "disposition": "created",
+      "displayName": "子流程第二版"
+    }
+  ],
+  "entryWorkflow": {
+    "workflowId": "imported-main",
+    "revision": "target-main-r1"
+  },
+  "completedAt": "2026-10-29T03:00:30Z"
+}

@@ -1,0 +1,14 @@
+{
+  "editId": "edit-trajectory-1",
+  "expectedSourceSha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+  "content": {
+    "kind": "trajectory",
+    "contentRef": {
+      "kind": "resource",
+      "resourceId": "trajectory-edit-content",
+      "length": 383,
+      "sha256": "12188fcec747ec6d190c7a2eff18ad4e2b650954e94ffff1677b0acff28caac3"
+    },
+    "durationUs": 4000
+  }
+}

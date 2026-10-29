@@ -1,0 +1,8 @@
+{
+  "collectionId": "another-collection",
+  "kind": "templateNames",
+  "filter": {},
+  "order": "asc",
+  "cursor": "cursor-next",
+  "pageSize": 2
+}

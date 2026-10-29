@@ -1,0 +1,33 @@
+{
+  "operationId": "operation-vision-observe-demo",
+  "method": "vision.observe",
+  "state": "succeeded",
+  "result": {
+    "recordId": "record-demo",
+    "sessionId": null,
+    "operationId": "operation-demo",
+    "runId": null,
+    "state": "succeeded",
+    "capturedAt": "2026-10-29T02:00:00Z",
+    "completedAt": "2026-10-29T02:00:01Z",
+    "frameId": "frame-demo",
+    "screenshotResource": "deskweave://frames/frame-demo",
+    "baselineRecordId": null,
+    "connectionId": "local-vision",
+    "connectionVersion": 1,
+    "prompt": "读取报表月份和可下载状态。",
+    "output": {
+      "ready": true
+    },
+    "durationMs": 1000,
+    "usage": {
+      "inputTokens": 16,
+      "outputTokens": 4
+    },
+    "reason": null,
+    "checkedAt": "2026-10-29T02:00:00Z",
+    "skipReason": null,
+    "difference": null
+  },
+  "error": null
+}

@@ -1,0 +1,11 @@
+{
+  "operationId": "operation-observation-export-demo",
+  "method": "observation.export",
+  "state": "cancelled",
+  "result": null,
+  "error": {
+    "code": "CANCELLED",
+    "message": "导出已取消",
+    "retry": "never"
+  }
+}

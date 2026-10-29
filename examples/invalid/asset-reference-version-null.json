@@ -1,0 +1,27 @@
+{
+  "assetId": "asset-synthetic",
+  "currentVersion": "asset-v3",
+  "versionCount": 3,
+  "scope": "version",
+  "assetVersion": null,
+  "snapshotId": "reference-query-all-1",
+  "snapshotAt": "2026-10-29T00:00:00Z",
+  "expiresAt": "2026-10-29T00:05:00Z",
+  "references": [
+    {
+      "ownerKind": "revision",
+      "ownerId": "workflow-v1",
+      "displayName": "报表流程版本 1",
+      "assetVersion": "asset-v1"
+    },
+    {
+      "ownerKind": "draft",
+      "ownerId": "editor-2",
+      "displayName": "待完成草稿",
+      "assetVersion": "asset-v2"
+    }
+  ],
+  "totalReferences": 3,
+  "hiddenReferences": 1,
+  "nextCursor": null
+}

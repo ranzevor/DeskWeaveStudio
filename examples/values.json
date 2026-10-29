@@ -1,0 +1,19 @@
+{
+  "zero": 0,
+  "false": false,
+  "empty": "",
+  "escaped": {
+    "$literal": {
+      "$expr": "ordinary text"
+    }
+  },
+  "sum": {
+    "$expr": {
+      "op": "add",
+      "args": [
+        0,
+        1
+      ]
+    }
+  }
+}

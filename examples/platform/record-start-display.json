@@ -1,0 +1,6 @@
+{
+  "targetToken": "desktop-recording-platform",
+  "coordinateMode": "display",
+  "includePointerMotion": true,
+  "expectedTopologyVersion": 7
+}

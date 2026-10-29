@@ -1,0 +1,22 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "breakpoint-remove",
+  "session": "session-demo",
+  "method": "debug.breakpoints.update",
+  "workspace": "workspace-demo",
+  "deadlineMs": 5000,
+  "params": {
+    "workflowId": "parent",
+    "revision": "parent-r1",
+    "expectedVersion": 1,
+    "breakpoints": [
+      {
+        "workflowId": "parent",
+        "revision": "parent-r1",
+        "nodeId": "call",
+        "enabled": true
+      }
+    ]
+  }
+}

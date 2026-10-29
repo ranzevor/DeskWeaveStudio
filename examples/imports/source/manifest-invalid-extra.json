@@ -1,0 +1,58 @@
+{
+  "formatVersion": "1.0",
+  "name": "固定依赖演示包",
+  "entry": "main",
+  "resources": [
+    {
+      "key": "main",
+      "path": "workflow-main.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 1442,
+      "sha256": "0678aadb43a959e6ae980b0b4591ffcbf6a33058ade1f15c0476092917ddd029",
+      "sourceId": "parent",
+      "sourceVersion": "source-main-r1",
+      "displayName": "入口流程",
+      "bindings": {
+        "child": "childOne",
+        "unused": "childTwo"
+      }
+    },
+    {
+      "key": "secondary",
+      "path": "workflow-secondary.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 1445,
+      "sha256": "9a43392123b6e1323abcb12e850cf3511a56f8fdba7b7ebdac77947a17f9af06",
+      "sourceId": "secondary",
+      "sourceVersion": "source-secondary-r1",
+      "displayName": "辅助流程",
+      "bindings": {
+        "child": "childTwo"
+      }
+    },
+    {
+      "key": "childOne",
+      "path": "workflow-childOne.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 769,
+      "sha256": "02461a45fffbdce39461fe7a5900d14eeecaaa611b2a029b1df1d8257d447a89",
+      "sourceId": "child",
+      "sourceVersion": "source-childOne-r1",
+      "displayName": "返回输入"
+    },
+    {
+      "key": "childTwo",
+      "path": "workflow-childTwo.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 775,
+      "sha256": "fb8cdacdb1704254a70335177d57f128ba9a59f70f6644ce27f873abd2b04415",
+      "sourceId": "child",
+      "sourceVersion": "source-childTwo-r1",
+      "displayName": "子流程第二版"
+    }
+  ]
+}

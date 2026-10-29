@@ -1,0 +1,483 @@
+{
+  "formatVersion": "1.0",
+  "coordinateMode": "event",
+  "events": [
+    {
+      "kind": "pointer.move",
+      "atUs": 100000,
+      "x": 600,
+      "y": 500
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 200000,
+      "button": "left",
+      "state": "down"
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 212500,
+      "x": 597,
+      "y": 520
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 225000,
+      "x": 588,
+      "y": 539
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 237500,
+      "x": 574,
+      "y": 558
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 250000,
+      "x": 554,
+      "y": 577
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 262500,
+      "x": 529,
+      "y": 594
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 275000,
+      "x": 499,
+      "y": 611
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 287500,
+      "x": 464,
+      "y": 627
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 300000,
+      "x": 424,
+      "y": 641
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 312500,
+      "x": 381,
+      "y": 655
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 325000,
+      "x": 333,
+      "y": 666
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 337500,
+      "x": 283,
+      "y": 676
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 350000,
+      "x": 230,
+      "y": 685
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 362500,
+      "x": 174,
+      "y": 691
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 375000,
+      "x": 117,
+      "y": 696
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 387500,
+      "x": 59,
+      "y": 699
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 400000,
+      "x": 0,
+      "y": 700
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 412500,
+      "x": -59,
+      "y": 699
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 425000,
+      "x": -117,
+      "y": 696
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 437500,
+      "x": -174,
+      "y": 691
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 450000,
+      "x": -230,
+      "y": 685
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 462500,
+      "x": -283,
+      "y": 676
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 475000,
+      "x": -333,
+      "y": 666
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 487500,
+      "x": -381,
+      "y": 655
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 500000,
+      "x": -424,
+      "y": 641
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 512500,
+      "x": -464,
+      "y": 627
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 525000,
+      "x": -499,
+      "y": 611
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 537500,
+      "x": -529,
+      "y": 594
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 550000,
+      "x": -554,
+      "y": 577
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 562500,
+      "x": -574,
+      "y": 558
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 575000,
+      "x": -588,
+      "y": 539
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 587500,
+      "x": -597,
+      "y": 520
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 600000,
+      "x": -600,
+      "y": 500
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 612500,
+      "x": -597,
+      "y": 480
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 625000,
+      "x": -588,
+      "y": 461
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 637500,
+      "x": -574,
+      "y": 442
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 650000,
+      "x": -554,
+      "y": 423
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 662500,
+      "x": -529,
+      "y": 406
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 675000,
+      "x": -499,
+      "y": 389
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 687500,
+      "x": -464,
+      "y": 373
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 700000,
+      "x": -424,
+      "y": 359
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 712500,
+      "x": -381,
+      "y": 345
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 725000,
+      "x": -333,
+      "y": 334
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 737500,
+      "x": -283,
+      "y": 324
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 750000,
+      "x": -230,
+      "y": 315
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 762500,
+      "x": -174,
+      "y": 309
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 775000,
+      "x": -117,
+      "y": 304
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 787500,
+      "x": -59,
+      "y": 301
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 800000,
+      "x": 0,
+      "y": 300
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 812500,
+      "x": 59,
+      "y": 301
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 825000,
+      "x": 117,
+      "y": 304
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 837500,
+      "x": 174,
+      "y": 309
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 850000,
+      "x": 230,
+      "y": 315
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 862500,
+      "x": 283,
+      "y": 324
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 875000,
+      "x": 333,
+      "y": 334
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 887500,
+      "x": 381,
+      "y": 345
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 900000,
+      "x": 424,
+      "y": 359
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 912500,
+      "x": 464,
+      "y": 373
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 925000,
+      "x": 499,
+      "y": 389
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 937500,
+      "x": 529,
+      "y": 406
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 950000,
+      "x": 554,
+      "y": 423
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 962500,
+      "x": 574,
+      "y": 442
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 975000,
+      "x": 588,
+      "y": 461
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 987500,
+      "x": 597,
+      "y": 480
+    },
+    {
+      "kind": "pointer.move",
+      "atUs": 1000000,
+      "x": 600,
+      "y": 500
+    },
+    {
+      "kind": "pointer.button",
+      "atUs": 1012500,
+      "button": "left",
+      "state": "up"
+    }
+  ],
+  "source": {
+    "scope": "allDisplays",
+    "topology": {
+      "version": 42,
+      "coordinateSpace": "desktopPhysicalPixels",
+      "virtualBounds": {
+        "x": -1440,
+        "y": -1200,
+        "width": 4000,
+        "height": 3760
+      },
+      "displays": [
+        {
+          "displayId": "portrait-left",
+          "name": "显示屏 1",
+          "outputNames": [
+            "左侧竖屏"
+          ],
+          "bounds": {
+            "x": -1440,
+            "y": 0,
+            "width": 1440,
+            "height": 2560
+          },
+          "rotation": 90,
+          "dpiX": 144,
+          "dpiY": 144,
+          "primary": false
+        },
+        {
+          "displayId": "main",
+          "name": "显示屏 2",
+          "outputNames": [
+            "主显示屏"
+          ],
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 2560,
+            "height": 1440
+          },
+          "rotation": 0,
+          "dpiX": 96,
+          "dpiY": 96,
+          "primary": true
+        },
+        {
+          "displayId": "top",
+          "name": "显示屏 3",
+          "outputNames": [
+            "上方显示屏"
+          ],
+          "bounds": {
+            "x": 0,
+            "y": -1200,
+            "width": 1920,
+            "height": 1200
+          },
+          "rotation": 0,
+          "dpiX": 120,
+          "dpiY": 120,
+          "primary": false
+        }
+      ]
+    },
+    "displayIds": [
+      "portrait-left",
+      "main",
+      "top"
+    ],
+    "initialPointer": {
+      "x": 600,
+      "y": 500
+    }
+  }
+}

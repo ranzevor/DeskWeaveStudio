@@ -1,0 +1,35 @@
+{
+  "signed": {
+    "role": "release",
+    "formatVersion": "1.0",
+    "product": "DeskWeaveStudio",
+    "rootVersion": 1,
+    "channel": "stable",
+    "sequence": 9,
+    "version": "1.0.9",
+    "issuedAt": "2026-10-28T00:00:00Z",
+    "expiresAt": "2026-11-02T00:00:00Z",
+    "artifact": {
+      "platform": "windows-x64",
+      "url": "https://downloads.example.invalid/DeskWeaveStudio-1.0.9.exe",
+      "length": 41,
+      "sha256": "46f85ff9557a55d588866c19cd5bf3a96295105d2805362f64669f47b67b5101",
+      "publisher": "DeskWeaveStudio Synthetic Publisher",
+      "components": {
+        "studio": "1.0.9",
+        "engine": "1.0.9",
+        "agent": "1.0.9",
+        "bridge": "1.0.9"
+      },
+      "protocolVersion": "1.0",
+      "workspaceFormatMin": 1,
+      "workspaceFormatMax": 1
+    }
+  },
+  "signatures": [
+    {
+      "keyId": "e97bcbf2e3122adbc78a03702c5bd74c7edd40d6c53cd6a2d2391785509b6e69",
+      "signature": "Nqxm3JOQ0mDed7/3WzEmJnxwfUuAP1fuzJPbnBXHbF4z1MI9dCHtEa8OlnlPbO2fuRsbQOoh7lalg3iXVjkcCA=="
+    }
+  ]
+}

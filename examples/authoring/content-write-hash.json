@@ -1,0 +1,6 @@
+{
+  "uploadId": "upload-demo",
+  "offset": 0,
+  "chunk": "ewogICJkZWZpbml0aW9uIjogewogICAgImZvcm1hdFZlcnNpb24iOiAiMS4wIiwKICAgICJpZCI6ICJoZWxsbw==",
+  "chunkSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+}

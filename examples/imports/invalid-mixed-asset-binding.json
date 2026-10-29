@@ -1,0 +1,91 @@
+{
+  "importId": "mixed-import-demo",
+  "planId": null,
+  "sourceManifestHash": "ea91b2ccc01c4648198e06cb5149ebf5f4d54cd35bddff53de44a20e5656d25d",
+  "catalogVersion": 21,
+  "mappings": [
+    {
+      "sourceKey": "main",
+      "sourceKind": "workflow",
+      "sourceId": "parent",
+      "sourceVersion": "source-main-r1",
+      "sourceSha256": "43fbaf27104cd9839b61a3b5269d2bfc6f9c3f07254579f3858efe8e9f0e0622",
+      "targetKind": "workflow",
+      "targetId": "mixed-imported-main",
+      "targetVersion": "mixed-target-main-r1",
+      "targetSha256": "1eb56948b1c13a128aad8891dc15ecb79362a5dc3b6a8e36271b25e53642ab08",
+      "disposition": "created",
+      "displayName": "入口流程"
+    },
+    {
+      "sourceKey": "secondary",
+      "sourceKind": "workflow",
+      "sourceId": "secondary",
+      "sourceVersion": "source-secondary-r1",
+      "sourceSha256": "9a43392123b6e1323abcb12e850cf3511a56f8fdba7b7ebdac77947a17f9af06",
+      "targetKind": "workflow",
+      "targetId": "mixed-imported-secondary",
+      "targetVersion": "mixed-target-secondary-r1",
+      "targetSha256": "ad6981bd5102de16236a4660949aa30a437cedadcdbea825a9214cd8366a6918",
+      "disposition": "created",
+      "displayName": "辅助流程"
+    },
+    {
+      "sourceKey": "childOne",
+      "sourceKind": "workflow",
+      "sourceId": "child",
+      "sourceVersion": "source-childOne-r1",
+      "sourceSha256": "02461a45fffbdce39461fe7a5900d14eeecaaa611b2a029b1df1d8257d447a89",
+      "targetKind": "workflow",
+      "targetId": "mixed-imported-childOne",
+      "targetVersion": "mixed-target-childOne-r1",
+      "targetSha256": "49bd86851b43255ba11189f6cee9d093ab8e1e7a4e4f0fadb9377754acb31880",
+      "disposition": "created",
+      "displayName": "返回输入"
+    },
+    {
+      "sourceKey": "childTwo",
+      "sourceKind": "workflow",
+      "sourceId": "child",
+      "sourceVersion": "source-childTwo-r1",
+      "sourceSha256": "fb8cdacdb1704254a70335177d57f128ba9a59f70f6644ce27f873abd2b04415",
+      "targetKind": "workflow",
+      "targetId": "mixed-imported-childTwo",
+      "targetVersion": "mixed-target-childTwo-r1",
+      "targetSha256": "5fe25f59cdf688a01542960a2393e124a963402beddc42b711f0d26030de973e",
+      "disposition": "created",
+      "displayName": "子流程第二版"
+    },
+    {
+      "sourceKey": "imageOne",
+      "sourceKind": "image",
+      "sourceId": "source-button",
+      "sourceVersion": "image-source-v1",
+      "sourceSha256": "fbee9576fd1d1eaf3bc801912e502bddd83056ce81620639df09f5a6bfb9bb85",
+      "targetKind": "image",
+      "targetId": "imported-button",
+      "targetVersion": "asset-button-v1",
+      "targetSha256": "fbee9576fd1d1eaf3bc801912e502bddd83056ce81620639df09f5a6bfb9bb85",
+      "disposition": "created",
+      "displayName": "按钮样本"
+    },
+    {
+      "sourceKey": "trajectoryOne",
+      "sourceKind": "trajectory",
+      "sourceId": "source-shortcut",
+      "sourceVersion": "trajectory-source-v1",
+      "sourceSha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+      "targetKind": "trajectory",
+      "targetId": "existing-shortcut",
+      "targetVersion": "asset-shortcut-v3",
+      "targetSha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+      "disposition": "reused",
+      "displayName": "快捷键轨迹"
+    }
+  ],
+  "entryWorkflow": {
+    "workflowId": "mixed-imported-main",
+    "revision": "mixed-target-main-r1"
+  },
+  "completedAt": "2026-10-29T04:00:30Z"
+}

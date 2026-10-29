@@ -1,0 +1,39 @@
+{
+  "formatVersion": "1.0",
+  "name": "子流程演示包",
+  "entry": "parent",
+  "resources": [
+    {
+      "key": "parent",
+      "path": "workflows/parent.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 1445,
+      "sha256": "569c8f63d6b5186f28c4126b1018033d5596d23003efaa301148b40c54c8ea15"
+    },
+    {
+      "key": "child",
+      "path": "workflows/child.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 769,
+      "sha256": "02461a45fffbdce39461fe7a5900d14eeecaaa611b2a029b1df1d8257d447a89"
+    },
+    {
+      "key": "hello",
+      "path": "workflows/hello.json",
+      "kind": "workflow",
+      "mediaType": "application/json",
+      "bytes": 2159,
+      "sha256": "cb582e7f7213a664fc4e8645b45730a1698bc79f84b85ec459513d4423731c56"
+    },
+    {
+      "key": "shortcut",
+      "path": "trajectories/shortcut.json",
+      "kind": "trajectory",
+      "mediaType": "application/json",
+      "bytes": 386,
+      "sha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8"
+    }
+  ]
+}

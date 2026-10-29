@@ -1,0 +1,14 @@
+{
+  "transport": "stdio",
+  "host": "127.0.0.1",
+  "port": 43127,
+  "allowedHosts": [
+    "127.0.0.1:43127"
+  ],
+  "allowedOrigins": [],
+  "tls": {
+    "enabled": false,
+    "certificateGrant": null,
+    "privateKeyGrant": null
+  }
+}

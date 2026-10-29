@@ -1,0 +1,26 @@
+{
+  "formatVersion": "1.0",
+  "coordinateMode": "event",
+  "events": [
+    {
+      "kind": "key.down",
+      "key": "ctrl_l",
+      "atUs": 0
+    },
+    {
+      "kind": "key.down",
+      "key": "s",
+      "atUs": 1000
+    },
+    {
+      "kind": "key.up",
+      "key": "s",
+      "atUs": 2000
+    },
+    {
+      "kind": "key.up",
+      "key": "ctrl_l",
+      "atUs": 3000
+    }
+  ]
+}

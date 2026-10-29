@@ -1,0 +1,213 @@
+{
+  "key": "workspace",
+  "name": "工作空间与开始",
+  "prefix": "W",
+  "order": 1,
+  "req": [
+    "DW-001",
+    "DW-003"
+  ],
+  "screens": [
+    {
+      "code": "W01",
+      "id": "welcome",
+      "title": "首次启动",
+      "view": "welcome",
+      "variant": "empty",
+      "parent": null,
+      "purpose": "选择创建、打开或恢复工作空间。",
+      "primary": "create-workspace",
+      "primaryLabel": "新建工作空间",
+      "requirements": [
+        "DW-001",
+        "DW-003",
+        "DW-N01"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W02",
+      "id": "recent",
+      "title": "最近工作空间",
+      "view": "welcome",
+      "variant": "recent",
+      "parent": null,
+      "purpose": "继续最近制作，或切换独立工作空间。",
+      "primary": "workspace",
+      "primaryLabel": "打开工作空间",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W03",
+      "id": "create-workspace",
+      "title": "新建工作空间",
+      "view": "modal",
+      "variant": "form",
+      "parent": "recent",
+      "purpose": "填写名称、选择目录并建立工作空间。",
+      "primary": "workspace",
+      "primaryLabel": "创建工作空间",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W04",
+      "id": "native-folder",
+      "title": "目录选择",
+      "view": "native",
+      "variant": "folder",
+      "parent": "create-workspace",
+      "purpose": "选择新建、打开或导出使用的本地目录。",
+      "primary": "create-workspace",
+      "primaryLabel": "选择此文件夹",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W05",
+      "id": "workspace",
+      "title": "工作空间概览",
+      "view": "workspace",
+      "variant": "ready",
+      "parent": null,
+      "purpose": "搜索、排序并打开流程。",
+      "primary": "editor-graph",
+      "primaryLabel": "打开流程",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W06",
+      "id": "new-flow",
+      "title": "新建流程",
+      "view": "modal",
+      "variant": "form",
+      "parent": "workspace",
+      "purpose": "命名流程并选择空白或已有模板。",
+      "primary": "editor-graph",
+      "primaryLabel": "创建流程",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W07",
+      "id": "draft-recovery",
+      "title": "草稿恢复",
+      "view": "modal",
+      "variant": "recovery",
+      "parent": "workspace",
+      "purpose": "对照最近保存版本，恢复中断前的编辑。",
+      "primary": "editor-graph",
+      "primaryLabel": "恢复选中草稿",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W08",
+      "id": "format-incompatible",
+      "title": "格式兼容处理",
+      "view": "state",
+      "variant": "format",
+      "parent": "workspace",
+      "purpose": "保留原数据，选择只读查看或使用支持版本。",
+      "primary": "workspace-readonly",
+      "primaryLabel": "只读打开",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W09",
+      "id": "workspace-permission",
+      "title": "工作空间访问失败",
+      "view": "state",
+      "variant": "permission",
+      "parent": "recent",
+      "purpose": "确认实际目录和访问权限后重试。",
+      "primary": "native-folder",
+      "primaryLabel": "重新选择目录",
+      "requirements": [
+        "DW-001",
+        "DW-003"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "W10",
+      "id": "workspace-readonly",
+      "title": "只读工作空间",
+      "view": "workspace",
+      "variant": "readonly",
+      "parent": null,
+      "purpose": "在不支持写入的新格式中查看目录，关闭编辑与运行入口。",
+      "primary": "update-available",
+      "primaryLabel": "检查更新",
+      "requirements": [
+        "DW-001",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

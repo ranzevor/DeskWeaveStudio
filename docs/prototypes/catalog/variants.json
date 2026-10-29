@@ -1,0 +1,212 @@
+{
+  "key": "variants",
+  "name": "主题、容量与通用状态",
+  "prefix": "V",
+  "order": 9,
+  "req": [
+    "DW-016",
+    "DW-018",
+    "DW-N03",
+    "DW-N06"
+  ],
+  "screens": [
+    {
+      "code": "V01",
+      "id": "editor-dark",
+      "title": "暗色工作台",
+      "view": "editor",
+      "variant": "graph",
+      "parent": null,
+      "purpose": "在暗色主题中查看完整编辑与运行入口。",
+      "primary": "settings-general",
+      "primaryLabel": "打开外观设置",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "dark"
+    },
+    {
+      "code": "V02",
+      "id": "editor-narrow",
+      "title": "窄窗口步骤工作台",
+      "view": "editor",
+      "variant": "narrow",
+      "parent": null,
+      "purpose": "在 800×600 视口保留步骤和运行控制。",
+      "primary": "flow-parameters",
+      "primaryLabel": "打开参数抽屉",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "theme": "light"
+    },
+    {
+      "code": "V03",
+      "id": "assets-empty",
+      "title": "资产库空状态",
+      "view": "assets",
+      "variant": "empty",
+      "parent": null,
+      "purpose": "通过采集或导入建立第一份资产。",
+      "primary": "asset-import",
+      "primaryLabel": "导入资产",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "V04",
+      "id": "runs-empty",
+      "title": "运行列表空状态",
+      "view": "runlist",
+      "variant": "empty",
+      "parent": null,
+      "purpose": "选择流程版本并创建首次运行。",
+      "primary": "workspace",
+      "primaryLabel": "选择流程",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "V05",
+      "id": "search-empty",
+      "title": "搜索无结果",
+      "view": "workspace",
+      "variant": "search-empty",
+      "parent": null,
+      "purpose": "保留查询条件并允许清除筛选。",
+      "primary": "workspace",
+      "primaryLabel": "清除筛选",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "V06",
+      "id": "editor-loading",
+      "title": "流程加载状态",
+      "view": "editor",
+      "variant": "loading",
+      "parent": null,
+      "purpose": "维持工作空间上下文，显示可取消读取。",
+      "primary": "editor-graph",
+      "primaryLabel": "查看加载结果",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "V07",
+      "id": "storage-error",
+      "title": "保存空间不足",
+      "view": "modal",
+      "variant": "storage-error",
+      "parent": "editor-graph",
+      "purpose": "保留未保存草稿，选择导出或释放空间。",
+      "primary": "draft-export",
+      "primaryLabel": "导出当前草稿",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "V08",
+      "id": "settings-validation",
+      "title": "配置字段校验",
+      "view": "settings",
+      "variant": "validation",
+      "parent": null,
+      "purpose": "在原字段显示原因并保留输入。",
+      "primary": "connection-edit",
+      "primaryLabel": "修正连接配置",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "V09",
+      "id": "editor-focus",
+      "title": "键盘焦点与等价操作",
+      "view": "editor",
+      "variant": "focus",
+      "parent": null,
+      "purpose": "通过可见焦点、步骤列表和连接菜单完成编辑。",
+      "primary": "shortcuts-help",
+      "primaryLabel": "查看键盘操作",
+      "requirements": [
+        "DW-016",
+        "DW-018",
+        "DW-N03",
+        "DW-N06"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

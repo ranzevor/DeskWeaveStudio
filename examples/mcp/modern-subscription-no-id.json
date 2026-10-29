@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/subscriptions/acknowledged",
+  "params": {
+    "_meta": {},
+    "notifications": {
+      "toolsListChanged": true,
+      "resourceSubscriptions": [
+        "deskweave://workspace/workspace-demo/runs/run-example/snapshot"
+      ]
+    }
+  }
+}

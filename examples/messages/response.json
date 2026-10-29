@@ -1,0 +1,16 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "response",
+  "replyTo": "request-demo-1",
+  "ok": true,
+  "result": {
+    "valid": true,
+    "diagnosticCount": 0,
+    "diagnosticsQuery": {
+      "collectionId": "collection-messages-response-result-diagnostics",
+      "kind": "diagnostics",
+      "itemCount": 0,
+      "expiresAt": "2026-11-05T02:05:00Z"
+    }
+  }
+}

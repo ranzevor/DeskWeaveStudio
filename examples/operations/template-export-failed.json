@@ -1,0 +1,11 @@
+{
+  "operationId": "operation-template-export-demo",
+  "method": "template.export",
+  "state": "failed",
+  "result": null,
+  "error": {
+    "code": "STORAGE_UNAVAILABLE",
+    "message": "目标文件夹无法写入",
+    "retry": "afterQuery"
+  }
+}

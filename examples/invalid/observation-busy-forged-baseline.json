@@ -1,0 +1,25 @@
+{
+  "recordId": "record-busy-demo",
+  "sessionId": "observation-session-demo",
+  "operationId": "check-busy-demo",
+  "runId": null,
+  "state": "skipped",
+  "capturedAt": null,
+  "completedAt": "2026-10-29T02:00:00Z",
+  "frameId": null,
+  "screenshotResource": null,
+  "baselineRecordId": "record-other",
+  "connectionId": "local-vision",
+  "connectionVersion": 1,
+  "prompt": "读取报表月份和可下载状态。",
+  "output": null,
+  "durationMs": 0,
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0
+  },
+  "reason": "上一请求尚未结束",
+  "checkedAt": "2026-10-29T02:00:00Z",
+  "skipReason": "busy",
+  "difference": null
+}

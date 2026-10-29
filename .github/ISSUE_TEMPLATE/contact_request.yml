@@ -1,0 +1,23 @@
+name: 私密联系请求
+description: 就安全或协作问题建立私密沟通
+title: "[Contact] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        此表单公开可见，仅用于联系请求。漏洞细节、当事人身份、凭据、个人联系方式和敏感附件通过私密渠道提供。
+  - type: dropdown
+    id: purpose
+    attributes:
+      label: 联系事项
+      options:
+        - 安全报告联系
+        - 协作行为报告联系
+        - 其他项目联系
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 可公开的说明
+      description: 可留空；不要填写漏洞细节、当事人信息或个人联系方式。

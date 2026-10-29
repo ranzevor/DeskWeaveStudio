@@ -1,0 +1,41 @@
+{
+  "query": {
+    "editorId": "connection-editor",
+    "editVersion": 3,
+    "endpoint": "http://127.0.0.1:11434/v1",
+    "model": "vision-local",
+    "options": {
+      "provider": "openaiCompatible",
+      "systemPrompt": "读取用户指定的图像区域。",
+      "defaultPrompt": "描述当前状态。",
+      "temperature": 0,
+      "maxOutputTokens": 1024,
+      "imageEncoding": "imageUrl",
+      "imageDetail": "auto",
+      "imagePayloadTemplate": null,
+      "extraBody": {}
+    },
+    "credential": {
+      "mode": "none"
+    },
+    "timeoutMs": 5000
+  },
+  "configuration": {
+    "endpoint": "http://127.0.0.1:11434/v1",
+    "model": "vision-local",
+    "options": {
+      "provider": "openaiCompatible",
+      "systemPrompt": "读取用户指定的图像区域。",
+      "defaultPrompt": "描述当前状态。",
+      "temperature": 0,
+      "maxOutputTokens": 1024,
+      "imageEncoding": "imageUrl",
+      "imageDetail": "auto",
+      "imagePayloadTemplate": null,
+      "extraBody": {}
+    },
+    "credential": {
+      "mode": "none"
+    }
+  }
+}

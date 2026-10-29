@@ -1,0 +1,15 @@
+{
+  "operationId": "operation-workflow-export-demo",
+  "method": "workflow.export",
+  "state": "succeeded",
+  "result": {
+    "exportId": "workflow-export-demo",
+    "workflowId": "workflow-demo",
+    "revision": "revision-demo",
+    "manifestResource": "deskweave://exports/workflow-export-demo/manifest",
+    "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "objectCount": 4,
+    "totalBytes": 8192
+  },
+  "error": null
+}

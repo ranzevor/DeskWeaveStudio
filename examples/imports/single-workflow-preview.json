@@ -1,0 +1,15 @@
+[
+  {
+    "sourceKey": "input",
+    "sourceKind": "workflow",
+    "sourceId": "hello",
+    "sourceVersion": null,
+    "sourceSha256": "cb582e7f7213a664fc4e8645b45730a1698bc79f84b85ec459513d4423731c56",
+    "targetKind": "workflow",
+    "targetId": "single-imported-workflow",
+    "targetVersion": "single-workflow-r1",
+    "targetSha256": "fa8292bf57fdf06e5619af774d3679a9e0cdf462339eef3f55715f32a61f4a65",
+    "disposition": "created",
+    "displayName": "问候流程"
+  }
+]

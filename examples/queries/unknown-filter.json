@@ -1,0 +1,10 @@
+{
+  "collectionId": "collection-templateNames",
+  "kind": "templateNames",
+  "filter": {
+    "all": true
+  },
+  "order": "asc",
+  "cursor": null,
+  "pageSize": 2
+}

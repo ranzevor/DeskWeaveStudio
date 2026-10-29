@@ -1,0 +1,75 @@
+{
+  "os": "linux",
+  "arch": "arm64",
+  "backend": "linux-wayland-compositor",
+  "backendVersion": "1.0.0",
+  "generation": 4,
+  "topologyVersion": null,
+  "topologyCoverage": "unknown",
+  "trajectoryVersions": [
+    "1.0",
+    "1.1"
+  ],
+  "features": {
+    "capture.display": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "capture.window": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "record.pointerAbsolute": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "record.pointerRelative": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "record.keyboard": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "record.allDisplays": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "input.pointerAbsolute": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "input.pointerRelative": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "input.keyboard": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "input.unicodeText": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "control.globalShortcut": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    },
+    "control.focusTarget": {
+      "state": "unimplemented",
+      "reason": "CAPABILITY_NOT_IMPLEMENTED",
+      "nextAction": "updateComponent"
+    }
+  }
+}

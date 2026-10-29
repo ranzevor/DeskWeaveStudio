@@ -1,0 +1,12 @@
+{
+  "formatVersion": "1.0",
+  "coordinateMode": "relative",
+  "events": [
+    {
+      "kind": "pointer.delta",
+      "atUs": 0,
+      "dx": 0.5,
+      "dy": 0
+    }
+  ]
+}

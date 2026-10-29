@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%231d4ed8%22/%3E%3Ctext x=%228%22 y=%2224%22 font-family=%22sans-serif%22 font-size=%2224%22 fill=%22white%22%3ED%3C/text%3E%3C/svg%3E">
+<title>DeskWeaveStudio · 界面原型</title>
+<link rel="stylesheet" href="src/styles.css">
+<link rel="stylesheet" href="src/details.css">
+<link rel="stylesheet" href="src/run-settings.css">
+<link rel="stylesheet" href="src/system.css">
+<link rel="stylesheet" href="src/dialogs.css">
+<link rel="stylesheet" href="src/extra.css">
+<link rel="stylesheet" href="src/vision-extra.css">
+<link rel="stylesheet" href="src/premium.css">
+<link rel="stylesheet" href="src/premium-editor.css">
+<link rel="stylesheet" href="src/premium-vision.css">
+<link rel="stylesheet" href="src/completion.css">
+<link rel="stylesheet" href="src/authoring.css">
+<link rel="stylesheet" href="src/recording.css">
+<link rel="stylesheet" href="src/queries.css">
+<link rel="stylesheet" href="src/platforms.css">
+<link rel="stylesheet" href="src/scrollbars.css">
+</head>
+<body>
+<div id="review">
+  <aside class="review-nav">
+    <a class="review-brand" href="#editor-graph"><span class="brand-mark">D</span><span>DeskWeaveStudio<small>高保真界面 · 设计 0.1</small></span></a>
+    <label class="review-search"><span>搜索界面</span><input id="screen-search" type="search" placeholder="页面、弹窗或状态" aria-label="搜索界面"></label>
+    <div id="screen-count" class="review-count"></div>
+    <nav id="screen-nav" aria-label="原型界面目录"></nav>
+    <a class="review-doc" href="../design/prototypes.md">阅读原型设计说明 ↗</a>
+  </aside>
+  <main class="review-main">
+    <header class="review-header"><div><div id="screen-code" class="eyebrow"></div><h1 id="screen-title"></h1></div><div class="review-actions"><button id="previous" type="button" aria-label="上一个界面">←</button><button id="next" type="button" aria-label="下一个界面">→</button><a id="screen-image" target="_blank" rel="noopener">查看设计图 ↗</a><button id="focus-preview" type="button">专注预览</button></div></header>
+    <div class="review-work"><div class="review-preview"><div id="stage-wrap"><div id="stage"></div></div></div><aside id="screen-spec" class="review-spec"></aside></div>
+  </main>
+</div>
+<script src="src/data.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/views-core.js"></script>
+<script src="src/views-actions.js"></script>
+<script src="src/views-recording.js"></script>
+<script src="src/views-runs.js"></script>
+<script src="src/views-settings.js"></script>
+<script src="src/views-system.js"></script>
+<script src="src/dialogs.js"></script>
+<script src="src/views-config-extra.js"></script>
+<script src="src/views-vision-extra.js"></script>
+<script src="src/views-completion.js"></script>
+<script src="src/authoring-state.js"></script>
+<script src="src/views-authoring.js"></script>
+<script src="src/views-recording-desktop.js"></script>
+<script src="src/views-queries.js"></script>
+<script src="src/views-platforms.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>

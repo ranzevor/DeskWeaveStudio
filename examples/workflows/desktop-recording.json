@@ -1,0 +1,54 @@
+{
+  "formatVersion": "1.0",
+  "id": "desktop-recording",
+  "name": "跨屏桌面操作",
+  "entry": "play",
+  "parameters": {},
+  "variables": {},
+  "targets": {
+    "main": {
+      "kind": "desktop",
+      "required": true
+    }
+  },
+  "resources": {
+    "recorded": {
+      "kind": "trajectory"
+    }
+  },
+  "limits": {
+    "activeMs": 600000,
+    "steps": 10000,
+    "callDepth": 8,
+    "parallelCalls": 8,
+    "inputEvents": 100000
+  },
+  "nodes": [
+    {
+      "id": "play",
+      "title": "播放跨屏轨迹",
+      "action": "input.trajectory",
+      "params": {
+        "target": "main",
+        "trajectory": "recorded",
+        "displayMapping": {
+          "mode": "original"
+        }
+      },
+      "on": {
+        "next": "done"
+      }
+    },
+    {
+      "id": "done",
+      "title": "返回结果",
+      "action": "flow.return",
+      "params": {
+        "values": {
+          "completed": true
+        }
+      },
+      "on": {}
+    }
+  ]
+}

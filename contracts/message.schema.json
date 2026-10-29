@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:message:1",
+  "title": "本机消息信封 1.0",
+  "oneOf": [
+    {
+      "allOf": [
+        {
+          "$ref": "#/$defs/requestEnvelope"
+        },
+        {
+          "$ref": "urn:deskweave:service:1"
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "1.0"
+        },
+        "kind": {
+          "const": "response"
+        },
+        "replyTo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "ok": {
+          "const": true
+        },
+        "result": {
+          "$ref": "urn:deskweave:values:1#/$defs/raw"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "kind",
+        "replyTo",
+        "ok",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "1.0"
+        },
+        "kind": {
+          "const": "response"
+        },
+        "replyTo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "ok": {
+          "const": false
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "retry": {
+              "enum": [
+                "never",
+                "sameRequest",
+                "afterQuery"
+              ]
+            },
+            "details": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "urn:deskweave:values:1#/$defs/raw"
+              }
+            }
+          },
+          "required": [
+            "code",
+            "message",
+            "retry"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "kind",
+        "replyTo",
+        "ok",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "1.0"
+        },
+        "kind": {
+          "const": "event"
+        },
+        "streamId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "instanceEpoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "seq": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$"
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "urn:deskweave:values:1#/$defs/raw"
+          }
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "kind",
+        "streamId",
+        "instanceEpoch",
+        "seq",
+        "event",
+        "occurredAt",
+        "payload"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event": {
+                "const": "runtime.variables.changed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "urn:deskweave:inspection:1#/$defs/variablesChanged"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "requestEnvelope": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "1.0"
+        },
+        "kind": {
+          "const": "request"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "method": {
+          "type": "string",
+          "pattern": "^[a-z]+\\.[a-z]+(?:\\.[a-z]+)*$"
+        },
+        "deadlineMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400000
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "urn:deskweave:values:1#/$defs/raw"
+          }
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "kind",
+        "id",
+        "session",
+        "workspace",
+        "method",
+        "deadlineMs",
+        "params"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

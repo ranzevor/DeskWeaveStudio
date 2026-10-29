@@ -1,0 +1,13 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "event",
+  "streamId": "run-demo",
+  "instanceEpoch": "epoch-demo",
+  "seq": "1",
+  "event": "run.accepted",
+  "occurredAt": "2026-02-30T00:00:00Z",
+  "payload": {
+    "runId": "run-demo",
+    "state": "queued"
+  }
+}

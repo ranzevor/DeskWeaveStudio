@@ -1,0 +1,14 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "draft-discard-demo",
+  "session": "host-session-demo",
+  "workspace": "workspace-demo",
+  "method": "draft.discard",
+  "deadlineMs": 5000,
+  "params": {
+    "workflowId": "hello",
+    "editorId": "editor-demo",
+    "expectedEditVersion": 2
+  }
+}

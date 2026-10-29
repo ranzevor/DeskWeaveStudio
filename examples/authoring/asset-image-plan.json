@@ -1,0 +1,15 @@
+{
+  "editId": "edit-image-1",
+  "assetKind": "image",
+  "sourceSha256": "f19a16bcfae9039149a059239b55ae2da1eb1231c44c82437eadcace7d7ad823",
+  "sourceVersion": "3",
+  "sourceWidth": 64,
+  "sourceHeight": 32,
+  "sourceDurationUs": null,
+  "destination": {
+    "mode": "newVersion",
+    "assetId": "button-template",
+    "expectedCurrentVersion": "3"
+  },
+  "expiresAt": "2026-10-29T02:30:00Z"
+}

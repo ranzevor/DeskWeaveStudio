@@ -1,0 +1,19 @@
+{
+  "planId": "resume-between-demo",
+  "runId": "run-demo",
+  "controlVersion": 8,
+  "pauseId": "pause-between-demo",
+  "agentEpoch": "agent-live-demo",
+  "generation": 4,
+  "expiresAt": "2026-10-29T02:01:00Z",
+  "heldInputs": [
+    {
+      "kind": "key",
+      "key": "Control"
+    }
+  ],
+  "pointerToRestore": null,
+  "requiresConfirmation": true,
+  "planHash": "c0b8afd4a100e239c19dd857393614740bf375e24579213e625134cabb5ddc3f",
+  "restoreTargetToken": "target-not-authorized"
+}

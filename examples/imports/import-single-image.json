@@ -1,0 +1,23 @@
+{
+  "importId": "single-image-import",
+  "planId": "single-image-plan",
+  "sourceManifestHash": "fbee9576fd1d1eaf3bc801912e502bddd83056ce81620639df09f5a6bfb9bb85",
+  "catalogVersion": 31,
+  "mappings": [
+    {
+      "sourceKey": "input",
+      "sourceKind": "image",
+      "sourceId": null,
+      "sourceVersion": null,
+      "sourceSha256": "fbee9576fd1d1eaf3bc801912e502bddd83056ce81620639df09f5a6bfb9bb85",
+      "targetKind": "image",
+      "targetId": "single-image",
+      "targetVersion": "single-image-v1",
+      "targetSha256": "fbee9576fd1d1eaf3bc801912e502bddd83056ce81620639df09f5a6bfb9bb85",
+      "disposition": "created",
+      "displayName": "按钮样本"
+    }
+  ],
+  "entryWorkflow": null,
+  "completedAt": "2026-10-29T05:00:30Z"
+}

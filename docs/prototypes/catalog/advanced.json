@@ -1,0 +1,455 @@
+{
+  "key": "advanced",
+  "name": "模型高级配置与 MCP 管理",
+  "prefix": "C",
+  "order": 6.1,
+  "req": [
+    "DW-025",
+    "DW-028"
+  ],
+  "screens": [
+    {
+      "code": "C01",
+      "id": "connection-advanced",
+      "title": "模型高级配置",
+      "view": "config-extra",
+      "variant": "advanced",
+      "parent": null,
+      "purpose": "配置采样、预算、图像编码、提示和附加参数。",
+      "primary": "settings-connections",
+      "primaryLabel": "保存配置",
+      "requirements": [
+        "DW-025"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C02",
+      "id": "connection-template",
+      "title": "自定义图像消息",
+      "view": "config-extra",
+      "variant": "template",
+      "parent": null,
+      "purpose": "编辑图像消息片段并检查占位符。",
+      "primary": "connection-message-preview",
+      "primaryLabel": "校验并预览",
+      "requirements": [
+        "DW-025"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C03",
+      "id": "connection-template-error",
+      "title": "图像消息字段错误",
+      "view": "config-extra",
+      "variant": "template-error",
+      "parent": null,
+      "purpose": "保留模板并定位未知占位符错误。",
+      "primary": "connection-message-preview",
+      "primaryLabel": "校验并预览",
+      "requirements": [
+        "DW-025"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C04",
+      "id": "connection-message-preview",
+      "title": "模型消息预览",
+      "view": "config-extra",
+      "variant": "message-preview",
+      "parent": null,
+      "purpose": "使用合成图像查看构造后的 JSON 消息。",
+      "primary": "connection-message-preview",
+      "primaryLabel": "校验并预览",
+      "requirements": [
+        "DW-025"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C05",
+      "id": "connection-tested",
+      "title": "连接测试结果",
+      "view": "config-extra",
+      "variant": "connection-tested",
+      "parent": null,
+      "purpose": "分别查看配置、端点和模型可用性。",
+      "primary": "settings-connections",
+      "primaryLabel": "保存连接",
+      "requirements": [
+        "DW-025"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C06",
+      "id": "mcp-transport",
+      "title": "MCP 传输与监听配置",
+      "view": "config-extra",
+      "variant": "transport",
+      "parent": null,
+      "purpose": "选择传输、监听地址、端口和来源。",
+      "primary": "mcp-listener",
+      "primaryLabel": "校验并启用",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C07",
+      "id": "mcp-transport-error",
+      "title": "MCP 配置校验失败",
+      "view": "config-extra",
+      "variant": "transport-error",
+      "parent": null,
+      "purpose": "处理非回环监听缺少 TLS 的字段错误。",
+      "primary": "mcp-transport",
+      "primaryLabel": "修正监听配置",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C08",
+      "id": "mcp-tls",
+      "title": "MCP TLS 证书",
+      "view": "config-extra",
+      "variant": "tls",
+      "parent": null,
+      "purpose": "选择证书与私钥并检查有效性。",
+      "primary": "mcp-transport",
+      "primaryLabel": "应用证书",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C09",
+      "id": "mcp-listener",
+      "title": "MCP 监听与客户端",
+      "view": "config-extra",
+      "variant": "listener",
+      "parent": null,
+      "purpose": "查看监听入口、支持协议和客户端连接状态。",
+      "primary": "mcp-tokens",
+      "primaryLabel": "管理令牌",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C10",
+      "id": "mcp-listener-error",
+      "title": "MCP 监听启动失败",
+      "view": "config-extra",
+      "variant": "listener-error",
+      "parent": null,
+      "purpose": "处理端口占用并保留原监听配置。",
+      "primary": "mcp-transport",
+      "primaryLabel": "修改端口",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C11",
+      "id": "mcp-tokens",
+      "title": "MCP 客户端令牌",
+      "view": "config-extra",
+      "variant": "tokens",
+      "parent": null,
+      "purpose": "查看令牌状态、期限和关联目标。",
+      "primary": "mcp-token-create",
+      "primaryLabel": "创建令牌",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C12",
+      "id": "mcp-token-create",
+      "title": "创建客户端令牌",
+      "view": "config-extra",
+      "variant": "token-create",
+      "parent": null,
+      "purpose": "选择能力、目标与有效期。",
+      "primary": "mcp-token-created",
+      "primaryLabel": "创建令牌",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C13",
+      "id": "mcp-token-created",
+      "title": "令牌一次性查看",
+      "view": "config-extra",
+      "variant": "token-created",
+      "parent": null,
+      "purpose": "保存本次显示的明文并完成配置。",
+      "primary": "mcp-tokens",
+      "primaryLabel": "已保存，返回清单",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C14",
+      "id": "mcp-token-revoke",
+      "title": "撤销令牌与运行处置",
+      "view": "config-extra",
+      "variant": "token-revoke",
+      "parent": null,
+      "purpose": "检查受影响会话并选择关联运行的处置。",
+      "primary": "mcp-tokens",
+      "primaryLabel": "撤销令牌",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "C15",
+      "id": "mcp-tools",
+      "title": "MCP 工具目录",
+      "view": "config-extra",
+      "variant": "tools",
+      "parent": null,
+      "purpose": "按能力查看工具组与授权要求。",
+      "primary": "mcp-prompts",
+      "primaryLabel": "查看预设任务",
+      "requirements": [
+        "DW-013",
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C16",
+      "id": "mcp-resources",
+      "title": "MCP 资源目录与预览",
+      "view": "config-extra",
+      "variant": "resources",
+      "parent": null,
+      "purpose": "查看可读对象、媒体类型和分块预览。",
+      "primary": "observations-detail",
+      "primaryLabel": "预览观察记录",
+      "requirements": [
+        "DW-013",
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C17",
+      "id": "mcp-prompts",
+      "title": "MCP 预设任务预览",
+      "view": "config-extra",
+      "variant": "prompts",
+      "parent": null,
+      "purpose": "填写参数并预览返回消息。",
+      "primary": null,
+      "primaryLabel": "预览消息",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "更新本页预设任务消息预览"
+    },
+    {
+      "code": "C18",
+      "id": "mcp-config-read",
+      "title": "保存配置与实际监听",
+      "view": "completion",
+      "variant": "mcp-config-read",
+      "parent": null,
+      "purpose": "分别读取已保存及实际生效的网络配置和脱敏TLS状态。",
+      "primary": null,
+      "primaryLabel": "重新读取服务快照",
+      "primaryKind": "local",
+      "primaryResult": "保存版本、活动版本与需重启状态来自同次读取。",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C19",
+      "id": "mcp-token-query",
+      "title": "令牌范围与使用记录",
+      "view": "completion",
+      "variant": "mcp-token-query",
+      "parent": null,
+      "purpose": "按状态筛选并分页读取名称、权限、目标、期限和最近使用记录。",
+      "primary": null,
+      "primaryLabel": "下一页",
+      "primaryKind": "local",
+      "primaryResult": "读取同一查询中的后续令牌；清单不包含明文。",
+      "requirements": [
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C20",
+      "id": "mcp-query",
+      "title": "集合分页查询",
+      "view": "query",
+      "variant": "mcp-query",
+      "parent": "mcp-tools",
+      "purpose": "设置条件、排序和每页数量，逐页查询授权集合。",
+      "primary": null,
+      "primaryLabel": "查询",
+      "primaryKind": "local",
+      "primaryResult": "返回当前条件下的第一页。",
+      "requirements": [
+        "DW-013",
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C21",
+      "id": "mcp-query-expired",
+      "title": "集合查询已过期",
+      "view": "query",
+      "variant": "mcp-query-expired",
+      "parent": "mcp-tools",
+      "purpose": "保留条件，重新建立已过期的查询。",
+      "primary": null,
+      "primaryLabel": "重新查询",
+      "primaryKind": "local",
+      "primaryResult": "创建新快照并从第一页读取。",
+      "requirements": [
+        "DW-013",
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "C22",
+      "id": "mcp-query-error",
+      "title": "续页条件已变化",
+      "view": "query",
+      "variant": "mcp-query-error",
+      "parent": "mcp-tools",
+      "purpose": "保留新的排序条件，重新查询后继续。",
+      "primary": null,
+      "primaryLabel": "重新查询",
+      "primaryKind": "local",
+      "primaryResult": "新的查询与当前条件一致。",
+      "requirements": [
+        "DW-013",
+        "DW-028"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

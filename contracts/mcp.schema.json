@@ -1,0 +1,667 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:mcp:1",
+  "title": "DeskWeaveStudio MCP 接入配置 1.0",
+  "$defs": {
+    "serverConfig": {
+      "type": "object",
+      "properties": {
+        "transport": {
+          "enum": [
+            "stdio",
+            "streamableHttp",
+            "sse"
+          ],
+          "description": "stdio 与 streamableHttp 提供主协议和旧版兼容；sse 仅为显式启用的旧 HTTP+SSE 兼容入口。"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "allowedHosts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253
+          },
+          "uniqueItems": true
+        },
+        "allowedOrigins": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "uniqueItems": true
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "certificateGrant": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "privateKeyGrant": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "enabled",
+            "certificateGrant",
+            "privateKeyGrant"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "transport",
+        "host",
+        "port",
+        "allowedHosts",
+        "allowedOrigins",
+        "tls"
+      ],
+      "additionalProperties": false
+    },
+    "tokenGrant": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "permissions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 14,
+          "items": {
+            "enum": [
+              "workflow.read",
+              "workflow.write",
+              "run.read",
+              "run.execute",
+              "run.control",
+              "capture.read",
+              "vision.local",
+              "vision.remote",
+              "asset.read",
+              "asset.write",
+              "observation.read",
+              "observation.control",
+              "desktop.input",
+              "desktop.stop"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "uniqueItems": true
+        },
+        "expiresInSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 2592000
+        }
+      },
+      "required": [
+        "name",
+        "permissions",
+        "targets",
+        "expiresInSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "promptArguments": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "issue": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "targetName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "elementTypes": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "requestMetadata": {
+      "type": "object",
+      "properties": {
+        "deskweave/requestId": {
+          "$ref": "urn:deskweave:message:1#/$defs/requestEnvelope/properties/id"
+        }
+      },
+      "additionalProperties": true
+    },
+    "implementation": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "websiteUrl": {
+          "type": "string"
+        },
+        "icons": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": true
+    },
+    "modernRequestMetadata": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/requestMetadata"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "io.modelcontextprotocol/protocolVersion": {
+              "const": "2026-07-28"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "type": "object"
+            },
+            "io.modelcontextprotocol/clientInfo": {
+              "$ref": "#/$defs/implementation"
+            }
+          },
+          "required": [
+            "io.modelcontextprotocol/protocolVersion",
+            "io.modelcontextprotocol/clientCapabilities"
+          ]
+        }
+      ]
+    },
+    "rpcId": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "modernRequest": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/$defs/rpcId"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "_meta": {
+              "$ref": "#/$defs/modernRequestMetadata"
+            }
+          },
+          "required": [
+            "_meta"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": true
+    },
+    "modernToolCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/modernRequest"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "tools/call"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "_meta": {
+                  "$ref": "#/$defs/modernRequestMetadata"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "arguments": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "_meta",
+                "name"
+              ],
+              "additionalProperties": true
+            }
+          }
+        }
+      ]
+    },
+    "notificationFilter": {
+      "type": "object",
+      "properties": {
+        "toolsListChanged": {
+          "type": "boolean"
+        },
+        "promptsListChanged": {
+          "type": "boolean"
+        },
+        "resourcesListChanged": {
+          "type": "boolean"
+        },
+        "resourceSubscriptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maxItems": 32,
+          "uniqueItems": true
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "listenRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/modernRequest"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "subscriptions/listen"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "_meta": {
+                  "$ref": "#/$defs/modernRequestMetadata"
+                },
+                "notifications": {
+                  "$ref": "#/$defs/notificationFilter"
+                }
+              },
+              "required": [
+                "_meta",
+                "notifications"
+              ],
+              "additionalProperties": true
+            }
+          }
+        }
+      ]
+    },
+    "cacheFields": {
+      "type": "object",
+      "properties": {
+        "ttlMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cacheScope": {
+          "enum": [
+            "public",
+            "private"
+          ]
+        }
+      },
+      "required": [
+        "ttlMs",
+        "cacheScope"
+      ],
+      "additionalProperties": true
+    },
+    "discoverResult": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/cacheFields"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "resultType": {
+              "const": "complete"
+            },
+            "supportedVersions": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "2026-07-28",
+                  "2025-11-25"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "capabilities": {
+              "type": "object"
+            },
+            "_meta": {
+              "type": "object",
+              "properties": {
+                "io.modelcontextprotocol/serverInfo": {
+                  "$ref": "#/$defs/implementation"
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            "instructions": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "resultType",
+            "supportedVersions",
+            "capabilities"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    },
+    "modernToolsPage": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/cacheFields"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "resultType": {
+              "const": "complete"
+            },
+            "tools": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "object"
+              }
+            },
+            "nextCursor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "resultType",
+            "tools"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    },
+    "subscriptionMeta": {
+      "type": "object",
+      "properties": {
+        "io.modelcontextprotocol/subscriptionId": {
+          "$ref": "#/$defs/rpcId"
+        }
+      },
+      "required": [
+        "io.modelcontextprotocol/subscriptionId"
+      ],
+      "additionalProperties": true
+    },
+    "subscriptionAcknowledged": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "notifications/subscriptions/acknowledged"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "_meta": {
+              "$ref": "#/$defs/subscriptionMeta"
+            },
+            "notifications": {
+              "$ref": "#/$defs/notificationFilter"
+            }
+          },
+          "required": [
+            "_meta",
+            "notifications"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "subscriptionUpdated": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "notifications/resources/updated"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "_meta": {
+              "$ref": "#/$defs/subscriptionMeta"
+            },
+            "uri": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "_meta",
+            "uri"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "subscriptionComplete": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/$defs/rpcId"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "resultType": {
+              "const": "complete"
+            },
+            "_meta": {
+              "$ref": "#/$defs/subscriptionMeta"
+            }
+          },
+          "required": [
+            "resultType",
+            "_meta"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "legacyInitialize": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/$defs/rpcId"
+        },
+        "method": {
+          "const": "initialize"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "protocolVersion": {
+              "const": "2025-11-25"
+            },
+            "clientInfo": {
+              "$ref": "#/$defs/implementation"
+            },
+            "capabilities": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "protocolVersion",
+            "clientInfo",
+            "capabilities"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "cancelNotification": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "notifications/cancelled"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "$ref": "#/$defs/rpcId"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "requestId"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

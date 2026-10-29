@@ -1,0 +1,567 @@
+{
+  "key": "recording",
+  "name": "录制、截图与定位",
+  "prefix": "R",
+  "order": 3,
+  "req": [
+    "DW-004",
+    "DW-005",
+    "DW-014"
+  ],
+  "screens": [
+    {
+      "code": "R01",
+      "id": "record-config",
+      "title": "录制准备",
+      "view": "recording",
+      "variant": "config",
+      "parent": "editor-graph",
+      "purpose": "选择全部显示屏、单屏或窗口，核对物理布局并开始连续录制。",
+      "primary": "record-active",
+      "primaryLabel": "开始录制",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R02",
+      "id": "record-active",
+      "title": "录制浮条",
+      "view": "record",
+      "variant": "active",
+      "parent": null,
+      "purpose": "查看时长与事件数，暂停或结束录制。",
+      "primary": "record-paused",
+      "primaryLabel": "暂停",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R03",
+      "id": "record-paused",
+      "title": "录制暂停",
+      "view": "record",
+      "variant": "paused",
+      "parent": null,
+      "purpose": "保持目标信息，选择继续或结束。",
+      "primary": "record-active",
+      "primaryLabel": "继续录制",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R04",
+      "id": "trajectory-editor",
+      "title": "录制时间轴",
+      "view": "trajectory",
+      "variant": "ready",
+      "parent": null,
+      "purpose": "裁剪与查看完整事件，调整按键区间。",
+      "primary": "editor-graph",
+      "primaryLabel": "保存轨迹",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R05",
+      "id": "trajectory-repair",
+      "title": "录制分段修复",
+      "view": "trajectory",
+      "variant": "repair",
+      "parent": null,
+      "purpose": "核对中断分段与按下配对，保存可修复草稿。",
+      "primary": "trajectory-editor",
+      "primaryLabel": "应用配对调整",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R06",
+      "id": "capture-overlay",
+      "title": "截图区域覆盖层",
+      "view": "capture",
+      "variant": "selecting",
+      "parent": null,
+      "purpose": "框选目标图像中的区域并确认尺寸。",
+      "primary": "template-editor",
+      "primaryLabel": "完成选区",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R07",
+      "id": "template-editor",
+      "title": "模板制作",
+      "view": "template",
+      "variant": "edit",
+      "parent": null,
+      "purpose": "查看来源图像、裁剪边界与模板名称。",
+      "primary": "asset-image",
+      "primaryLabel": "保存模板",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R08",
+      "id": "match-test",
+      "title": "模板匹配测试",
+      "view": "match",
+      "variant": "found",
+      "parent": null,
+      "purpose": "查看候选、算法分数、尺度与定位结果。",
+      "primary": "node-properties",
+      "primaryLabel": "使用此定位",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014",
+        "DW-N01"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R09",
+      "id": "match-ambiguous",
+      "title": "多个候选",
+      "view": "match",
+      "variant": "ambiguous",
+      "parent": null,
+      "purpose": "比较候选位置，调整选择策略或模板。",
+      "primary": "template-editor",
+      "primaryLabel": "调整模板",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R10",
+      "id": "match-none",
+      "title": "未找到目标",
+      "view": "match",
+      "variant": "none",
+      "parent": null,
+      "purpose": "定位具体条件，调整区域或重新采集。",
+      "primary": "capture-overlay",
+      "primaryLabel": "重新采集",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R11",
+      "id": "observation",
+      "title": "单次观察",
+      "view": "observe",
+      "variant": "ready",
+      "parent": null,
+      "purpose": "明确目标区域、连接和输出格式后观察。",
+      "primary": "observation-running",
+      "primaryLabel": "开始观察",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R12",
+      "id": "observation-error",
+      "title": "单次观察超时",
+      "view": "observe",
+      "variant": "error",
+      "parent": null,
+      "purpose": "查看独立单次请求的超时结果，重新发起或返回观察中心。",
+      "primary": "observation",
+      "primaryLabel": "重新观察",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R13",
+      "id": "match-config",
+      "title": "匹配范围与尺度",
+      "view": "execution-extra",
+      "variant": "match-config",
+      "parent": null,
+      "purpose": "配置目标内矩形和模板尺度并测试。",
+      "primary": "match-test",
+      "primaryLabel": "测试匹配",
+      "requirements": [
+        "DW-005"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "R14",
+      "id": "match-config-error",
+      "title": "匹配配置错误",
+      "view": "execution-extra",
+      "variant": "match-invalid",
+      "parent": null,
+      "purpose": "定位重复尺度并保留未应用设置。",
+      "primary": "match-test",
+      "primaryLabel": "测试匹配",
+      "requirements": [
+        "DW-005"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "validate"
+    },
+    {
+      "code": "R15",
+      "id": "observation-running",
+      "title": "单次观察进行中",
+      "view": "observe",
+      "variant": "progress",
+      "parent": "observation",
+      "purpose": "跟踪一次独立观察请求，可取消本次请求。",
+      "primary": "observation-cancelled",
+      "primaryLabel": "取消本次观察",
+      "completion": "observation-succeeded",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R16",
+      "id": "observation-succeeded",
+      "title": "单次观察完成",
+      "view": "observe",
+      "variant": "succeeded",
+      "parent": "observation",
+      "purpose": "查看独立观察结果、实际截图与记录时间，并导出本条记录。",
+      "primary": "observations-export",
+      "primaryLabel": "导出本条记录",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R17",
+      "id": "observation-cancelled",
+      "title": "单次观察已取消",
+      "view": "observe",
+      "variant": "cancelled",
+      "parent": "observation",
+      "purpose": "查看独立请求的取消结果，持续观察会话不受影响。",
+      "primary": "observation",
+      "primaryLabel": "重新观察",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-014"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R18",
+      "id": "trajectory-trim",
+      "title": "精确轨迹裁剪",
+      "view": "completion",
+      "variant": "trajectory-trim",
+      "parent": null,
+      "purpose": "选择左闭右开时间范围，核对源时间与归零后的事件时间。",
+      "primary": null,
+      "primaryLabel": "生成预览",
+      "primaryKind": "local",
+      "primaryResult": "生成未发送输入的完整轨迹预览。",
+      "requirements": [
+        "DW-004",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R19",
+      "id": "trajectory-repair-many",
+      "title": "多个配对问题修复",
+      "view": "completion",
+      "variant": "trajectory-repair-many",
+      "parent": null,
+      "purpose": "逐项或批量选择补配对或移除区间，预览后一次应用并可撤销。",
+      "primary": null,
+      "primaryLabel": "应用裁剪",
+      "primaryKind": "local",
+      "primaryResult": "全部问题解决后写入一份合法 Trajectory。",
+      "requirements": [
+        "DW-004",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R20",
+      "id": "capture-keyboard",
+      "title": "键盘与数值截图选区",
+      "view": "completion",
+      "variant": "capture-keyboard",
+      "parent": null,
+      "purpose": "使用方向键、尺寸快捷键或数值表单调整同一个目标帧矩形。",
+      "primary": null,
+      "primaryLabel": "确认选区",
+      "primaryKind": "local",
+      "primaryResult": "输出当前帧内 targetPixels 矩形。",
+      "requirements": [
+        "DW-005",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R21",
+      "id": "capture-boundary",
+      "title": "截图选区越界",
+      "view": "completion",
+      "variant": "capture-boundary",
+      "parent": null,
+      "purpose": "保留错误数值和最后有效矩形，修正边界后确认。",
+      "primary": null,
+      "primaryLabel": "更新选区",
+      "primaryKind": "local",
+      "primaryResult": "合法整数矩形更新预览。",
+      "requirements": [
+        "DW-005",
+        "DW-016"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R22",
+      "id": "record-displays",
+      "title": "录制显示屏布局",
+      "view": "recording",
+      "variant": "layout",
+      "parent": null,
+      "purpose": "查看实际排列、负坐标、方向与混合缩放并选择录制范围。",
+      "primary": "record-config",
+      "primaryLabel": "使用当前范围",
+      "requirements": [
+        "DW-004",
+        "DW-016",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R23",
+      "id": "record-topology-changed",
+      "title": "录制显示布局已变化",
+      "view": "recording",
+      "variant": "topology-changed",
+      "parent": null,
+      "purpose": "显示器断开后结束旧录制，保存分段或按当前屏幕新建录制。",
+      "primary": "trajectory-editor",
+      "primaryLabel": "保存已录分段",
+      "requirements": [
+        "DW-004",
+        "DW-016",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R24",
+      "id": "record-unavailable",
+      "title": "录制显示屏不可用",
+      "view": "recording",
+      "variant": "unavailable",
+      "parent": null,
+      "purpose": "刷新不可用的显示列表，恢复后选择录制范围。",
+      "primary": "record-config",
+      "primaryLabel": "刷新显示屏",
+      "requirements": [
+        "DW-004",
+        "DW-016",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R25",
+      "id": "trajectory-displays",
+      "title": "轨迹回放显示屏映射",
+      "view": "recording",
+      "variant": "mapping",
+      "parent": null,
+      "purpose": "核对来源与当前屏幕，使用原布局或逐屏平移映射。",
+      "primary": null,
+      "primaryLabel": "应用显示屏映射",
+      "requirements": [
+        "DW-004",
+        "DW-016",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "完整有效的显示屏映射写入轨迹动作。"
+    },
+    {
+      "code": "R26",
+      "id": "trajectory-displays-invalid",
+      "title": "轨迹显示屏映射不完整",
+      "view": "recording",
+      "variant": "mapping-invalid",
+      "parent": null,
+      "purpose": "补齐缺失屏幕映射；未匹配或越界时禁止应用。",
+      "primary": null,
+      "primaryLabel": "应用显示屏映射",
+      "requirements": [
+        "DW-004",
+        "DW-016",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "primaryKind": "local",
+      "primaryResult": "完整有效的显示屏映射写入轨迹动作。"
+    }
+  ]
+}

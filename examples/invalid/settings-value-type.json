@@ -1,0 +1,22 @@
+{
+  "scope": "user",
+  "expectedVersion": 4,
+  "expectedBaseVersion": null,
+  "updates": [
+    {
+      "op": "set",
+      "key": "ui.theme",
+      "value": 12
+    },
+    {
+      "op": "set",
+      "key": "runtime.interruptPolicy",
+      "value": "ignore"
+    },
+    {
+      "op": "set",
+      "key": "agent.previewHz",
+      "value": 10
+    }
+  ]
+}

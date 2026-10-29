@@ -1,0 +1,35 @@
+{
+  "collectionId": "collection-templateNames",
+  "kind": "templateNames",
+  "querySnapshot": {
+    "snapshotId": "query-templateNames",
+    "snapshotAt": "2026-11-05T02:00:00Z",
+    "expiresAt": "2026-11-05T02:05:00Z",
+    "sourceVersion": "1"
+  },
+  "items": [
+    {
+      "index": 0,
+      "value": {
+        "candidateId": "candidate-save",
+        "name": "保存按钮",
+        "source": "ocr",
+        "reason": "名称已被另一资产使用",
+        "conflict": true
+      }
+    },
+    {
+      "index": 1,
+      "value": {
+        "candidateId": "candidate-status",
+        "name": "状态标签_002",
+        "source": "rule",
+        "reason": "OCR 未返回文字",
+        "conflict": false
+      }
+    }
+  ],
+  "matchedCount": 8,
+  "nextCursor": "cursor-next",
+  "countState": "exact"
+}

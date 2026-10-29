@@ -1,0 +1,12 @@
+{
+  "name": "流程客户端",
+  "permissions": [
+    "workflow.read",
+    "run.execute",
+    "run.read"
+  ],
+  "targets": [
+    "demo-target"
+  ],
+  "expiresInSeconds": 3600
+}

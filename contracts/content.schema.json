@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:content:1",
+  "title": "DeskWeaveStudio 内容传输 1.0",
+  "$defs": {
+    "contentRef": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "resource"
+        },
+        "resourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 33554432
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "resourceId",
+        "length",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "workflowModel": {
+      "type": "object",
+      "properties": {
+        "definition": {
+          "$ref": "urn:deskweave:workflow:1"
+        },
+        "dependencies": {
+          "$ref": "urn:deskweave:service:1#/$defs/workflow.save/properties/params/properties/dependencies"
+        }
+      },
+      "required": [
+        "definition",
+        "dependencies"
+      ],
+      "additionalProperties": false
+    },
+    "beginParams": {
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "enum": [
+            "workflowModel",
+            "trajectoryEdit"
+          ]
+        },
+        "mediaType": {
+          "const": "application/json"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 33554432
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "purpose",
+        "mediaType",
+        "length",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "upload": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "nextOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
+        },
+        "maxChunkBytes": {
+          "const": 196608
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uploadId",
+        "nextOffset",
+        "maxChunkBytes",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "writeParams": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
+        },
+        "chunk": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 262144,
+          "contentEncoding": "base64"
+        },
+        "chunkSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "uploadId",
+        "offset",
+        "chunk",
+        "chunkSha256"
+      ],
+      "additionalProperties": false
+    },
+    "writeResult": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "nextOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "uploadId",
+        "nextOffset",
+        "replayed"
+      ],
+      "additionalProperties": false
+    },
+    "sealParams": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "uploadId"
+      ],
+      "additionalProperties": false
+    },
+    "sealResult": {
+      "type": "object",
+      "properties": {
+        "reference": {
+          "$ref": "urn:deskweave:content:1#/$defs/contentRef"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "reference",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "discardParams": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "uploadId"
+      ],
+      "additionalProperties": false
+    },
+    "discardResult": {
+      "type": "object",
+      "properties": {
+        "discarded": {
+          "const": true
+        }
+      },
+      "required": [
+        "discarded"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/contentRef"
+}

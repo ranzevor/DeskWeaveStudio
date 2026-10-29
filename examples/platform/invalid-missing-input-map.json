@@ -1,0 +1,13 @@
+{
+  "mode": "displayLocal",
+  "displays": [
+    {
+      "sourceDisplayId": "main",
+      "targetDisplayId": "linux-main"
+    },
+    {
+      "sourceDisplayId": "left",
+      "targetDisplayId": "linux-left"
+    }
+  ]
+}

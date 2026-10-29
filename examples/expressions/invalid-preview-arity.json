@@ -1,0 +1,11 @@
+{
+  "value": {
+    "$expr": {
+      "op": "not",
+      "args": [
+        true,
+        false
+      ]
+    }
+  }
+}

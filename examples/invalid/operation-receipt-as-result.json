@@ -1,0 +1,11 @@
+{
+  "operationId": "operation-workflow-export-demo",
+  "method": "workflow.export",
+  "state": "succeeded",
+  "result": {
+    "accepted": true,
+    "operationId": "operation-demo",
+    "state": "queued"
+  },
+  "error": null
+}

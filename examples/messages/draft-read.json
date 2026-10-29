@@ -1,0 +1,15 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "request",
+  "id": "draft-discover-demo",
+  "session": "host-session-demo",
+  "workspace": "workspace-demo",
+  "method": "draft.read",
+  "deadlineMs": 5000,
+  "params": {
+    "workflowId": "hello",
+    "editorId": null,
+    "cursor": null,
+    "pageSize": 20
+  }
+}

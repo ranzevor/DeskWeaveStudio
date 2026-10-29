@@ -1,0 +1,13 @@
+{
+  "inputKind": "trajectory",
+  "sourceFile": "imports/single-source/shortcut.json",
+  "targetFiles": {
+    "input": "imports/single-target/shortcut.json"
+  },
+  "targetBindings": {
+    "input": {}
+  },
+  "mappingFile": "imports/single-trajectory-preview.json",
+  "currentCatalogVersion": 31,
+  "now": "2026-10-29T05:00:20Z"
+}

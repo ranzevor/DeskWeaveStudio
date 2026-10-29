@@ -1,0 +1,20 @@
+{
+  "resultType": "complete",
+  "supportedVersions": [
+    "2026-07-28",
+    "2025-11-25"
+  ],
+  "capabilities": {
+    "tools": {},
+    "resources": {},
+    "prompts": {}
+  },
+  "_meta": {
+    "io.modelcontextprotocol/serverInfo": {
+      "name": "DeskWeaveStudio",
+      "version": "0.1.0"
+    }
+  },
+  "ttlMs": 0,
+  "cacheScope": "private"
+}

@@ -1,0 +1,10 @@
+{
+  "collectionId": "collection-templateNames",
+  "kind": "runFrames",
+  "filter": {
+    "minimumScore": 0.5
+  },
+  "order": "asc",
+  "cursor": null,
+  "pageSize": 2
+}

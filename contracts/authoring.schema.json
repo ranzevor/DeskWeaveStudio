@@ -1,0 +1,576 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:authoring:1",
+  "title": "DeskWeaveStudio 编辑提交 1.0",
+  "$defs": {
+    "draftTestParams": {
+      "type": "object",
+      "properties": {
+        "editorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "editVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "options": {
+          "$ref": "urn:deskweave:vision:1#/$defs/connectionOptions"
+        },
+        "credential": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "const": "none"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "const": "saved"
+                },
+                "connectionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "mode",
+                "connectionId",
+                "version"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "const": "ephemeral"
+                },
+                "secretGrant": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "mode",
+                "secretGrant"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 30000
+        }
+      },
+      "required": [
+        "editorId",
+        "editVersion",
+        "endpoint",
+        "model",
+        "options",
+        "credential"
+      ],
+      "additionalProperties": false
+    },
+    "draftTestResult": {
+      "type": "object",
+      "properties": {
+        "editorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "editVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "configurationHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "configurationValid": {
+          "type": "boolean"
+        },
+        "reachable": {
+          "type": "boolean"
+        },
+        "modelAvailable": {
+          "type": "boolean"
+        },
+        "reason": {
+          "oneOf": [
+            {
+              "enum": [
+                "configurationInvalid",
+                "networkFailed",
+                "authenticationFailed",
+                "modelNotFound",
+                "messageIncompatible",
+                "timeout",
+                "cancelled"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "editorId",
+        "editVersion",
+        "configurationHash",
+        "configurationValid",
+        "reachable",
+        "modelAvailable",
+        "reason",
+        "checkedAt"
+      ],
+      "additionalProperties": false
+    },
+    "editSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "asset"
+            },
+            "assetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "assetVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "kind",
+            "assetId",
+            "assetVersion"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "frame"
+            },
+            "frameId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "kind",
+            "frameId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "editDestination": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "create"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "mode",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "newVersion"
+            },
+            "assetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "expectedCurrentVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "mode",
+            "assetId",
+            "expectedCurrentVersion"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "editPrepareParams": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editSource"
+        },
+        "destination": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editDestination"
+        }
+      },
+      "required": [
+        "source",
+        "destination"
+      ],
+      "additionalProperties": false
+    },
+    "editPlan": {
+      "type": "object",
+      "properties": {
+        "editId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "assetKind": {
+          "enum": [
+            "image",
+            "trajectory"
+          ]
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceVersion": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceWidth": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceHeight": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceDurationUs": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 86400000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "destination": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editDestination"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "editId",
+        "assetKind",
+        "sourceSha256",
+        "sourceVersion",
+        "sourceWidth",
+        "sourceHeight",
+        "sourceDurationUs",
+        "destination",
+        "expiresAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "assetKind": {
+                "const": "image"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sourceWidth": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65536
+              },
+              "sourceHeight": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65536
+              },
+              "sourceDurationUs": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "sourceWidth": {
+                "type": "null"
+              },
+              "sourceHeight": {
+                "type": "null"
+              },
+              "sourceDurationUs": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 86400000000
+              }
+            }
+          }
+        }
+      ]
+    },
+    "editContent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "imageCrop"
+            },
+            "roi": {
+              "$ref": "urn:deskweave:vision:1#/$defs/roi"
+            }
+          },
+          "required": [
+            "kind",
+            "roi"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "trajectory"
+            },
+            "contentRef": {
+              "$ref": "urn:deskweave:content:1#/$defs/contentRef"
+            },
+            "durationUs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 86400000000
+            }
+          },
+          "required": [
+            "kind",
+            "contentRef",
+            "durationUs"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "editCommitParams": {
+      "type": "object",
+      "properties": {
+        "editId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedSourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "content": {
+          "$ref": "urn:deskweave:authoring:1#/$defs/editContent"
+        }
+      },
+      "required": [
+        "editId",
+        "expectedSourceSha256",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "editResult": {
+      "type": "object",
+      "properties": {
+        "editId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "assetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "assetVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "previousVersion": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "trajectory"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 33554432
+        },
+        "createdNewVersion": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "editId",
+        "assetId",
+        "assetVersion",
+        "previousVersion",
+        "kind",
+        "name",
+        "sourceSha256",
+        "sha256",
+        "length",
+        "createdNewVersion"
+      ],
+      "additionalProperties": false
+    },
+    "editDiscardParams": {
+      "type": "object",
+      "properties": {
+        "editId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "editId"
+      ],
+      "additionalProperties": false
+    },
+    "editDiscardResult": {
+      "type": "object",
+      "properties": {
+        "editId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "discarded": {
+          "const": true
+        }
+      },
+      "required": [
+        "editId",
+        "discarded"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/editPlan"
+}

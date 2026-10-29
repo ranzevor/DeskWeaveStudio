@@ -1,0 +1,150 @@
+{
+  "diagnostics": [
+    {
+      "code": "INPUT_REQUIRED",
+      "message": "请选择本次运行的月份。",
+      "nodeId": null
+    },
+    {
+      "code": "MISSING_RESOURCE",
+      "message": "下载按钮模板版本不存在。",
+      "nodeId": "locate"
+    }
+  ],
+  "runRequirements": [
+    {
+      "name": "月份",
+      "kind": "input",
+      "satisfied": false
+    },
+    {
+      "name": "报表中心",
+      "kind": "target",
+      "satisfied": true
+    }
+  ],
+  "runFrames": [
+    {
+      "frameId": "frame-main",
+      "parentId": null,
+      "revision": "parent-r1",
+      "state": "paused",
+      "nodeId": "call"
+    }
+  ],
+  "runEffects": [
+    {
+      "segmentId": "segment-drag-demo",
+      "state": "in_flight"
+    }
+  ],
+  "templateNames": [
+    {
+      "candidateId": "candidate-save",
+      "name": "保存按钮",
+      "source": "ocr",
+      "reason": "名称已被另一资产使用",
+      "conflict": true
+    },
+    {
+      "candidateId": "candidate-status",
+      "name": "状态标签_002",
+      "source": "rule",
+      "reason": "OCR 未返回文字",
+      "conflict": false
+    },
+    {
+      "candidateId": "candidate-2",
+      "name": "筛选按钮",
+      "source": "manual",
+      "reason": null,
+      "conflict": false
+    },
+    {
+      "candidateId": "candidate-3",
+      "name": "归档入口",
+      "source": "manual",
+      "reason": null,
+      "conflict": true
+    },
+    {
+      "candidateId": "candidate-4",
+      "name": "预览按钮",
+      "source": "manual",
+      "reason": null,
+      "conflict": false
+    },
+    {
+      "candidateId": "candidate-5",
+      "name": "下载提示",
+      "source": "manual",
+      "reason": null,
+      "conflict": false
+    },
+    {
+      "candidateId": "candidate-6",
+      "name": "返回按钮",
+      "source": "manual",
+      "reason": null,
+      "conflict": true
+    }
+  ],
+  "templateAssets": [
+    {
+      "candidateId": "candidate-save",
+      "assetId": "save-button-demo",
+      "assetVersion": "save-button-version-demo",
+      "name": "保存按钮"
+    }
+  ],
+  "matchCandidates": [
+    {
+      "box": {
+        "space": "targetPixels",
+        "x": 1040,
+        "y": 172,
+        "width": 126,
+        "height": 40
+      },
+      "score": 0.97,
+      "scale": 1
+    }
+  ],
+  "importedObjects": [
+    {
+      "kind": "workflow",
+      "objectId": "imported-main",
+      "version": "target-main-r1",
+      "reused": false
+    },
+    {
+      "kind": "workflow",
+      "objectId": "imported-secondary",
+      "version": "target-secondary-r1",
+      "reused": false
+    },
+    {
+      "kind": "workflow",
+      "objectId": "imported-childOne",
+      "version": "target-childOne-r1",
+      "reused": false
+    },
+    {
+      "kind": "workflow",
+      "objectId": "imported-childTwo",
+      "version": "target-childTwo-r1",
+      "reused": false
+    }
+  ],
+  "ocrLanguages": [
+    {
+      "language": "zh-Hans"
+    },
+    {
+      "language": "en-US"
+    },
+    {
+      "language": "de-DE"
+    }
+  ]
+}

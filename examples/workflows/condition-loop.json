@@ -1,0 +1,56 @@
+{
+  "formatVersion": "1.0",
+  "id": "loop-demo",
+  "name": "有界条件循环",
+  "entry": "repeat",
+  "parameters": {},
+  "variables": {},
+  "targets": {},
+  "resources": {
+    "body": {
+      "kind": "workflow"
+    }
+  },
+  "limits": {
+    "activeMs": 600000,
+    "steps": 10000,
+    "callDepth": 8,
+    "parallelCalls": 8,
+    "inputEvents": 100000
+  },
+  "nodes": [
+    {
+      "id": "repeat",
+      "title": "最多尝试三次",
+      "action": "flow.loop",
+      "params": {
+        "workflow": "body",
+        "inputs": {},
+        "condition": {
+          "$expr": {
+            "op": "less",
+            "args": [
+              {
+                "$expr": {
+                  "op": "path",
+                  "path": [
+                    "run",
+                    "attempts"
+                  ]
+                }
+              },
+              3
+            ]
+          }
+        },
+        "mode": "while",
+        "maxIterations": 3,
+        "timeoutMs": 10000
+      },
+      "on": {}
+    }
+  ],
+  "runVariables": {
+    "attempts": 0
+  }
+}

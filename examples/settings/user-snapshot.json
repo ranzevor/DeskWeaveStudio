@@ -1,0 +1,71 @@
+{
+  "scope": "user",
+  "version": 5,
+  "baseVersion": null,
+  "values": {
+    "ui.theme": "dark",
+    "ui.locale": "zh-CN",
+    "ui.density": "standard",
+    "ui.reducedMotion": "system",
+    "studio.restoreWorkspace": true,
+    "studio.askBeforeBackground": true,
+    "input.hotkeys": {
+      "emergencyStop": "Ctrl+Alt+Pause",
+      "recordToggle": "Ctrl+Alt+R",
+      "runPauseResume": "Ctrl+Alt+P"
+    },
+    "runtime.maxQueuedRuns": 16,
+    "runtime.interruptPolicy": "ignore",
+    "runtime.modelConcurrency": 2,
+    "runtime.imageConcurrency": 2,
+    "runtime.observationSessions": 4,
+    "storage.imageCacheMiB": 256,
+    "storage.runRetentionDays": 30,
+    "storage.runAttachmentMiB": 5120,
+    "storage.observationRetentionDays": 30,
+    "storage.observationScreenshotMiB": 2048,
+    "agent.previewHz": 10,
+    "privacy.telemetry": false,
+    "updates.channel": "stable",
+    "updates.checkAutomatically": true,
+    "storage.runRetentionEnabled": false,
+    "storage.observationRetentionEnabled": false
+  },
+  "overrides": {
+    "ui.theme": "dark",
+    "runtime.interruptPolicy": "ignore",
+    "agent.previewHz": 10
+  },
+  "sources": {
+    "ui.theme": "user",
+    "ui.locale": "default",
+    "ui.density": "default",
+    "ui.reducedMotion": "default",
+    "studio.restoreWorkspace": "default",
+    "studio.askBeforeBackground": "default",
+    "input.hotkeys": "default",
+    "runtime.maxQueuedRuns": "default",
+    "runtime.interruptPolicy": "user",
+    "runtime.modelConcurrency": "default",
+    "runtime.imageConcurrency": "default",
+    "runtime.observationSessions": "default",
+    "storage.imageCacheMiB": "default",
+    "storage.runRetentionDays": "default",
+    "storage.runAttachmentMiB": "default",
+    "storage.observationRetentionDays": "default",
+    "storage.observationScreenshotMiB": "default",
+    "agent.previewHz": "user",
+    "privacy.telemetry": "default",
+    "updates.channel": "default",
+    "updates.checkAutomatically": "default",
+    "storage.runRetentionEnabled": "default",
+    "storage.observationRetentionEnabled": "default"
+  },
+  "pending": [
+    {
+      "key": "agent.previewHz",
+      "activation": "restartAgent",
+      "savedVersion": 5
+    }
+  ]
+}

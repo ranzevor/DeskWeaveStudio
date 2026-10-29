@@ -1,0 +1,572 @@
+{
+  "key": "runs",
+  "name": "运行、调试与恢复",
+  "prefix": "U",
+  "order": 5,
+  "req": [
+    "DW-008",
+    "DW-009",
+    "DW-010",
+    "DW-011",
+    "DW-019"
+  ],
+  "screens": [
+    {
+      "code": "U01",
+      "id": "runs",
+      "title": "运行列表",
+      "view": "runlist",
+      "variant": "ready",
+      "parent": null,
+      "purpose": "按流程、时间和状态查询运行。",
+      "primary": "run-running",
+      "primaryLabel": "查看运行",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U02",
+      "id": "run-running",
+      "title": "运行监控",
+      "view": "run",
+      "variant": "running",
+      "parent": null,
+      "purpose": "查看调用树、当前步骤、时间线与输入结果。",
+      "primary": "run-pausing",
+      "primaryLabel": "暂停",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U03",
+      "id": "run-paused",
+      "title": "断点与单步调试",
+      "view": "run",
+      "variant": "paused",
+      "parent": null,
+      "purpose": "在安全点查看变量，单步执行选中调用。",
+      "primary": "run-running",
+      "primaryLabel": "继续运行",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U04",
+      "id": "run-failed",
+      "title": "运行失败详情",
+      "view": "run",
+      "variant": "failed",
+      "parent": null,
+      "purpose": "查看失败动作、具体原因、附件与清理结果。",
+      "primary": "editor-graph",
+      "primaryLabel": "修改流程",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U05",
+      "id": "run-succeeded",
+      "title": "运行完成",
+      "view": "run",
+      "variant": "succeeded",
+      "parent": null,
+      "purpose": "核对输出、输入结果和后置检查。",
+      "primary": "run-config",
+      "primaryLabel": "再次运行",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U06",
+      "id": "run-stopping",
+      "title": "正在停止",
+      "view": "run",
+      "variant": "stopping",
+      "parent": null,
+      "purpose": "持续展示取消、子调用收拢和释放进度。",
+      "primary": "run-cancelled",
+      "primaryLabel": "查看停止结果",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U07",
+      "id": "emergency",
+      "title": "全局急停锁定",
+      "view": "modal",
+      "variant": "emergency",
+      "parent": "run-stopping",
+      "purpose": "核对输入释放后，以本地确认解除锁定。",
+      "primary": "workspace",
+      "primaryLabel": "确认接管并解除锁定",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U08",
+      "id": "target-lost",
+      "title": "目标失效",
+      "view": "modal",
+      "variant": "target-lost",
+      "parent": "run-paused",
+      "purpose": "保留已执行结果，重新绑定目标后检查继续条件。",
+      "primary": "target-select",
+      "primaryLabel": "重新绑定目标",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U09",
+      "id": "desktop-busy",
+      "title": "桌面正在使用",
+      "view": "modal",
+      "variant": "desktop-busy",
+      "parent": "run-config",
+      "purpose": "查看当前运行，选择等待或返回。",
+      "primary": "run-running",
+      "primaryLabel": "查看占用运行",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U10",
+      "id": "run-interrupted",
+      "title": "运行中断与效果核对",
+      "view": "run",
+      "variant": "interrupted",
+      "parent": null,
+      "purpose": "核对未确认输入，查看目标后创建新的重试。",
+      "primary": "target-select",
+      "primaryLabel": "查看并重新绑定",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U11",
+      "id": "run-disconnected",
+      "title": "连接中断",
+      "view": "run",
+      "variant": "disconnected",
+      "parent": null,
+      "purpose": "保留已有运行视图，重连后恢复服务快照。",
+      "primary": "run-running",
+      "primaryLabel": "重新连接",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U12",
+      "id": "run-queued",
+      "title": "排队与准备",
+      "view": "run",
+      "variant": "queued",
+      "parent": null,
+      "purpose": "展示等待原因与队列位置，允许取消排队。",
+      "primary": "run-cancelled",
+      "primaryLabel": "取消排队",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U13",
+      "id": "run-pausing",
+      "title": "正在暂停",
+      "view": "run",
+      "variant": "pausing",
+      "parent": null,
+      "purpose": "等待释放输入与调用树安全点，保留停止入口。",
+      "primary": "run-paused",
+      "primaryLabel": "查看暂停结果",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U14",
+      "id": "run-cancelled",
+      "title": "运行已取消",
+      "view": "run",
+      "variant": "cancelled",
+      "parent": null,
+      "purpose": "核对停止原因、已发生结果与释放确认。",
+      "primary": "editor-graph",
+      "primaryLabel": "返回编辑",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U15",
+      "id": "cleanup-failed",
+      "title": "输入清理失败",
+      "view": "run",
+      "variant": "cleanup-failed",
+      "parent": null,
+      "purpose": "阻止新输入，显示接管和恢复的具体动作。",
+      "primary": "emergency",
+      "primaryLabel": "打开接管确认",
+      "requirements": [
+        "DW-008",
+        "DW-009",
+        "DW-010",
+        "DW-011",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U16",
+      "id": "run-shared-variables",
+      "title": "共享变量运行快照",
+      "view": "execution-extra",
+      "variant": "variables",
+      "parent": null,
+      "purpose": "只读查看本次运行共享变量和版本。",
+      "primary": "run-running",
+      "primaryLabel": "返回运行",
+      "requirements": [
+        "DW-026"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U17",
+      "id": "run-variable-conflict",
+      "title": "共享变量并发冲突",
+      "view": "execution-extra",
+      "variant": "variable-conflict",
+      "parent": null,
+      "purpose": "查看未应用的冲突写入并重新读取。",
+      "primary": "run-shared-variables",
+      "primaryLabel": "重新读取变量",
+      "requirements": [
+        "DW-026"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U18",
+      "id": "run-loop",
+      "title": "条件循环运行监控",
+      "view": "execution-extra",
+      "variant": "loop",
+      "parent": null,
+      "purpose": "查看实际轮次、退出条件和剩余预算。",
+      "primary": "action-flow-loop",
+      "primaryLabel": "查看循环配置",
+      "requirements": [
+        "DW-026"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U19",
+      "id": "resume-review",
+      "title": "继续前核对输入",
+      "view": "completion",
+      "variant": "resume-review",
+      "parent": null,
+      "purpose": "核对暂停检查点、目标、指针和持有输入，通过本地确认继续。",
+      "primary": null,
+      "primaryLabel": "确认并继续",
+      "primaryKind": "local",
+      "primaryResult": "一次性确认消费后从同一检查点继续。",
+      "requirements": [
+        "DW-009",
+        "DW-019",
+        "DW-029"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U20",
+      "id": "resume-stale",
+      "title": "继续计划已过期",
+      "view": "completion",
+      "variant": "resume-stale",
+      "parent": null,
+      "purpose": "保留暂停运行，重新检查后生成新的本地确认计划。",
+      "primary": null,
+      "primaryLabel": "重新检查",
+      "primaryKind": "local",
+      "primaryResult": "生成绑定当前暂停检查点的新计划。",
+      "requirements": [
+        "DW-009",
+        "DW-019"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U21",
+      "id": "breakpoints-edit",
+      "title": "固定版本断点配置",
+      "view": "completion",
+      "variant": "breakpoints-edit",
+      "parent": null,
+      "purpose": "增删并启用断点，整组保存到固定流程版本，仅新运行生效。",
+      "primary": null,
+      "primaryLabel": "保存整组断点",
+      "primaryKind": "local",
+      "primaryResult": "保存新断点配置版本，当前运行保持原快照。",
+      "requirements": [
+        "DW-011",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U22",
+      "id": "breakpoints-conflict",
+      "title": "断点配置版本冲突",
+      "view": "completion",
+      "variant": "breakpoints-conflict",
+      "parent": null,
+      "purpose": "保留待保存断点，重新读取后检查并提交整组配置。",
+      "primary": null,
+      "primaryLabel": "重新读取并保留编辑",
+      "primaryKind": "local",
+      "primaryResult": "更新基准版本，待保存断点继续保留。",
+      "requirements": [
+        "DW-011",
+        "DW-008"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U23",
+      "id": "variables-inspect",
+      "title": "运行变量检查",
+      "view": "authoring",
+      "variant": "variables-inspect",
+      "parent": null,
+      "purpose": "读取固定调用与范围的变量页，敏感值保持遮蔽。",
+      "primary": null,
+      "primaryLabel": "读取快照",
+      "primaryKind": "local",
+      "primaryResult": "读取固定调用与范围的变量页，敏感值保持遮蔽。",
+      "requirements": [
+        "DW-011",
+        "DW-026",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U24",
+      "id": "variables-expired",
+      "title": "变量快照已过期",
+      "view": "authoring",
+      "variant": "variables-expired",
+      "parent": null,
+      "purpose": "保留调用与范围选择，创建新的变量快照。",
+      "primary": null,
+      "primaryLabel": "重新读取",
+      "primaryKind": "local",
+      "primaryResult": "保留调用与范围选择，创建新的变量快照。",
+      "requirements": [
+        "DW-011"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "U25",
+      "id": "variables-redacted",
+      "title": "敏感变量与派生值",
+      "view": "authoring",
+      "variant": "variables-redacted",
+      "parent": null,
+      "purpose": "查看敏感输入及派生值的遮蔽状态。",
+      "primary": null,
+      "primaryLabel": "读取快照",
+      "primaryKind": "local",
+      "primaryResult": "查看敏感输入及派生值的遮蔽状态。",
+      "requirements": [
+        "DW-011",
+        "DW-N02"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

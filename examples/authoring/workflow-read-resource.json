@@ -1,0 +1,12 @@
+{
+  "workflowId": "hello",
+  "revision": "1",
+  "definitionHash": "e7e0f04e5364d6d9372ddfc2e359011fed753b48a7df4551ecc17c610e68b79c",
+  "modelResource": {
+    "resourceId": "content-workflow-demo",
+    "mediaType": "application/json",
+    "length": 2423,
+    "sha256": "8b4ccd6938d3cd4125c60d9b2dc217344d4b375ca2e0fcab131393ba374a78b3",
+    "expiresAt": "2026-10-29T02:05:00Z"
+  }
+}

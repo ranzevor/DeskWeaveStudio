@@ -1,0 +1,16 @@
+{
+  "proposalId": "proposal-demo",
+  "candidateSetId": "candidates-demo",
+  "candidateVersion": 1,
+  "proposalHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "canCommit": false,
+  "expiresAt": "2026-10-29T02:30:00Z",
+  "itemCount": 2,
+  "conflictCount": 1,
+  "itemsQuery": {
+    "collectionId": "collection-vision-template-name-conflict",
+    "kind": "templateNames",
+    "itemCount": 2,
+    "expiresAt": "2026-10-29T02:30:00Z"
+  }
+}

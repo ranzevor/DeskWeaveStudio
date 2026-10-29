@@ -1,0 +1,75 @@
+{
+  "os": "macos",
+  "arch": "arm64",
+  "backend": "macos-quartz",
+  "backendVersion": "1.0.0",
+  "generation": 4,
+  "topologyVersion": 7,
+  "topologyCoverage": "all",
+  "trajectoryVersions": [
+    "1.0",
+    "1.1"
+  ],
+  "features": {
+    "capture.display": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "capture.window": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "record.pointerAbsolute": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "record.pointerRelative": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "record.keyboard": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "record.allDisplays": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "input.pointerAbsolute": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "input.pointerRelative": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "input.keyboard": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "input.unicodeText": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "control.globalShortcut": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    },
+    "control.focusTarget": {
+      "state": "available",
+      "reason": "NONE",
+      "nextAction": "none"
+    }
+  }
+}

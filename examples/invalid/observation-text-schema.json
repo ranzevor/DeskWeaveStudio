@@ -1,0 +1,26 @@
+{
+  "intervalMs": 5000,
+  "changeDetection": {
+    "enabled": true,
+    "threshold": 3
+  },
+  "timeoutMs": 60000,
+  "maxRecords": 100,
+  "maxDurationMs": 86400000,
+  "prompt": "读取报表月份和可下载状态。",
+  "roi": null,
+  "outputMode": "text",
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "ready"
+    ],
+    "additionalProperties": false
+  },
+  "saveFrames": true
+}

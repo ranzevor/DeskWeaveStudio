@@ -1,0 +1,19 @@
+{
+  "plan": {
+    "editId": "edit-trajectory-1",
+    "assetKind": "trajectory",
+    "sourceSha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+    "sourceVersion": "4",
+    "sourceWidth": null,
+    "sourceHeight": null,
+    "sourceDurationUs": 30001,
+    "destination": {
+      "mode": "create",
+      "name": "保存快捷键片段"
+    },
+    "expiresAt": "2026-10-29T02:30:00Z"
+  },
+  "currentVersion": "4",
+  "now": "2026-10-29T02:00:10Z",
+  "contentFile": "authoring/edited-trajectory.json"
+}

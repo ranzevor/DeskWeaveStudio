@@ -1,0 +1,22 @@
+{
+  "operationId": "operation-record-finish-demo",
+  "method": "record.finish",
+  "state": "succeeded",
+  "result": {
+    "recordingId": "recording-demo",
+    "partial": false,
+    "resource": {
+      "resourceId": "trajectory-resource-demo",
+      "mediaType": "application/json",
+      "length": 386,
+      "sha256": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+      "expiresAt": "2026-10-29T03:00:00Z"
+    },
+    "assetId": "trajectory-demo",
+    "assetVersion": "trajectory-version-demo",
+    "draftId": null,
+    "eventCount": 4,
+    "durationUs": 30000
+  },
+  "error": null
+}

@@ -1,0 +1,342 @@
+{
+  "key": "assets",
+  "name": "资产与任务包",
+  "prefix": "A",
+  "order": 4,
+  "req": [
+    "DW-005",
+    "DW-012"
+  ],
+  "screens": [
+    {
+      "code": "A01",
+      "id": "assets",
+      "title": "资产库",
+      "view": "assets",
+      "variant": "grid",
+      "parent": null,
+      "purpose": "搜索模板、轨迹和流程资源，查看版本。",
+      "primary": "asset-image",
+      "primaryLabel": "查看资产",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A02",
+      "id": "asset-image",
+      "title": "图像资产详情",
+      "view": "asset",
+      "variant": "image",
+      "parent": null,
+      "purpose": "查看模板预览、来源、版本与引用。",
+      "primary": "asset-references",
+      "primaryLabel": "查看引用",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A03",
+      "id": "asset-trajectory",
+      "title": "轨迹资产详情",
+      "view": "asset",
+      "variant": "trajectory",
+      "parent": null,
+      "purpose": "查看时序、事件种类、持续时间与按键配对。",
+      "primary": "trajectory-editor",
+      "primaryLabel": "编辑副本",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A04",
+      "id": "asset-references",
+      "title": "资产引用",
+      "view": "drawer",
+      "variant": "references",
+      "parent": "assets",
+      "purpose": "定位依赖该资产版本的流程与运行。",
+      "primary": "editor-graph",
+      "primaryLabel": "打开引用流程",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A05",
+      "id": "asset-import",
+      "title": "导入资产",
+      "view": "modal",
+      "variant": "import",
+      "parent": "assets",
+      "purpose": "检查文件类型、名称和导入结果。",
+      "primary": "assets",
+      "primaryLabel": "导入所选文件",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A06",
+      "id": "package-import",
+      "title": "导入任务包",
+      "view": "modal",
+      "variant": "package-import",
+      "parent": "workspace",
+      "purpose": "检查入口流程与依赖完整性后导入。",
+      "primary": "workspace",
+      "primaryLabel": "导入任务包",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A07",
+      "id": "package-conflict",
+      "title": "任务包同名处理",
+      "view": "modal",
+      "variant": "package-conflict",
+      "parent": "workspace",
+      "purpose": "对同名不同内容保留新对象，不覆盖历史。",
+      "primary": "workspace",
+      "primaryLabel": "作为新流程导入",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A08",
+      "id": "package-export",
+      "title": "导出任务包",
+      "view": "modal",
+      "variant": "package-export",
+      "parent": "editor-graph",
+      "purpose": "选择固定版本和资源范围，确认保存目录。",
+      "primary": "editor-graph",
+      "primaryLabel": "导出任务包",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A09",
+      "id": "asset-delete",
+      "title": "删除资产确认",
+      "view": "modal",
+      "variant": "asset-delete",
+      "parent": "assets",
+      "purpose": "显示仍被引用的版本并阻止误删。",
+      "primary": "assets",
+      "primaryLabel": "保留被引用资产",
+      "requirements": [
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A10",
+      "id": "package-target-map",
+      "title": "任务包对象映射",
+      "view": "completion",
+      "variant": "package-target-map",
+      "parent": null,
+      "purpose": "核对独立流程副本、相同内容复用及来源到目标的固定版本映射。",
+      "primary": null,
+      "primaryLabel": "确认导入",
+      "primaryKind": "local",
+      "primaryResult": "按有效计划原子导入，并显示真实映射清单。",
+      "requirements": [
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A11",
+      "id": "package-target-invalid",
+      "title": "导入映射计划失效",
+      "view": "completion",
+      "variant": "package-target-invalid",
+      "parent": null,
+      "purpose": "保留预览，目录或计划改变后重新核对内容映射。",
+      "primary": null,
+      "primaryLabel": "重新预览映射",
+      "primaryKind": "local",
+      "primaryResult": "取得当前目录下的新映射计划。",
+      "requirements": [
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A12",
+      "id": "asset-delete-review",
+      "title": "删除资产与引用检查",
+      "view": "completion",
+      "variant": "asset-delete-review",
+      "parent": null,
+      "purpose": "重新读取全部引用总数，确认无依赖后删除整个资产及其版本。",
+      "primary": null,
+      "primaryLabel": "删除整个资产",
+      "primaryKind": "local",
+      "primaryResult": "版本和引用检查通过后删除资产。",
+      "requirements": [
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A13",
+      "id": "asset-delete-stale",
+      "title": "资产删除检查失效",
+      "view": "completion",
+      "variant": "asset-delete-stale",
+      "parent": null,
+      "purpose": "版本或引用变化时保留资产，重新检查可见与不可见引用数量。",
+      "primary": null,
+      "primaryLabel": "重新检查引用",
+      "primaryKind": "local",
+      "primaryResult": "读取当前版本与完整引用数量，仍被引用时阻止删除。",
+      "requirements": [
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A14",
+      "id": "asset-edit-save",
+      "title": "保存手工编辑资产",
+      "view": "authoring",
+      "variant": "asset-edit-save",
+      "parent": null,
+      "purpose": "选择新资产或新版本，固定源内容后提交。",
+      "primary": null,
+      "primaryLabel": "准备保存",
+      "primaryKind": "local",
+      "primaryResult": "选择新资产或新版本，固定源内容后提交。",
+      "requirements": [
+        "DW-004",
+        "DW-005",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A15",
+      "id": "asset-edit-conflict",
+      "title": "资产头版本冲突",
+      "view": "authoring",
+      "variant": "asset-edit-conflict",
+      "parent": null,
+      "purpose": "保留编辑，读取最新头后由用户重新提交。",
+      "primary": null,
+      "primaryLabel": "重新准备",
+      "primaryKind": "local",
+      "primaryResult": "保留编辑，读取最新头后由用户重新提交。",
+      "requirements": [
+        "DW-008",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A16",
+      "id": "asset-edit-cancelled",
+      "title": "资产编辑已取消",
+      "view": "authoring",
+      "variant": "asset-edit-cancelled",
+      "parent": null,
+      "purpose": "取消未提交计划不产生正式版本，编辑内容继续保留。",
+      "primary": null,
+      "primaryLabel": "准备保存",
+      "primaryKind": "local",
+      "primaryResult": "取消未提交计划不产生正式版本，编辑内容继续保留。",
+      "requirements": [
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    }
+  ]
+}

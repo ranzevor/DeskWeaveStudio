@@ -1,0 +1,10 @@
+{
+  "leaseId": "lease-demo",
+  "generation": 4,
+  "agentEpoch": "agent-new-demo",
+  "state": "uncertain",
+  "cleanup": "failed",
+  "pauseSnapshot": null,
+  "lastResumeAttemptId": null,
+  "reason": "原生事件位置无法核定"
+}

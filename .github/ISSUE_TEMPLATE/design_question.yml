@@ -1,0 +1,25 @@
+name: 设计讨论
+description: 讨论架构、交互、契约或兼容决定
+title: "[Design] "
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: 对象与问题
+      description: 链接受影响的设计、契约或需求，并说明具体冲突。
+    validations:
+      required: true
+  - type: textarea
+    id: choices
+    attributes:
+      label: 备选方案
+      description: 比较行为、成本、权限、数据与兼容影响。
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: 判断与验证
+      description: 给出已知材料，以及能够区分方案的验证方法。
+    validations:
+      required: true
