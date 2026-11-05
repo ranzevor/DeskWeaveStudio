@@ -1,6 +1,6 @@
 # 贡献指南
 
-从 [README](README.md)、[设计导航](docs/README.md)和[路线图](ROADMAP.md)了解当前范围。设计阶段欢迎需求澄清、契约修正、合成样例、交互方案和文档检查改进。
+从 [README](README.md)、[设计导航](docs/README.md)和[路线图](ROADMAP.md)了解当前范围。开发按路线图推进，欢迎实现、缺陷修复、契约修正、交互方案和文档改进。
 
 ## 提交问题
 
@@ -16,6 +16,12 @@
 
 使用独立分支，保持修改围绕一个目标。公共字段变化同时更新 Schema、示例、相应设计与兼容说明；新需求同步追踪表。参数范围以契约为源，勿在动作目录或表单中另外维护一份。
 
+## 提交格式
+
+提交标题使用英文类型和范围、简体中文主题，例如 `feat(engine): 增加流程版本保存`。正文说明行为变化、兼容影响和测试结果；PR 标题及压缩后的提交沿用这一格式。
+
+变更通过 PR 纳入 main，合并须取得仓库所有者明确授权。
+
 ## 本地检查
 
 需要 Python 3.12 或更高版本：
@@ -25,7 +31,7 @@ python -m pip install -r requirements-docs.txt
 python tools/check_docs.py --contracts
 ```
 
-推荐在项目独立环境中运行，具体步骤见[工程实施](docs/development/engineering.md)。检查应用行为的场景与文档检查分开，按实际执行结果填写 PR。
+Python 实现运行 `uv sync --frozen` 和 `uv run --frozen python -m unittest discover -s tests -q`，完整命令见[Engine 开发](docs/development/engine.md)。文档检查使用独立环境，具体步骤见[工程实施](docs/development/engineering.md)。检查应用行为的场景与文档检查分开，按实际执行结果填写 PR。
 
 ## 提交 PR
 

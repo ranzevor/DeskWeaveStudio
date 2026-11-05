@@ -46,6 +46,7 @@
 | [文档检查](quality/document-validation.md) | 文档、契约和示例的检查入口 |
 | [原型检查](quality/prototype-validation.md) | 画板覆盖、浏览器交互与视觉检查 |
 | [需求追踪](quality/traceability.md) | 需求到设计、接口、验收用例与里程碑的对应 |
+| [Engine 开发](development/engine.md) | 共享服务库的安装、方法范围、会话与测试 |
 | [工程实施](development/engineering.md) | 代码组织、工具链、依赖与审查方式 |
 | [公开仓库设置](development/repository.md) | 仓库权限、分支保护、报告入口与发行准备 |
 

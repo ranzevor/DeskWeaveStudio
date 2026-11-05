@@ -3,7 +3,7 @@
 # DeskWeaveStudio
 
 [![Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-2563eb)](LICENSE)
-[![Design and prototype — Chinese only](https://img.shields.io/badge/Stage-Design%20%26%20Prototype-8b5cf6)](ROADMAP.md)
+[![Engine foundation — Chinese only](https://img.shields.io/badge/Stage-Engine%20Foundation-8b5cf6)](ROADMAP.md)
 [![Windows, macOS and Linux targets — Chinese only](https://img.shields.io/badge/Targets-Windows%20%7C%20macOS%20%7C%20Linux-475569)](docs/architecture/platforms.md)
 [![MCP 2026-07-28 — Chinese only](https://img.shields.io/badge/MCP-2026--07--28-15803d)](docs/interfaces/mcp.md)
 
@@ -20,7 +20,18 @@ DeskWeaveStudio is designed to record desktop actions, compose workflows, locate
 
 ## Project status
 
-The project is at the system design and interactive prototype stage. The repository contains product requirements, system designs, interactive prototypes, high-resolution mockups, JSON Schemas, examples and validation tools. Implementation of the desktop application, execution engine, MCP service and installers is organized in the [roadmap (Chinese only)](ROADMAP.md).
+The execution core is under development. The Python service library provides expression previews, workflow validation, inline workflow version storage, catalog and revision pagination, and saved-request lookup. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, standalone Engine process, Rust Agent, MCP Bridge and installers follow the [roadmap (Chinese only)](ROADMAP.md).
+
+## Execution core
+
+With Python 3.12 and uv 0.8.2:
+
+```bash
+uv sync --frozen
+uv run --frozen python examples/engine/workspace.py
+```
+
+The example saves, reads and validates a workflow and previews an expression in a temporary workspace. See [Engine development (Chinese only)](docs/development/engine.md) for available methods and development commands.
 
 ## Interface prototypes
 
