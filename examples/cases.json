@@ -3578,5 +3578,41 @@
     "schema": "service.schema.json#/$defs/workflow.validate/properties/params",
     "semantic": "none",
     "expected": "schema-fail"
+  },
+  {
+    "file": "queries/expression-missing-path.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-division.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-type.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-key-path.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-unknown-reason.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/expression-invalid-path.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "schema-fail"
   }
 ]

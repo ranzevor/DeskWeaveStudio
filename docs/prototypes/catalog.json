@@ -9971,7 +9971,8 @@
             "snapshotAt",
             "expiresAt"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         }
       },
       {
@@ -13587,7 +13588,8 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage"
+          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage",
+          "x-maxUtf8Bytes": 262144
         }
       },
       {
@@ -14148,7 +14150,8 @@
           ]
         },
         "result": {
-          "$ref": "urn:deskweave:query:1#/$defs/page"
+          "$ref": "urn:deskweave:query:1#/$defs/page",
+          "x-maxUtf8Bytes": 262144
         }
       },
       {

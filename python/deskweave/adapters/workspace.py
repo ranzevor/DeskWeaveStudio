@@ -5,6 +5,7 @@ import os
 import sqlite3
 import threading
 import time
+import unicodedata
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -98,42 +99,141 @@ class Workspace:
             self._connection = connection
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys=ON")
-            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1):
+            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2):
                 raise DeskWeaveError("SCHEMA_UNSUPPORTED", "工作空间数据库版本不受支持。")
             connection.execute("PRAGMA synchronous=FULL")
-            connection.executescript("""
-                CREATE TABLE IF NOT EXISTS workflow (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, head_revision TEXT NOT NULL,
-                    updated_at TEXT NOT NULL, sequence INTEGER NOT NULL);
-                CREATE TABLE IF NOT EXISTS revision (
-                    sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL,
-                    workflow_id TEXT NOT NULL, parent_id TEXT, name TEXT NOT NULL,
-                    definition_hash TEXT NOT NULL, dependencies_hash TEXT NOT NULL,
-                    created_at TEXT NOT NULL);
-                CREATE INDEX IF NOT EXISTS revision_workflow ON revision(workflow_id, sequence);
-                CREATE TABLE IF NOT EXISTS command_receipt (
-                    client_id TEXT NOT NULL, request_id TEXT NOT NULL, method TEXT NOT NULL,
-                    workflow_id TEXT NOT NULL, payload_hash TEXT NOT NULL, result TEXT NOT NULL,
-                    created_at TEXT NOT NULL, PRIMARY KEY(client_id, request_id));
-                CREATE TABLE IF NOT EXISTS query_snapshot (
-                    id TEXT PRIMARY KEY, owner TEXT NOT NULL,
-                    authorization_version INTEGER NOT NULL,
-                    binding TEXT NOT NULL, created_at REAL NOT NULL, expires_at REAL NOT NULL,
-                    extra TEXT NOT NULL);
-                CREATE TABLE IF NOT EXISTS query_member (
-                    snapshot_id TEXT NOT NULL REFERENCES query_snapshot(id) ON DELETE CASCADE,
-                    ordinal INTEGER NOT NULL, value TEXT NOT NULL,
-                    PRIMARY KEY(snapshot_id, ordinal));
-                CREATE TABLE IF NOT EXISTS query_cursor (
-                    token TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL
-                    REFERENCES query_snapshot(id) ON DELETE CASCADE,
-                    ordinal INTEGER NOT NULL, UNIQUE(snapshot_id, ordinal));
-                PRAGMA user_version=1;
-                DELETE FROM query_snapshot;
-            """)
+            self._initialize_storage()
         except BaseException:
             self.close()
             raise
+
+    def _initialize_storage(self) -> None:
+        with self.transaction() as connection:
+            connection.create_function(
+                "fold",
+                1,
+                lambda value: unicodedata.normalize("NFC", value).casefold(),
+                deterministic=True,
+            )
+            statements = [
+                "CREATE TABLE IF NOT EXISTS workflow (id TEXT PRIMARY KEY, name"
+                " TEXT NOT NULL, head_revision TEXT NOT NULL, updated_at TEXT "
+                "NOT NULL, sequence INTEGER NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS revision (sequence INTEGER PRIMARY "
+                "KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, workflow_id TEXT "
+                "NOT NULL, parent_id TEXT, name TEXT NOT NULL, definition_hash "
+                "TEXT NOT NULL, dependencies_hash TEXT NOT NULL, created_at "
+                "TEXT NOT NULL, name_key TEXT NOT NULL DEFAULT '', valid_until "
+                "INTEGER)",
+                "CREATE INDEX IF NOT EXISTS revision_workflow ON revision(workflow_id, sequence)",
+                "CREATE TABLE IF NOT EXISTS command_receipt (client_id TEXT NOT"
+                " NULL, request_id TEXT NOT NULL, method TEXT NOT NULL, "
+                "workflow_id TEXT NOT NULL, payload_hash TEXT NOT NULL, result "
+                "TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY "
+                "KEY(client_id, request_id))",
+            ]
+            for statement in statements:
+                connection.execute(statement)
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(revision)")}
+            if "name_key" not in columns:
+                connection.execute(
+                    "ALTER TABLE revision ADD COLUMN name_key TEXT NOT NULL DEFAULT ''"
+                )
+                connection.execute("UPDATE revision SET name_key=fold(name)")
+            if "valid_until" not in columns:
+                connection.execute("ALTER TABLE revision ADD COLUMN valid_until INTEGER")
+                connection.execute(
+                    "WITH bounds AS MATERIALIZED (SELECT sequence, LEAD(sequence) OVER "
+                    "(PARTITION BY workflow_id ORDER BY sequence) AS end_sequence FROM revision) "
+                    "UPDATE revision SET valid_until=(SELECT end_sequence FROM "
+                    "bounds WHERE bounds.sequence=revision.sequence)"
+                )
+            for statement in (
+                "CREATE INDEX IF NOT EXISTS revision_catalog_name_asc ON "
+                "revision(name_key ASC, workflow_id ASC, sequence DESC)",
+                "CREATE INDEX IF NOT EXISTS revision_catalog_name_desc ON "
+                "revision(name_key DESC, workflow_id ASC, sequence DESC)",
+                "DROP TABLE IF EXISTS query_cursor",
+                "DROP TABLE IF EXISTS query_member",
+                "DROP TABLE IF EXISTS query_snapshot",
+                "CREATE TABLE query_snapshot (id TEXT PRIMARY KEY, owner TEXT "
+                "NOT NULL, authorization_version INTEGER NOT NULL, binding TEXT"
+                " NOT NULL, created_at REAL NOT NULL, expires_at REAL NOT NULL,"
+                " source TEXT NOT NULL, extra TEXT NOT NULL)",
+                "CREATE TABLE query_cursor (token TEXT PRIMARY KEY, snapshot_id"
+                " TEXT NOT NULL REFERENCES query_snapshot(id) ON DELETE "
+                "CASCADE, position TEXT NOT NULL, UNIQUE(snapshot_id, "
+                "position))",
+                "PRAGMA user_version=2",
+            ):
+                connection.execute(statement)
+
+    @staticmethod
+    def catalog_rows(connection, source, position, limit):
+        where = ["sequence<=?", "(valid_until IS NULL OR valid_until>?)", "instr(name_key,?)>0"]
+        arguments = [source["watermark"], source["watermark"], source["nameContains"]]
+        if source["workflowIds"] is not None:
+            where.append("workflow_id IN (SELECT value FROM json_each(?))")
+            arguments.append(dumps(source["workflowIds"]).decode())
+        index = ""
+        if source["order"] == "updatedDesc":
+            order = "sequence DESC"
+            if position is not None:
+                where.append("sequence<?")
+                arguments.append(position)
+        elif source["order"] == "nameAsc":
+            index = " INDEXED BY revision_catalog_name_asc"
+            order = "name_key ASC, workflow_id ASC"
+            if position is not None:
+                where.append("(name_key,workflow_id)>(?,?)")
+                arguments.extend(position)
+        else:
+            index = " INDEXED BY revision_catalog_name_desc"
+            order = "name_key DESC, workflow_id ASC"
+            if position is not None:
+                where.append("name_key<=? AND (name_key<? OR workflow_id>?)")
+                arguments.extend((position[0], position[0], position[1]))
+        rows = connection.execute(
+            "SELECT sequence,workflow_id,name,id,name_key FROM revision"
+            + index
+            + " WHERE "
+            + " AND ".join(where)
+            + " ORDER BY "
+            + order
+            + " LIMIT ?",
+            (*arguments, limit),
+        )
+        for row in rows:
+            key = (
+                row["sequence"]
+                if source["order"] == "updatedDesc"
+                else [row["name_key"], row["workflow_id"]]
+            )
+            yield key, {"id": row["workflow_id"], "name": row["name"], "version": row["id"]}
+
+    @staticmethod
+    def revision_rows(connection, source, position, limit):
+        rows = connection.execute(
+            "SELECT * FROM revision WHERE workflow_id=? AND sequence<=? AND sequence<? "
+            "ORDER BY sequence DESC LIMIT ?",
+            (
+                source["workflowId"],
+                source["watermark"],
+                source["watermark"] + 1 if position is None else position,
+                limit,
+            ),
+        )
+        for row in rows:
+            yield (
+                row["sequence"],
+                {
+                    "revision": row["id"],
+                    "parentRevision": row["parent_id"],
+                    "name": row["name"],
+                    "createdAt": row["created_at"],
+                    "definitionHash": row["definition_hash"],
+                },
+            )
 
     @staticmethod
     def _atomic_write(path: Path, data: bytes) -> None:
@@ -269,7 +369,7 @@ class Workspace:
             with self.transaction() as connection:
                 row = connection.execute(
                     "INSERT INTO revision(id,workflow_id,parent_id,name,definition_hash,"
-                    "dependencies_hash,created_at) VALUES(?,?,?,?,?,?,?)",
+                    "dependencies_hash,created_at,name_key) VALUES(?,?,?,?,?,?,?,?)",
                     (
                         revision,
                         params["workflowId"],
@@ -278,8 +378,13 @@ class Workspace:
                         definition_hash,
                         dependencies_hash,
                         created,
+                        unicodedata.normalize("NFC", params["definition"]["name"]).casefold(),
                     ),
                 )
+                if head is not None:
+                    connection.execute(
+                        "UPDATE revision SET valid_until=? WHERE id=?", (row.lastrowid, head)
+                    )
                 connection.execute(
                     "INSERT INTO workflow VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
                     "name=excluded.name,head_revision=excluded.head_revision,"

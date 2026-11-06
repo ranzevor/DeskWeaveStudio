@@ -114,7 +114,7 @@ ObservationSession 的控制状态和 ObservationQuery 的分页快照分开维�
 
 TopologySession 保存基准 editVersion、候选入口与出口差异、不可达集合及一次撤销补丁；正式输出仍为 Workflow.entry 和 Node.on，不另存执行关系。步骤显示顺序保存为布局偏好。
 
-ExpressionSession 保存原字段、非法原文、最后有效 Value AST、当前结构树路径及合成求值快照。递归节点依照 values.schema.json 构造；预览调用 expression.preview，由 Engine 的运行求值器计算结果并检查类型和限额。异步请求绑定文档与表达式编辑代次；修改值或上下文、取消或切换字段后旧结果失效。
+ExpressionSession 保存原字段、非法原文、最后有效 Value AST、当前结构树路径及合成求值快照。递归节点依照 values.schema.json 构造；预览调用 expression.preview，由 Engine 的运行求值器计算结果并检查类型和限额。计算失败按 details.expressionPath 选择对应操作数，按 details.reason 区分缺失路径、除零、类型与容量错误，message 显示具体原因；请求结构错误按 details.fieldPath 定位参数。异步请求绑定文档与表达式编辑代次；修改值或上下文、取消或切换字段后旧结果失效。
 
 TrajectoryEditSession 保存固定源版本、左闭右开的选段、问题及逐项修复方案、预览输出与撤销补丁。修改选段或任一方案使旧预览失效；应用时再次核对源版本和预览摘要。输出为完整 Trajectory，预览不发送桌面输入。
 

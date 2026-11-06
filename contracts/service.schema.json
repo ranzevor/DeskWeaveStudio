@@ -2805,7 +2805,8 @@
             "snapshotAt",
             "expiresAt"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [
@@ -5698,7 +5699,8 @@
           "$ref": "urn:deskweave:inspection:1#/$defs/revisionParams"
         },
         "result": {
-          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage"
+          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage",
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [
@@ -6159,7 +6161,8 @@
           ]
         },
         "result": {
-          "$ref": "urn:deskweave:query:1#/$defs/page"
+          "$ref": "urn:deskweave:query:1#/$defs/page",
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [
@@ -6240,7 +6243,8 @@
           "required": [
             "value"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         },
         "result": {
           "type": "object",
@@ -6252,7 +6256,8 @@
           "required": [
             "value"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [

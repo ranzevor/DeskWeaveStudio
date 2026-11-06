@@ -10,9 +10,14 @@ from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME, MAX_SAFE_INTEGER, dumps
 
 
-class MissingPath(DeskWeaveError):
-    def __init__(self):
-        super().__init__("VALUE_PATH_MISSING", "数据路径不存在。")
+class ExpressionError(DeskWeaveError):
+    def __init__(self, reason: str, message: str, path=(), *, code="INVALID_ARGUMENT"):
+        super().__init__(code, message, details={"expressionPath": list(path), "reason": reason})
+
+
+class MissingPath(ExpressionError):
+    def __init__(self, path):
+        super().__init__("PATH_MISSING", "数据路径不存在。", path)
 
 
 def value_type(value: object) -> str:
@@ -35,26 +40,33 @@ def matches_type(value: object, expected: str) -> bool:
 
 def _shape(value: object, checkpoint: Callable[[], None] = lambda: None) -> None:
     operations = 0
-    stack = [(value, 0)]
+    stack = [(value, 0, ())]
     while stack:
         checkpoint()
-        item, depth = stack.pop()
+        item, depth, path = stack.pop()
         if depth > 32:
-            raise DeskWeaveError("LIMIT_EXCEEDED", "表达式嵌套超过 32 层。")
+            raise ExpressionError(
+                "AST_DEPTH", "表达式嵌套超过 32 层。", path, code="LIMIT_EXCEEDED"
+            )
         if type(item) is list:
-            stack.extend((child, depth + 1) for child in item)
+            stack.extend((child, depth + 1, (*path, index)) for index, child in enumerate(item))
         elif type(item) is dict:
             if "$literal" in item:
                 continue
             if "$expr" in item:
                 operations += 1
                 if operations > 256:
-                    raise DeskWeaveError("LIMIT_EXCEEDED", "表达式超过 256 个运算节点。")
+                    raise ExpressionError(
+                        "AST_NODES", "表达式超过 256 个运算节点。", path, code="LIMIT_EXCEEDED"
+                    )
                 expr = item["$expr"]
                 if type(expr) is dict and type(expr.get("args")) is list:
-                    stack.extend((child, depth + 1) for child in expr["args"])
+                    stack.extend(
+                        (child, depth + 1, (*path, "$expr", "args", index))
+                        for index, child in enumerate(expr["args"])
+                    )
             else:
-                stack.extend((child, depth + 1) for child in item.values())
+                stack.extend((child, depth + 1, (*path, key)) for key, child in item.items())
 
 
 def evaluate(
@@ -78,67 +90,70 @@ def evaluate(
         },
     )
 
-    def boolean(item):
+    def boolean(item, path):
         if type(item) is not bool:
-            raise DeskWeaveError("VALUE_TYPE_MISMATCH", "布尔运算需要布尔值。")
+            raise ExpressionError("TYPE_MISMATCH", "布尔运算需要布尔值。", path)
         return item
 
-    def number(item):
+    def number(item, path):
         if type(item) not in (int, float):
-            raise DeskWeaveError("VALUE_TYPE_MISMATCH", "数值运算需要数字。")
+            raise ExpressionError("TYPE_MISMATCH", "数值运算需要数字。", path)
         return item
 
-    def visit(item):
+    def visit(item, path=()):
         checkpoint()
         if type(item) is list:
-            return [visit(child) for child in item]
+            return [visit(child, (*path, index)) for index, child in enumerate(item)]
         if type(item) is not dict:
             return item
         if "$literal" in item:
             return copy.deepcopy(item["$literal"])
         if "$expr" not in item:
-            return {key: visit(child) for key, child in item.items()}
+            return {key: visit(child, (*path, key)) for key, child in item.items()}
         expr = item["$expr"]
         op = expr["op"]
         if op == "path":
             result = context
-            for key in expr["path"]:
+            for index, key in enumerate(expr["path"]):
                 checkpoint()
                 if type(result) is dict and type(key) is str and key in result:
                     result = result[key]
-                elif type(result) is list and type(key) is int and 0 <= key < len(result):
-                    result = result[key]
+                elif (
+                    type(result) is list and matches_type(key, "integer") and 0 <= key < len(result)
+                ):
+                    result = result[int(key)]
                 else:
-                    raise MissingPath()
+                    raise MissingPath((*path, "$expr", "path", index))
             return copy.deepcopy(result)
         args = expr["args"]
         if op == "coalesce":
-            for argument in args:
+            for index, argument in enumerate(args):
                 try:
-                    result = visit(argument)
+                    result = visit(argument, (*path, "$expr", "args", index))
                 except MissingPath:
                     continue
                 if result is not None:
                     return result
             return None
-        first = visit(args[0])
+        first_path, second_path = (*path, "$expr", "args", 0), (*path, "$expr", "args", 1)
+        first = visit(args[0], first_path)
         if op == "and":
-            return boolean(first) and boolean(visit(args[1]))
+            return boolean(first, first_path) and boolean(visit(args[1], second_path), second_path)
         if op == "or":
-            return boolean(first) or boolean(visit(args[1]))
+            return boolean(first, first_path) or boolean(visit(args[1], second_path), second_path)
         if op == "not":
-            return not boolean(first)
+            return not boolean(first, first_path)
         if op == "length":
             if type(first) not in (str, list):
-                raise DeskWeaveError("VALUE_TYPE_MISMATCH", "长度运算需要文本或数组。")
+                raise ExpressionError("TYPE_MISMATCH", "长度运算需要文本或数组。", first_path)
             return len(first.encode("utf-16-le")) // 2 if type(first) is str else len(first)
-        second = visit(args[1])
+        second = visit(args[1], second_path)
         if op in {"equal", "notEqual"}:
             equal = dumps(first, checkpoint=checkpoint) == dumps(second, checkpoint=checkpoint)
             return equal if op == "equal" else not equal
-        left, right = number(first), number(second)
+        left, right = number(first, first_path), number(second, second_path)
         if op == "divide" and right == 0:
-            raise DeskWeaveError("VALUE_DIVISION_BY_ZERO", "除数不能为零。")
+            raise ExpressionError("DIVISION_BY_ZERO", "除数不能为零。", second_path)
         result = {
             "add": operator.add,
             "subtract": operator.sub,
@@ -152,7 +167,12 @@ def evaluate(
         if type(result) in (int, float) and (
             not math.isfinite(result) or abs(result) > MAX_SAFE_INTEGER
         ):
-            raise DeskWeaveError("LIMIT_EXCEEDED", "运算结果超出数值范围。")
+            raise ExpressionError(
+                "NUMERIC_RANGE",
+                "运算结果超出数值范围。",
+                (*path, "$expr", "op"),
+                code="LIMIT_EXCEEDED",
+            )
         return result
 
     result = visit(value)
@@ -160,5 +180,5 @@ def evaluate(
     validate("urn:deskweave:values:1#/$defs/raw", result)
     checkpoint()
     if not matches_type(result, expected_type):
-        raise DeskWeaveError("VALUE_TYPE_MISMATCH", "表达式结果类型与字段要求不一致。")
+        raise ExpressionError("TYPE_MISMATCH", "表达式结果类型与字段要求不一致。")
     return result

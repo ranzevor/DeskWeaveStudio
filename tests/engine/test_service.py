@@ -24,7 +24,7 @@ def workflow(identity="hello", name="问候"):
     return value
 
 
-class ServiceTests(unittest.TestCase):
+class EngineCase(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.directory = Path(self.temporary.name) / "workspace"
@@ -73,6 +73,8 @@ class ServiceTests(unittest.TestCase):
         }
         return self.success("workflow.save", params, **kwargs)
 
+
+class ServiceTests(EngineCase):
     def test_cross_client_save_and_immutable_versions(self):
         first = self.save()
         returned = self.success(
@@ -646,7 +648,7 @@ else:
             response = self.request("query.read", {**params, "cursor": cursor})
             self.assertEqual(response["error"]["code"], "COLLECTION_NOT_FOUND")
         with self.workspace.transaction() as connection:
-            for table in ("query_snapshot", "query_member", "query_cursor"):
+            for table in ("query_snapshot", "query_cursor"):
                 self.assertEqual(
                     connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0
                 )

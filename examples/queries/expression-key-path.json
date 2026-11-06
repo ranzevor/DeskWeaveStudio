@@ -1,0 +1,10 @@
+{
+  "expressionPath": [
+    "a/~汉",
+    0,
+    "$expr",
+    "args",
+    0
+  ],
+  "reason": "TYPE_MISMATCH"
+}

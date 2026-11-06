@@ -112,7 +112,7 @@ event.subscribe 返回订阅身份、epoch 和序号 S 的一致运行快照，�
 
 NAME_CONFLICT 指明当前名称占用；CURSOR_EXPIRED 要求以原筛选重新建立查询；PROCESS_INTERRUPTED 保留原作业与效果记录，不提示直接重放；CREDENTIAL_UNAVAILABLE 区分凭据已撤销或无法读取，不能以重输业务参数代替连接处理。
 
-普通分页查询快照默认有效 5 分钟，每个 Engine 最多保留 32 个快照，全部快照成员合计最多 100 万项；运行明细等更短期限及客户端限额见[分页查询](pagination.md)。游标绑定认证工作空间、查询条件与快照；到期或容量回收后返回 CURSOR_EXPIRED，不从游标猜测新分页位置。新查询取得新快照，结果更新时间不能被当成原快照的继续。
+普通分页查询快照默认有效 5 分钟，每个 Engine 最多保留 32 个快照，实际登记的游标位置合计最多 100 万条，关闭或过期后释放；运行明细等更短期限及客户端限额见[分页查询](pagination.md)。游标绑定认证工作空间、查询条件与快照；到期或容量回收后返回 CURSOR_EXPIRED，不从游标猜测新分页位置。新查询取得新快照，结果更新时间不能被当成原快照的继续。
 
 未知执行字段拒绝；extensions 中的命名空间内容可保留。新增非必需事件字段可忽略，未知事件类型触发能力协商或快照，不伪造成功状态。
 
@@ -194,8 +194,10 @@ workflow.revisions、connection.list、debug.variables.read 分别提供版本�
 
 expression.preview 属于可信本地编辑方法，沿用当前编辑会话的 workflow.read 权限。参数 value 使用公共 Value AST；context 只接收 inputs、vars、run、prev、calls、runtime 六个可选 JSON 根；expectedType 为 any、null、boolean、number、string、array 或 object，缺省 any。context 缺省空对象，缺少根或路径按同一求值器的缺失值规则处理，不补入真实运行变量。
 
-Engine 使用流程运行的领域求值器，单次仅计算所传合成数据，不创建运行、持有租约、读工作空间对象或调用外部连接。成功返回 value；缺失路径、除零或类型不匹配返回 INVALID_ARGUMENT，details 定位表达式位置和具体原因；超预算返回 LIMIT_EXCEEDED。布尔字段使用 expectedType=boolean，不将数字、字符串或 null 转换为布尔值。
+Engine 使用流程运行的领域求值器，单次仅计算所传合成数据，不创建运行、持有租约、读工作空间对象或调用外部连接。成功返回 value；缺失路径、除零或类型不匹配返回 INVALID_ARGUMENT。details.expressionPath 是相对 value 的字段路径段数组，字符串表示对象键、整数表示数组下标，空数组表示 value 根；details.reason 分别为 PATH_MISSING、DIVISION_BY_ZERO 或 TYPE_MISMATCH。数值范围、AST 深度及运算节点超限返回 LIMIT_EXCEEDED，reason 分别为 NUMERIC_RANGE、AST_DEPTH、AST_NODES，并携带同样的位置字段。请求时间耗尽返回 DEADLINE_EXCEEDED。布尔字段使用 expectedType=boolean，不将数字、字符串或 null 转换为布尔值。
 
-完整参数与成功结果各不超过 256KiB UTF-8，仍受 1MiB 控制信封限制；AST 使用共同的 256 运算节点、32 层嵌套上限，执行预算取 deadlineMs 与 1 秒的较小值。每客户端最多一个在途预览；新编辑取消旧等待，服务收拢原计算，前端按编辑代次丢弃迟到回复。超限直接返回具体错误，不裁剪值、抽样数组或返回部分运算结果。
+完整参数与成功结果各不超过 256KiB UTF-8，Schema 中以 x-maxUtf8Bytes 声明，由分发器统一执行。参数按补默认值前的 params、结果按包含 value 字段的完整 result 计数，均使用 RFC 8785 规范编码后的实际字节；超限返回 LIMIT_EXCEEDED。完整消息仍受 1MiB 控制信封限制；AST 使用共同的 256 运算节点、32 层嵌套上限，执行预算取 deadlineMs 与 1 秒的较小值。每客户端最多一个在途预览；新编辑取消旧等待，服务收拢原计算，前端按编辑代次丢弃迟到回复。超限直接返回具体错误，不裁剪值、抽样数组或返回部分运算结果。
+
+计算错误详情见 [expressionErrorDetails](../../contracts/values.schema.json)；请求结构错误使用 INVALID_ARGUMENT 和 details.fieldPath 定位参数。客户端按 reason 处理计算错误，按 expressionPath 定位字段，message 用于显示具体原因。coalesce 只处理内部的缺失路径，不吞掉除零、类型或预算错误。
 
 该方法与草稿共用本地编辑入口；MCP 的 workflow.validate、run.prepare 和 run.start 调用同一领域校验与执行逻辑。入口分工及处理器约束见[共享应用服务](../architecture/shared-services.md)。

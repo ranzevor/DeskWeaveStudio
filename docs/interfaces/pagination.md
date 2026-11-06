@@ -36,7 +36,7 @@ operation.get、operation.cancel、request.status 及订阅快照沿用同一结
 | deskweave_workflow_revisions | 流程历史版本 | 50 / 100 | 流程与版本元数据 |
 | deskweave_debug_variables_read | 脱敏变量 | 50 / 100 | 运行、调用帧、范围与数据版本 |
 
-workspace.catalog 的 nameContains 为 NFC 归一化后的名称子串，states 只筛选运行目录，允许运行状态枚举；流程与资产目录使用空数组。空数组查询全部允许状态；未知状态返回 INVALID_PARAMS。order 为 updatedDesc、nameAsc 或 nameDesc，相同排序值以对象身份作为稳定次序键。名称匹配忽略大小写，不解释通配符、表达式或 SQL。
+workspace.catalog 的 nameContains 为 NFC 归一化后的名称子串，states 只筛选运行目录，允许运行状态枚举；流程与资产目录使用空数组。空数组查询全部允许状态；未知状态返回 INVALID_ARGUMENT。order 为 updatedDesc、nameAsc 或 nameDesc，相同排序值以对象身份作为稳定次序键。名称匹配忽略大小写，不解释通配符、表达式或 SQL。
 
 template.candidates 在固定候选版本中先应用 minimumScore，再按评分、位置与候选身份排序。observation.query 的时间为 UTC，查询区间左闭右开，排序以时间和记录身份共同确定。记录查询每页返回同一 querySnapshot、snapshotAt 和 expiresAt。
 
@@ -54,17 +54,17 @@ template.candidates 在固定候选版本中先应用 minimumScore，再按评�
 | pageSize | 整数 1～100，默认 50 |
 | includeTotal | 是否计算当前条件下的准确总数，默认 false |
 
-filter 根据 kind 校验。未知字段、错误类型和不适用于当前集合的条件返回 INVALID_PARAMS。布尔条件 false 与省略条件分别处理。数组条件去重并规范排序；省略值与其默认值具有相同查询含义。
+filter 根据 kind 校验。未知字段、错误类型和不适用于当前集合的条件返回 INVALID_ARGUMENT。布尔条件 false 与省略条件分别处理。数组条件去重并规范排序；省略值与其默认值具有相同查询含义。
 
 返回字段为 collectionId、kind、querySnapshot、items、matchedCount、countState 和 nextCursor。每条 items 为 index 与 value；value 按集合类型使用具体记录结构。index 是来源集合固定次序中的序号，筛选和翻页不重新编号。
 
 asc 按固定序号递增，desc 递减。来源序号按以下规则建立：诊断按节点、字段和诊断代码；运行要求按类型和名称；调用帧按创建次序；输入效果按输入段接收次序；命名和资产批次按固定选集次序；匹配候选按评分降序、位置和尺度；导入对象按固定清单次序；语言按规范语言名称。
 
-查询页最多 100 项，完整查询结果最多 256KiB，并遵守 1MiB 控制帧预算。读取按页面预算提前结束时，nextCursor 指向最后实际返回成员之后。服务端使用索引和一个额外成员判断是否还有后续数据。
+查询页最多 100 项，完整 result（包含查询元数据、数量与下一游标）按 RFC 8785 编码最多 256KiB UTF-8，由方法 Schema 的 x-maxUtf8Bytes 与共享分发器执行，并遵守 1MiB 控制帧预算。读取按页面预算提前结束时，nextCursor 指向最后实际返回成员之后。服务端使用索引和一个额外成员判断是否还有后续数据。
 
 nextCursor 为 null 表示末页。空结果返回 items=[]、nextCursor=null。客户端根据 nextCursor 判断是否继续，不能用本页不足 pageSize 判断末页。
 
-matchedCount 为当前条件与读取权限下的准确数量，countState=exact；未计算时返回 null 和 notComputed。includeTotal=true 要求在查询预算内完成准确计数，超时返回 QUERY_TIMEOUT。缓存计数必须绑定同一来源版本和规范化条件。首屏读取可以直接使用已有计数，或在不计算总数的情况下返回页面。
+matchedCount 为当前条件与读取权限下的准确数量，countState=exact；未计算时返回 null 和 notComputed。includeTotal=true 要求在查询预算内完成准确计数，超时返回 DEADLINE_EXCEEDED。缓存计数必须绑定同一来源版本和规范化条件。首屏读取可以直接使用已有计数，或在不计算总数的情况下返回页面。
 
 ## 快照与游标
 
@@ -86,7 +86,11 @@ run.snapshot 的 framesQuery 和 effectsQuery 固定到同一 dataVersion 和 la
 
 不可变作业结果复用其原结果索引；运行与目录使用版本化索引，按读取版本固定成员。SQLite 读取事务只覆盖一次有界页面读取，查询快照通过不可变版本根或版本化记录维持，避免长期读事务阻止写入。索引至少覆盖集合/版本与稳定序号，以及状态、类型、父调用等主要筛选字段。
 
-每个客户端最多持有 8 个集合查询快照，每工作空间最多 32 个；同时在途的集合页查询每客户端最多 2 个。普通页面读取预算 2 秒，includeTotal=true 时总预算 5 秒。容量不足返回 LIMIT_EXCEEDED，取消和连接结束释放所属查询。源集合回收须先结束其查询引用；权限撤销不等待自然到期。
+流程目录在创建快照的同一事务中读取版本序号上界。revision 的 sequence 与 valid_until 表示目录记录的可见区间：sequence 不大于上界，且 valid_until 为空或大于上界时可见。保存新版本在同一事务写入新记录、结束旧目录版本区间并更新流程头；定义内容和历史版本身份保持不变。name_key 保存名称的 NFC 与大小写折叠值，名称正序、倒序分别使用对应组合索引；更新顺序和版本历史使用 sequence 索引。
+
+查询只登记版本上界、条件、授权范围及期限。每页按最后实际返回的排序键继续读取，最多取得 pageSize+1 条匹配记录，不使用 offset，也不为快照复制目录或版本成员。历史版本固定流程与头版本上界。诊断查询复用来源集合，按原始 index 筛选迭代，仅在 includeTotal=true 时计算准确总数；多个查询不复制来源条目。名称子串等条件可扫描索引中的候选项，扫描受请求时间预算约束，不承诺任意筛选都只检查 pageSize 条记录。
+
+每个客户端最多持有 8 个集合查询快照，每工作空间最多 32 个；同时在途的集合页查询每客户端最多 2 个。普通页面读取预算 2 秒，includeTotal=true 时总预算 5 秒。实际登记的游标位置每工作空间最多 1,000,000 条；相同快照和位置复用游标，容量按已分配的状态计算，不按查询范围内的虚拟成员数重复计费。容量不足返回 LIMIT_EXCEEDED，关闭、过期和连接结束释放所属查询及游标。首屏登记和页面读取处于同一短事务，失败或超时不留下未交付的快照。源集合回收须先结束其查询引用；权限撤销不等待自然到期。
 
 workflow.validate 产生的诊断集合最多有效五分钟，每会话最多八个、每工作空间最多三十二个，空诊断结果同样受限。创建前回收过期集合；达到会话限额时淘汰本会话最早创建且没有活动查询快照的集合，仅达到全局限额时从全局同类集合中淘汰最早创建者。活动查询保护其来源直到关闭或过期，全部候选均被占用时返回 LIMIT_EXCEEDED，调用方可按 collectionId 关闭旧诊断。淘汰后的集合返回 COLLECTION_NOT_FOUND；新校验创建新的集合身份。断开或撤权释放所属集合及快照。
 

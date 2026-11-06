@@ -1,0 +1,9 @@
+{
+  "expressionPath": [
+    "answer",
+    "$expr",
+    "args",
+    1
+  ],
+  "reason": "DIVISION_BY_ZERO"
+}

@@ -52,3 +52,6 @@ jobs:
       - name: Run installed wheel
         run: >-
           uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'examples/engine/workspace.py'], check=True)"
+      - name: Test installed service contracts
+        run: >-
+          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', '-m', 'unittest', 'tests.engine.test_boundaries', '-q'], check=True)"

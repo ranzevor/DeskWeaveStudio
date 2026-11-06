@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from deskweave.contracts import validator
+from deskweave.contracts import schema_issues
 from deskweave.domain.values import _shape, matches_type
 from deskweave.errors import DeskWeaveError
 from deskweave.json import dumps
@@ -15,7 +15,6 @@ def validate_workflow(
 ) -> list[dict]:
     dumps(definition, max_bytes=33_554_432, checkpoint=checkpoint)
     diagnostics = []
-    schema_fields = set()
 
     def ordered():
         result = sorted(
@@ -34,20 +33,9 @@ def validate_workflow(
             item["fieldPath"] = field[:256]
         diagnostics.append(item)
 
-    for error in validator("urn:deskweave:workflow:1").iter_errors(definition):
-        checkpoint()
-        paths = [list(error.absolute_path)]
-        if error.validator == "required":
-            paths = [
-                [*error.absolute_path, name]
-                for name in error.validator_value
-                if name not in error.instance
-            ]
-        for path in paths:
-            field = "/" + "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in path)
-            if field not in schema_fields:
-                schema_fields.add(field)
-                add("WORKFLOW_SCHEMA", "字段不符合流程格式。", field=field)
+    for path, _reason in schema_issues("urn:deskweave:workflow:1", definition, checkpoint):
+        field = "/" + "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in path)
+        add("WORKFLOW_SCHEMA", "字段不符合流程格式。", field=field)
     checkpoint()
     if diagnostics:
         return ordered()

@@ -37,7 +37,8 @@ class ExpressionTests(unittest.TestCase):
         self.assertIsNone(evaluate(expr("coalesce", missing, None)))
         with self.assertRaises(DeskWeaveError) as caught:
             evaluate(expr("coalesce", expr("divide", 1, 0), 2))
-        self.assertEqual(caught.exception.code, "VALUE_DIVISION_BY_ZERO")
+        self.assertEqual(caught.exception.code, "INVALID_ARGUMENT")
+        self.assertEqual(caught.exception.details["reason"], "DIVISION_BY_ZERO")
 
     def test_type_separation_and_json_equality(self):
         self.assertFalse(evaluate(expr("equal", False, 0)))

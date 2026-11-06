@@ -11,12 +11,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from deskweave.adapters.workspace import Workspace, utc_time
-from deskweave.contracts import method_schema, validate
+from deskweave.contracts import method_schema, schema_contents, validate
 from deskweave.domain.values import evaluate
 from deskweave.domain.workflow import validate_workflow
 from deskweave.engine.pagination import Pages
 from deskweave.errors import DeskWeaveError
-from deskweave.json import digest, dumps, loads
+from deskweave.json import MAX_FRAME, digest, dumps, loads
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,8 @@ class Method:
     permissions: frozenset[str]
     defaults: dict
     local: bool = False
+    params_bytes: int = MAX_FRAME
+    result_bytes: int = MAX_FRAME
 
 
 class Engine:
@@ -104,7 +106,14 @@ class Engine:
         schemas, _ = contract_registry()
         if name not in schemas["urn:deskweave:service:1"]["$defs"]:
             raise ValueError("服务方法不在公共契约中：" + name)
-        self._methods[name] = Method(handler, frozenset(permissions), defaults or {}, local)
+        self._methods[name] = Method(
+            handler,
+            frozenset(permissions),
+            defaults or {},
+            local,
+            schema_contents(method_schema(name, "params")).get("x-maxUtf8Bytes", MAX_FRAME),
+            schema_contents(method_schema(name, "result")).get("x-maxUtf8Bytes", MAX_FRAME),
+        )
 
     def open_session(
         self,
@@ -189,6 +198,11 @@ class Engine:
                         deadline, started + (5 if request["params"].get("includeTotal") else 2)
                     )
                 with self.workspace.budget(deadline, self.monotonic):
+                    dumps(
+                        request["params"],
+                        max_bytes=method.params_bytes,
+                        checkpoint=self.workspace.check_deadline,
+                    )
                     validate(method_schema(request["method"], "params"), request["params"])
                     self.workspace.check_deadline()
                     params = copy.deepcopy(method.defaults)
@@ -203,6 +217,11 @@ class Engine:
                         raise DeskWeaveError(
                             "INTERNAL_ERROR", "服务结果不符合接口要求。"
                         ) from error
+                    dumps(
+                        result,
+                        max_bytes=method.result_bytes,
+                        checkpoint=self.workspace.check_deadline,
+                    )
                     response = {**header, "ok": True, "result": result}
                     dumps(response, checkpoint=self.workspace.check_deadline)
             return response
@@ -304,38 +323,34 @@ class Engine:
 
     def _revisions(self, session, params, _request_id):
         binding = digest({"method": "workflow.revisions", **params, "cursor": None})
-        identity = None
-        if params["cursor"] is None:
-            with self.workspace.transaction() as connection:
-                workflow = connection.execute(
-                    "SELECT head_revision FROM workflow WHERE id=?", (params["workflowId"],)
-                ).fetchone()
-                if workflow is None:
-                    raise DeskWeaveError("RESOURCE_NOT_FOUND", "流程不存在。")
-                head = workflow[0]
-            identity = self.pages.begin(
-                session.id,
-                session.authorization_version,
-                binding,
-                (
-                    "SELECT json_object('revision',id,'parentRevision',parent_id,'name',name,"
-                    "'createdAt',created_at,'definitionHash',definition_hash) AS value "
-                    "FROM revision "
-                    "WHERE workflow_id=? ORDER BY sequence DESC",
-                    (params["workflowId"],),
-                ),
-                {"headRevision": head},
+
+        def factory(connection):
+            workflow = connection.execute(
+                "SELECT head_revision,sequence FROM workflow WHERE id=?", (params["workflowId"],)
+            ).fetchone()
+            if workflow is None:
+                raise DeskWeaveError("RESOURCE_NOT_FOUND", "流程不存在。")
+            return {"workflowId": params["workflowId"], "watermark": workflow["sequence"]}, {
+                "headRevision": workflow["head_revision"]
+            }
+
+        def project(page):
+            page.update(
+                workflowId=params["workflowId"], headRevision=page.pop("extra")["headRevision"]
             )
-        page = self.pages.read(
+            return page
+
+        return self.pages.read(
             session.id,
             session.authorization_version,
             binding,
             params["pageSize"],
+            factory=factory,
+            reader=self.workspace.revision_rows,
+            project=project,
+            max_bytes=self._methods["workflow.revisions"].result_bytes,
             cursor=params["cursor"],
-            snapshot_id=identity,
         )
-        page.update(workflowId=params["workflowId"], headRevision=page.pop("extra")["headRevision"])
-        return page
 
     def _catalog(self, session, params, _request_id):
         if params["kind"] != "workflow":
@@ -344,45 +359,35 @@ class Engine:
             raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有流程读取权限。")
         params["nameContains"] = unicodedata.normalize("NFC", params["nameContains"]).casefold()
         binding = digest({"method": "workspace.catalog", **params, "cursor": None})
-        identity = None
-        if params["cursor"] is None:
-            order = {
-                "updatedDesc": "sequence DESC,id ASC",
-                "nameAsc": "fold(name) ASC,id ASC",
-                "nameDesc": "fold(name) DESC,id ASC",
-            }[params["order"]]
-            where, arguments = ["instr(fold(name),?)>0"], [params["nameContains"]]
-            if session.workflow_ids is not None:
-                where.append("id IN (SELECT value FROM json_each(?))")
-                arguments.append(dumps(sorted(session.workflow_ids)).decode())
-            with self.workspace.transaction() as connection:
-                connection.create_function(
-                    "fold",
-                    1,
-                    lambda text: unicodedata.normalize("NFC", text).casefold(),
-                    deterministic=True,
-                )
-            identity = self.pages.begin(
-                session.id,
-                session.authorization_version,
-                binding,
-                (
-                    "SELECT json_object('id',id,'name',name,'version',head_revision) AS value "
-                    "FROM workflow WHERE " + " AND ".join(where) + " ORDER BY " + order,
-                    arguments,
-                ),
-                {},
-            )
-        page = self.pages.read(
+
+        def factory(connection):
+            watermark = connection.execute(
+                "SELECT COALESCE(MAX(sequence),0) FROM revision"
+            ).fetchone()[0]
+            return {
+                "watermark": watermark,
+                "order": params["order"],
+                "nameContains": params["nameContains"],
+                "workflowIds": None
+                if session.workflow_ids is None
+                else sorted(session.workflow_ids),
+            }, {}
+
+        def project(page):
+            page.pop("extra")
+            return page
+
+        return self.pages.read(
             session.id,
             session.authorization_version,
             binding,
             params["pageSize"],
+            factory=factory,
+            reader=self.workspace.catalog_rows,
+            project=project,
+            max_bytes=self._methods["workspace.catalog"].result_bytes,
             cursor=params["cursor"],
-            snapshot_id=identity,
         )
-        page.pop("extra")
-        return page
 
     def _query(self, session, params, _request_id):
         collection = self._collections.get(params["collectionId"])
@@ -397,50 +402,73 @@ class Engine:
         if collection["expires"] <= self.clock():
             raise DeskWeaveError("CURSOR_EXPIRED", "结果集合已过期，请重新校验流程。")
         filters = {"text": "", "codes": [], "nodeId": None, **params["filter"]}
-        filters["codes"] = sorted(filters["codes"])
+        filters["text"] = unicodedata.normalize("NFC", filters["text"]).casefold()
+        filters["codes"] = sorted(set(filters["codes"]))
         params["filter"] = filters
         binding = digest({"method": "query.read", **params, "cursor": None})
-        identity = None
-        if params["cursor"] is None:
-            rows = [
-                {"index": index, "value": row}
-                for index, row in enumerate(collection["items"])
-                if filters["text"] in row["message"]
+
+        def matches(row):
+            self.workspace.check_deadline()
+            return (
+                (
+                    not filters["text"]
+                    or any(
+                        filters["text"] in unicodedata.normalize("NFC", row[key]).casefold()
+                        for key in ("message", "code")
+                    )
+                )
                 and (not filters["codes"] or row["code"] in filters["codes"])
                 and (filters["nodeId"] is None or row.get("nodeId") == filters["nodeId"])
-            ]
-            if params["order"] == "desc":
-                rows.reverse()
-            identity = self.pages.begin(
-                session.id,
-                session.authorization_version,
-                binding,
-                rows,
-                {
-                    "count": len(rows),
-                    "sourceVersion": collection["version"],
-                    "collectionId": params["collectionId"],
-                },
-                expires_at=collection["expires"],
             )
-        page = self.pages.read(
+
+        def factory(_connection):
+            count = (
+                sum(matches(row) for row in collection["items"]) if params["includeTotal"] else None
+            )
+            return {}, {
+                "count": count,
+                "sourceVersion": collection["version"],
+                "collectionId": params["collectionId"],
+            }
+
+        def reader(_connection, _source, position, _limit):
+            if params["order"] == "desc":
+                indices = range(
+                    len(collection["items"]) - 1 if position is None else position - 1, -1, -1
+                )
+            else:
+                indices = range(0 if position is None else position + 1, len(collection["items"]))
+            for index in indices:
+                row = collection["items"][index]
+                if matches(row):
+                    yield index, {"index": index, "value": row}
+
+        def project(page):
+            return {
+                "collectionId": params["collectionId"],
+                "kind": "diagnostics",
+                "querySnapshot": {
+                    key: page[key] for key in ("snapshotId", "snapshotAt", "expiresAt")
+                }
+                | {"sourceVersion": page["extra"]["sourceVersion"]},
+                "items": page["items"],
+                "nextCursor": page["nextCursor"],
+                "matchedCount": page["extra"]["count"],
+                "countState": "exact" if params["includeTotal"] else "notComputed",
+            }
+
+        return self.pages.read(
             session.id,
             session.authorization_version,
             binding,
             params["pageSize"],
+            factory=factory,
+            reader=reader,
+            project=project,
+            max_bytes=self._methods["query.read"].result_bytes,
             cursor=params["cursor"],
-            snapshot_id=identity,
+            expires_at=collection["expires"],
         )
-        return {
-            "collectionId": params["collectionId"],
-            "kind": "diagnostics",
-            "querySnapshot": {key: page[key] for key in ("snapshotId", "snapshotAt", "expiresAt")}
-            | {"sourceVersion": page["extra"]["sourceVersion"]},
-            "items": page["items"],
-            "nextCursor": page["nextCursor"],
-            "matchedCount": page["extra"]["count"] if params["includeTotal"] else None,
-            "countState": "exact" if params["includeTotal"] else "notComputed",
-        }
 
     def _close_query(self, session, params, _request_id):
         if "snapshotId" in params:

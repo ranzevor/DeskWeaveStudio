@@ -230,6 +230,43 @@
           "additionalProperties": false
         }
       ]
+    },
+    "expressionErrorDetails": {
+      "type": "object",
+      "properties": {
+        "expressionPath": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 262144
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 999999
+              }
+            ]
+          }
+        },
+        "reason": {
+          "enum": [
+            "PATH_MISSING",
+            "DIVISION_BY_ZERO",
+            "TYPE_MISMATCH",
+            "NUMERIC_RANGE",
+            "AST_DEPTH",
+            "AST_NODES"
+          ]
+        }
+      },
+      "required": [
+        "expressionPath",
+        "reason"
+      ],
+      "additionalProperties": false
     }
   },
   "$ref": "#/$defs/value"
