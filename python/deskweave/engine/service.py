@@ -157,7 +157,11 @@ class Engine:
         reply_id = request.get("id", "invalid") if type(request) is dict else "invalid"
         if type(reply_id) is not str or not 1 <= len(reply_id) <= 128:
             reply_id = "invalid"
-        response = {"protocolVersion": "1.0", "kind": "response", "replyTo": reply_id}
+        try:
+            reply_id.encode("utf-8")
+        except UnicodeEncodeError:
+            reply_id = "invalid"
+        header = {"protocolVersion": "1.0", "kind": "response", "replyTo": reply_id}
         started = self.monotonic()
         try:
             dumps(request)
@@ -177,33 +181,47 @@ class Engine:
                     and not session.local
                 ):
                     raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此操作权限。")
-                validate(method_schema(request["method"], "params"), request["params"])
-                params = copy.deepcopy(method.defaults)
-                params.update(copy.deepcopy(request["params"]))
-                if "workflowId" in params:
-                    self._authorize_workflow(session, params["workflowId"])
                 deadline = started + request["deadlineMs"] / 1000
+                if request["method"] == "expression.preview":
+                    deadline = min(deadline, started + 1)
                 if request["method"] in {"query.read", "workspace.catalog", "workflow.revisions"}:
-                    deadline = min(deadline, started + (5 if params.get("includeTotal") else 2))
+                    deadline = min(
+                        deadline, started + (5 if request["params"].get("includeTotal") else 2)
+                    )
                 with self.workspace.budget(deadline, self.monotonic):
+                    validate(method_schema(request["method"], "params"), request["params"])
+                    self.workspace.check_deadline()
+                    params = copy.deepcopy(method.defaults)
+                    params.update(copy.deepcopy(request["params"]))
+                    if "workflowId" in params:
+                        self._authorize_workflow(session, params["workflowId"])
                     result = method.handler(session, params, request["id"])
-                try:
-                    validate(method_schema(request["method"], "result"), result)
-                except DeskWeaveError as error:
-                    raise DeskWeaveError("INTERNAL_ERROR", "服务结果不符合接口要求。") from error
-                response.update(ok=True, result=result)
+                    self.workspace.check_deadline()
+                    try:
+                        validate(method_schema(request["method"], "result"), result)
+                    except DeskWeaveError as error:
+                        raise DeskWeaveError(
+                            "INTERNAL_ERROR", "服务结果不符合接口要求。"
+                        ) from error
+                    response = {**header, "ok": True, "result": result}
+                    dumps(response, checkpoint=self.workspace.check_deadline)
+            return response
         except DeskWeaveError as error:
-            response.update(ok=False, error=error.as_dict())
+            response = {**header, "ok": False, "error": error.as_dict()}
         except (OSError, sqlite3.Error):
-            response.update(
-                ok=False,
-                error=DeskWeaveError(
+            response = {
+                **header,
+                "ok": False,
+                "error": DeskWeaveError(
                     "STORAGE_UNAVAILABLE",
                     "工作空间存储不可用，请检查目录访问和剩余空间。",
                     retry="afterQuery",
                 ).as_dict(),
-            )
-        dumps(response)
+            }
+        try:
+            dumps(response)
+        except DeskWeaveError as error:
+            response = {**header, "ok": False, "error": error.as_dict()}
         return response
 
     @staticmethod
@@ -211,16 +229,24 @@ class Engine:
         if session.workflow_ids is not None and workflow_id not in session.workflow_ids:
             raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此流程的访问权限。")
 
-    @staticmethod
-    def _preview(_session, params, _request_id):
-        return {"value": evaluate(params["value"], params["context"], params["expectedType"])}
+    def _preview(self, _session, params, _request_id):
+        return {
+            "value": evaluate(
+                params["value"],
+                params["context"],
+                params["expectedType"],
+                checkpoint=self.workspace.check_deadline,
+            )
+        }
 
     def _save(self, session, params, request_id):
         if "modelRef" in params:
             raise DeskWeaveError("METHOD_UNAVAILABLE", "内容引用保存服务尚未实现。")
         if params["workflowId"] != params["definition"]["id"]:
             raise DeskWeaveError("INVALID_ARGUMENT", "流程定义与保存目标不一致。")
-        diagnostics = validate_workflow(params["definition"])
+        diagnostics = validate_workflow(
+            params["definition"], checkpoint=self.workspace.check_deadline
+        )
         if diagnostics:
             raise DeskWeaveError("INVALID_WORKFLOW", "流程存在结构或连接错误，请先校验流程。")
         if params["definition"]["resources"] or params["dependencies"]:
@@ -230,28 +256,38 @@ class Engine:
     def _read(self, _session, params, _request_id):
         if params["contentMode"] == "resource":
             raise DeskWeaveError("METHOD_UNAVAILABLE", "资源内容读取服务尚未实现。")
-        result = self.workspace.read(params["workflowId"], params["revision"])
-        dumps(result)
-        return result
+        return self.workspace.read(params["workflowId"], params["revision"])
 
     def _validate(self, session, params, _request_id):
         definition = params.get("definition")
+        workflow_id = params.get("workflowId")
         if definition is None:
-            definition = self.workspace.read(params["workflowId"], params["revision"])["definition"]
+            definition = self.workspace.read(workflow_id, params["revision"])["definition"]
         else:
-            self._authorize_workflow(session, definition["id"])
+            identity = definition.get("id")
+            if type(identity) is str and 1 <= len(identity) <= 128:
+                self._authorize_workflow(session, identity)
+                workflow_id = identity
+        diagnostics = validate_workflow(definition, checkpoint=self.workspace.check_deadline)
+        version = digest(definition)
+        self.workspace.check_deadline()
         now = self.clock()
+        active = self.pages.active_collections()
         self._collections = {
             key: value for key, value in self._collections.items() if value["expires"] > now
         }
-        if len(self._collections) >= 32:
-            raise DeskWeaveError("LIMIT_EXCEEDED", "诊断集合数量已满，请稍后重试。")
-        diagnostics = validate_workflow(definition)
+        owned = [key for key, value in self._collections.items() if value["owner"] == session.id]
+        if len(owned) >= 8 or len(self._collections) >= 32:
+            candidates = owned if len(owned) >= 8 else self._collections
+            oldest = next((key for key in candidates if key not in active), None)
+            if oldest is None:
+                raise DeskWeaveError("LIMIT_EXCEEDED", "诊断集合数量已满，请关闭已有诊断集合。")
+            del self._collections[oldest]
         identity = uuid.uuid4().hex
         self._collections[identity] = {
             "owner": session.id,
-            "workflow": definition["id"],
-            "version": digest(definition),
+            "workflow": workflow_id,
+            "version": version,
             "expires": now + 300,
             "items": diagnostics,
         }
@@ -356,7 +392,8 @@ class Engine:
             or params["kind"] != "diagnostics"
         ):
             raise DeskWeaveError("COLLECTION_NOT_FOUND", "结果集合不存在。")
-        self._authorize_workflow(session, collection["workflow"])
+        if collection["workflow"] is not None:
+            self._authorize_workflow(session, collection["workflow"])
         if collection["expires"] <= self.clock():
             raise DeskWeaveError("CURSOR_EXPIRED", "结果集合已过期，请重新校验流程。")
         filters = {"text": "", "codes": [], "nodeId": None, **params["filter"]}
@@ -379,7 +416,11 @@ class Engine:
                 session.authorization_version,
                 binding,
                 rows,
-                {"count": len(rows), "sourceVersion": collection["version"]},
+                {
+                    "count": len(rows),
+                    "sourceVersion": collection["version"],
+                    "collectionId": params["collectionId"],
+                },
                 expires_at=collection["expires"],
             )
         page = self.pages.read(
@@ -402,7 +443,14 @@ class Engine:
         }
 
     def _close_query(self, session, params, _request_id):
-        return self.pages.close(session.id, params["snapshotId"])
+        if "snapshotId" in params:
+            return self.pages.close(session.id, params["snapshotId"])
+        identity = params["collectionId"]
+        self.pages.release_collection(session.id, identity)
+        collection = self._collections.get(identity)
+        if collection is not None and collection["owner"] == session.id:
+            del self._collections[identity]
+        return {"closed": True}
 
     def _request_status(self, session, params, _request_id):
         with self.workspace.transaction() as connection:

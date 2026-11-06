@@ -47,7 +47,7 @@ Engine 消息结构见 [message.schema.json](../../contracts/message.schema.json
 }
 ```
 
-请求 deadlineMs 是接收端从准入开始计算的相对预算，不依赖客户端墙钟一致。返回响应分为 ok=true 的 result 和 ok=false 的 error；长作业先返回 operationId，运行先返回 runId 和 accepted 状态。
+请求 deadlineMs 是接收端从准入开始计算的相对预算，不依赖客户端墙钟一致；覆盖处理、结果校验和完整响应编码，超时返回 DEADLINE_EXCEEDED。完整响应超过 1MiB 时返回 LIMIT_EXCEEDED 错误信封。返回响应分为 ok=true 的 result 和 ok=false 的 error；长作业先返回 operationId，运行先返回 runId 和 accepted 状态。
 
 ## 应用命令
 
@@ -55,10 +55,10 @@ Engine 消息结构见 [message.schema.json](../../contracts/message.schema.json
 |---|---|---|
 | workspace.open | 原生选择器授予的目录能力 | 工作空间身份、格式和权限 |
 | workspace.catalog | kind、nameContains、states、order、cursor、pageSize | 固定查询中的授权对象与下一游标 |
-| query.read / query.close | 集合、类型、筛选、排序、游标、每页数量 / snapshotId | 类型化分页结果 / 查询快照释放 |
+| query.read / query.close | 集合、类型、筛选、排序、游标、每页数量 / snapshotId 或 collectionId | 类型化分页结果 / 快照或诊断集合释放 |
 | workspace.backup/restore | 导出位置或备份来源及新目录能力 | 可取消作业 |
 | workflow.read | workflowId、revision | 定义、依赖映射和摘要 |
-| workflow.validate | 定义或固定版本 | 字段/图/资源诊断 |
+| workflow.validate | 定义对象或固定版本；格式非法的定义进入诊断流程 | 字段/图/资源诊断 |
 | workflow.save | draftVersion、baseRevision、定义 | 已提交版本和确认代次 |
 | workflow.export | workflowId、revision、outputGrant | 导出作业和包清单 |
 | run.start | revision、参数、目标绑定、预算 | runId、接收状态 |

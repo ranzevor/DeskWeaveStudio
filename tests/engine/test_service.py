@@ -8,10 +8,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
+from deskweave.adapters.framing import FrameDecoder, encode_frame
 from deskweave.adapters.workspace import Workspace
 from deskweave.contracts import validate
 from deskweave.engine.service import Engine
 from deskweave.errors import DeskWeaveError
+from deskweave.json import MAX_FRAME, dumps
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -38,7 +40,7 @@ class ServiceTests(unittest.TestCase):
         self.workspace.close()
         self.temporary.cleanup()
 
-    def request(self, method, params, *, session=None, request_id=None):
+    def request(self, method, params, *, session=None, request_id=None, deadline_ms=30000):
         session = session or self.editor
         return self.engine.dispatch(
             session.id,
@@ -49,7 +51,7 @@ class ServiceTests(unittest.TestCase):
                 "session": session.id,
                 "workspace": self.workspace.id,
                 "method": method,
-                "deadlineMs": 30000,
+                "deadlineMs": deadline_ms,
                 "params": params,
             },
         )
@@ -275,6 +277,7 @@ class ServiceTests(unittest.TestCase):
 
     def test_single_writer_across_processes(self):
         command = """from pathlib import Path
+from deskweave.adapters.framing import FrameDecoder, encode_frame
 from deskweave.adapters.workspace import Workspace
 from deskweave.errors import DeskWeaveError
 import sys
@@ -412,3 +415,441 @@ else:
             "workflow.read", {"workflowId": "hello", "revision": first["revision"]}
         )
         self.assertEqual(response["error"]["code"], "STORAGE_CORRUPT")
+
+    def test_computation_deadline_returns_protocol_error(self):
+        from deskweave.engine import service
+
+        clock = [0.0]
+        self.engine.monotonic = lambda: clock[0]
+        for method, name, params in (
+            ("expression.preview", "evaluate", {"value": 1}),
+            ("workflow.validate", "validate_workflow", {"definition": workflow()}),
+        ):
+            with self.subTest(method=method):
+                clock[0] = 0.0
+                original = getattr(service, name)
+
+                def delayed(*args, original=original, **kwargs):
+                    result = original(*args, **kwargs)
+                    clock[0] = 31.0
+                    return result
+
+                with patch.object(service, name, side_effect=delayed):
+                    response = self.request(method, params)
+                self.assertFalse(response["ok"], response)
+                self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+                self.assertNotIn("result", response)
+                validate("urn:deskweave:message:1", response)
+
+    def test_repeated_validation_keeps_latest_results(self):
+        for invalid in (False, True):
+            for index in range(40):
+                definition = workflow(name=f"编辑 {index}")
+                if invalid:
+                    definition["entry"] = "missing"
+                result = self.success("workflow.validate", {"definition": definition})
+                self.assertEqual(result["valid"], not invalid)
+            page = self.success(
+                "query.read",
+                {"collectionId": result["diagnosticsQuery"]["collectionId"], "kind": "diagnostics"},
+            )
+            self.assertEqual(bool(page["items"]), invalid)
+            self.success("query.close", {"snapshotId": page["querySnapshot"]["snapshotId"]})
+
+    def test_invalid_definition_returns_multiple_field_diagnostics(self):
+        definition = workflow()
+        del definition["name"]
+        del definition["entry"]
+        definition["variables"] = []
+        result = self.success("workflow.validate", {"definition": definition})
+        self.assertFalse(result["valid"])
+        page = self.success(
+            "query.read",
+            {"collectionId": result["diagnosticsQuery"]["collectionId"], "kind": "diagnostics"},
+        )
+        diagnostics = [item["value"] for item in page["items"]]
+        self.assertEqual({item["code"] for item in diagnostics}, {"WORKFLOW_SCHEMA"})
+        self.assertEqual(
+            {item["fieldPath"] for item in diagnostics}, {"/name", "/entry", "/variables"}
+        )
+        self.assertEqual(result["diagnosticCount"], 3)
+
+    def test_full_response_frame_boundary(self):
+        request_id = "响应" * 64
+        base = None
+        for size in (MAX_FRAME - 1, MAX_FRAME, MAX_FRAME + 1):
+            with self.subTest(size=size):
+                definition = workflow()
+                definition["variables"] = {f"part{i}": "x" * 250000 for i in range(4)}
+                definition["variables"]["tail"] = ""
+                result = {
+                    "workflowId": "hello",
+                    "revision": "r" * 32,
+                    "definition": definition,
+                    "dependencies": {},
+                    "definitionHash": "0" * 64,
+                }
+                envelope = {
+                    "protocolVersion": "1.0",
+                    "kind": "response",
+                    "replyTo": request_id,
+                    "ok": True,
+                    "result": result,
+                }
+                definition["variables"]["tail"] = "x" * (size - len(dumps(envelope)))
+                self.assertLess(len(dumps(result)), MAX_FRAME)
+                saved = self.workspace.save(
+                    "studio",
+                    uuid.uuid4().hex,
+                    {
+                        "workflowId": "hello",
+                        "draftVersion": 1,
+                        "baseRevision": base,
+                        "definition": definition,
+                        "dependencies": {},
+                    },
+                )
+                base = saved["revision"]
+                response = self.request(
+                    "workflow.read",
+                    {"workflowId": "hello", "revision": base},
+                    request_id=request_id,
+                )
+                validate("urn:deskweave:message:1", response)
+                self.assertEqual(FrameDecoder().feed(encode_frame(response)), [response])
+                if size <= MAX_FRAME:
+                    self.assertTrue(response["ok"], response.get("error"))
+                    self.assertEqual(len(dumps(response)), size)
+                else:
+                    self.assertFalse(response["ok"])
+                    self.assertEqual(response["error"]["code"], "LIMIT_EXCEEDED")
+                    self.assertNotIn("result", response)
+
+    def test_expression_checkpoints_stop_remaining_operations(self):
+        from deskweave.domain import values
+        from tests.engine.test_values import expr
+
+        clock = [0.0]
+        self.engine.monotonic = lambda: clock[0]
+        add = values.operator.add
+        for deadline_ms, elapsed in ((5, 0.005), (30000, 1.0)):
+            clock[0] = 0.0
+
+            def delayed_add(left, right, elapsed=elapsed):
+                clock[0] = elapsed
+                return add(left, right)
+
+            with patch.object(values.operator, "add", side_effect=delayed_add) as operation:
+                response = self.request(
+                    "expression.preview",
+                    {"value": [expr("add", 1, 2), expr("add", 3, 4)]},
+                    deadline_ms=deadline_ms,
+                )
+            self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+            self.assertEqual(operation.call_count, 1)
+        self.assertEqual(self.success("expression.preview", {"value": 3})["value"], 3)
+
+    def test_workflow_checkpoints_stop_remaining_nodes(self):
+        from deskweave.domain import workflow as domain
+
+        clock = [0.0]
+        self.engine.monotonic = lambda: clock[0]
+        shape = domain._shape
+
+        def delayed_shape(*args, **kwargs):
+            clock[0] = 30.0
+            return shape(*args, **kwargs)
+
+        with patch.object(domain, "_shape", side_effect=delayed_shape) as operation:
+            response = self.request("workflow.validate", {"definition": workflow()})
+        self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+        self.assertEqual(operation.call_count, 1)
+        self.assertEqual(self.engine._collections, {})
+        self.assertTrue(self.success("workflow.validate", {"definition": workflow()})["valid"])
+
+    def test_deadline_covers_result_validation_and_serialization(self):
+        from deskweave.engine import service
+
+        clock = [0.0]
+        self.engine.monotonic = lambda: clock[0]
+        for stage in ("validate", "dumps"):
+            with self.subTest(stage=stage):
+                clock[0] = 0.0
+                original = getattr(service, stage)
+
+                def delayed(*args, original=original, stage=stage, **kwargs):
+                    result = original(*args, **kwargs)
+                    if stage == "validate" and str(args[0]).endswith("/result"):
+                        clock[0] = 1.0
+                    if stage == "dumps" and args[0].get("kind") == "response":
+                        clock[0] = 1.0
+                    return result
+
+                with patch.object(service, stage, side_effect=delayed):
+                    response = self.request("expression.preview", {"value": 1})
+                self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+                self.assertNotIn("result", response)
+                validate("urn:deskweave:message:1", response)
+
+    def test_timeout_after_commit_can_query_saved_request(self):
+        from deskweave.engine import service
+
+        clock = [0.0]
+        self.engine.monotonic = lambda: clock[0]
+        encode = service.dumps
+
+        def delayed_response(value, **kwargs):
+            result = encode(value, **kwargs)
+            if value.get("kind") == "response" and value.get("ok"):
+                clock[0] = 30.0
+            return result
+
+        with patch.object(service, "dumps", side_effect=delayed_response):
+            response = self.request(
+                "workflow.save",
+                {
+                    "workflowId": "hello",
+                    "draftVersion": 1,
+                    "baseRevision": None,
+                    "definition": workflow(),
+                    "dependencies": {},
+                },
+                request_id="committed-before-timeout",
+            )
+        self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+        status = self.success("request.status", {"requestId": "committed-before-timeout"})
+        self.assertEqual(status["state"], "finished")
+        self.assertEqual(
+            self.save(request_id="committed-before-timeout"),
+            status["result"],
+        )
+
+    def test_collection_close_releases_all_pages_and_is_owner_bound(self):
+        definition = workflow()
+        definition["entry"] = "missing"
+        result = self.success("workflow.validate", {"definition": definition})
+        params = {
+            "collectionId": result["diagnosticsQuery"]["collectionId"],
+            "kind": "diagnostics",
+            "pageSize": 1,
+        }
+        page = self.success("query.read", params)
+        other = self.success("query.read", {**params, "order": "desc"})
+        close = {"collectionId": params["collectionId"]}
+        self.success("query.close", close, session=self.remote)
+        self.success("query.read", {**params, "cursor": page["nextCursor"]})
+        self.success("query.close", {"snapshotId": other["querySnapshot"]["snapshotId"]})
+        self.success("query.read", {**params, "cursor": page["nextCursor"]})
+        self.success("query.close", close)
+        self.success("query.close", close)
+        for cursor in (None, page["nextCursor"]):
+            response = self.request("query.read", {**params, "cursor": cursor})
+            self.assertEqual(response["error"]["code"], "COLLECTION_NOT_FOUND")
+        with self.workspace.transaction() as connection:
+            for table in ("query_snapshot", "query_member", "query_cursor"):
+                self.assertEqual(
+                    connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0
+                )
+
+    def test_continuous_validation_and_release(self):
+        for index in range(40):
+            definition = workflow(name=f"校验 {index}")
+            definition["entry"] = "missing"
+            result = self.success("workflow.validate", {"definition": definition})
+            identity = result["diagnosticsQuery"]["collectionId"]
+            self.success("query.read", {"collectionId": identity, "kind": "diagnostics"})
+            self.success("query.close", {"collectionId": identity})
+        self.assertEqual(self.engine._collections, {})
+        with self.workspace.transaction() as connection:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM query_snapshot").fetchone()[0], 0
+            )
+
+    def test_validation_quota_protects_active_queries_and_other_sessions(self):
+        definition = workflow()
+        definition["entry"] = "missing"
+        reference = self.success(
+            "workflow.validate", {"definition": definition}, session=self.remote
+        )["diagnosticsQuery"]
+        params = {"collectionId": reference["collectionId"], "kind": "diagnostics", "pageSize": 1}
+        page = self.success("query.read", params, session=self.remote)
+        for index in range(40):
+            self.success("workflow.validate", {"definition": workflow(name=f"更新 {index}")})
+        self.success("query.read", {**params, "cursor": page["nextCursor"]}, session=self.remote)
+        references = []
+        for _ in range(8):
+            reference = self.success("workflow.validate", {"definition": workflow()})[
+                "diagnosticsQuery"
+            ]
+            references.append(reference)
+            self.success(
+                "query.read", {"collectionId": reference["collectionId"], "kind": "diagnostics"}
+            )
+        response = self.request("workflow.validate", {"definition": workflow()})
+        self.assertEqual(response["error"]["code"], "LIMIT_EXCEEDED")
+        self.success("workflow.validate", {"definition": workflow()}, session=self.remote)
+        self.success("query.close", {"collectionId": references[0]["collectionId"]})
+        self.success("workflow.validate", {"definition": workflow()})
+
+    def test_global_collection_capacity_and_expiry(self):
+        sessions = [
+            self.engine.open_session(f"reader-{index}", {"workflow.read"}) for index in range(5)
+        ]
+        oldest = None
+        newest = None
+        for session in sessions[:4]:
+            for _ in range(8):
+                reference = self.success(
+                    "workflow.validate", {"definition": workflow()}, session=session
+                )["diagnosticsQuery"]
+                oldest = oldest or reference
+                newest = reference
+        self.success("workflow.validate", {"definition": workflow()}, session=sessions[4])
+        self.assertEqual(len(self.engine._collections), 32)
+        response = self.request(
+            "query.read",
+            {"collectionId": oldest["collectionId"], "kind": "diagnostics"},
+            session=sessions[0],
+        )
+        self.assertEqual(response["error"]["code"], "COLLECTION_NOT_FOUND")
+        params = {"collectionId": newest["collectionId"], "kind": "diagnostics"}
+        self.success("query.read", params, session=sessions[3])
+        self.now[0] += 300
+        self.assertEqual(
+            self.request("query.read", params, session=sessions[3])["error"]["code"],
+            "CURSOR_EXPIRED",
+        )
+        self.success("workflow.validate", {"definition": workflow()}, session=sessions[4])
+        self.assertEqual(len(self.engine._collections), 1)
+        with self.workspace.transaction() as connection:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM query_snapshot").fetchone()[0], 0
+            )
+
+    def test_validation_handles_malformed_identity_without_losing_authorization(self):
+        restricted = self.engine.open_session("limited", {"workflow.read"}, workflow_ids={"hello"})
+        for identity in (None, [], {}, 12, "", "x" * 129):
+            definition = workflow()
+            if identity is None:
+                del definition["id"]
+            else:
+                definition["id"] = identity
+            result = self.success(
+                "workflow.validate", {"definition": definition}, session=restricted
+            )
+            self.assertFalse(result["valid"])
+            params = {
+                "collectionId": result["diagnosticsQuery"]["collectionId"],
+                "kind": "diagnostics",
+            }
+            page = self.success("query.read", params, session=restricted)
+            self.assertIn("/id", {item["value"]["fieldPath"] for item in page["items"]})
+            self.success(
+                "query.close", {"collectionId": params["collectionId"]}, session=restricted
+            )
+        definition = workflow("other")
+        del definition["name"]
+        response = self.request("workflow.validate", {"definition": definition}, session=restricted)
+        self.assertEqual(response["error"]["code"], "ACCESS_DENIED")
+
+    def test_validation_request_boundaries_remain_strict(self):
+        for params in (
+            {},
+            {"definition": []},
+            {"definition": None},
+            {"definition": {}, "extra": 1},
+            {"definition": {}, "workflowId": "hello", "revision": "rev"},
+        ):
+            response = self.request("workflow.validate", params)
+            self.assertEqual(response["error"]["code"], "INVALID_ARGUMENT")
+        definition = workflow()
+        definition["variables"] = {f"part{i}": "x" * 250000 for i in range(5)}
+        response = self.request("workflow.validate", {"definition": definition})
+        self.assertEqual(response["error"]["code"], "LIMIT_EXCEEDED")
+        for params in ({}, {"snapshotId": "s", "collectionId": "c"}, {"collectionId": None}):
+            response = self.request("query.close", params)
+            self.assertEqual(response["error"]["code"], "INVALID_ARGUMENT")
+
+    def test_invalid_unicode_request_id_returns_protocol_error(self):
+        response = self.request("expression.preview", {"value": 1}, request_id="\ud800")
+        self.assertEqual(response["error"]["code"], "INVALID_ARGUMENT")
+        self.assertEqual(response["replyTo"], "invalid")
+        self.assertEqual(FrameDecoder().feed(encode_frame(response)), [response])
+
+    def test_all_active_global_collections_require_explicit_release(self):
+        sessions = [
+            self.engine.open_session(f"active-{index}", {"workflow.read"}) for index in range(5)
+        ]
+        references = []
+        for session in sessions[:4]:
+            for _ in range(8):
+                reference = self.success(
+                    "workflow.validate", {"definition": workflow()}, session=session
+                )["diagnosticsQuery"]
+                references.append(reference)
+                self.success(
+                    "query.read",
+                    {"collectionId": reference["collectionId"], "kind": "diagnostics"},
+                    session=session,
+                )
+        response = self.request(
+            "workflow.validate", {"definition": workflow()}, session=sessions[4]
+        )
+        self.assertEqual(response["error"]["code"], "LIMIT_EXCEEDED")
+        self.success(
+            "query.close", {"collectionId": references[0]["collectionId"]}, session=sessions[0]
+        )
+        self.success("workflow.validate", {"definition": workflow()}, session=sessions[4])
+        with self.workspace.transaction() as connection:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM query_snapshot").fetchone()[0], 31
+            )
+        self.assertEqual(len(self.engine._collections), 32)
+
+    def test_session_end_releases_diagnostic_sources_and_pages(self):
+        definition = workflow()
+        definition["entry"] = "missing"
+        remote = self.success("workflow.validate", {"definition": definition}, session=self.remote)[
+            "diagnosticsQuery"
+        ]
+        params = {"collectionId": remote["collectionId"], "kind": "diagnostics", "pageSize": 1}
+        self.success("query.read", params, session=self.remote)
+        for close in (
+            self.engine.close_session,
+            lambda _identity: self.engine.revoke_client("studio"),
+        ):
+            session = self.engine.open_session("studio", {"workflow.read"})
+            reference = self.success(
+                "workflow.validate", {"definition": definition}, session=session
+            )["diagnosticsQuery"]
+            self.success(
+                "query.read", {**params, "collectionId": reference["collectionId"]}, session=session
+            )
+            close(session.id)
+            self.assertNotIn(reference["collectionId"], self.engine._collections)
+            with self.workspace.transaction() as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM query_snapshot WHERE owner=?", (session.id,)
+                    ).fetchone()[0],
+                    0,
+                )
+        self.success("query.read", params, session=self.remote)
+
+    def test_oversized_error_details_return_bounded_protocol_error(self):
+        from deskweave.engine.service import Method
+
+        def fail(*_args):
+            raise DeskWeaveError(
+                "INVALID_ARGUMENT",
+                "参数错误。",
+                details={f"part{index}": "x" * 250000 for index in range(5)},
+            )
+
+        self.engine._methods["expression.preview"] = Method(fail, frozenset(), {})
+        response = self.request("expression.preview", {"value": 1})
+        self.assertEqual(response["error"]["code"], "LIMIT_EXCEEDED")
+        self.assertNotIn("result", response)
+        self.assertLess(len(dumps(response)), 1024)
+        validate("urn:deskweave:message:1", response)
+        self.assertEqual(FrameDecoder().feed(encode_frame(response)), [response])

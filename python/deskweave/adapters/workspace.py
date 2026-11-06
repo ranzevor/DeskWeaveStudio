@@ -162,7 +162,7 @@ class Workspace:
     def closed(self) -> bool:
         return self._closed
 
-    def _check_deadline(self) -> None:
+    def check_deadline(self) -> None:
         if self._deadline is not None and self._clock() >= self._deadline:
             raise DeskWeaveError("DEADLINE_EXCEEDED", "请求处理超时。", retry="afterQuery")
 
@@ -175,13 +175,14 @@ class Workspace:
             self._deadline, self._clock = deadline, clock
             connection = self._connection
             try:
-                self._check_deadline()
+                self.check_deadline()
                 wait_ms = max(1, min(2000, int((deadline - clock()) * 1000)))
                 connection.execute(f"PRAGMA busy_timeout={wait_ms}")
                 connection.set_progress_handler(lambda: int(clock() >= deadline), 1000)
                 yield
+                self.check_deadline()
             except sqlite3.Error:
-                self._check_deadline()
+                self.check_deadline()
                 raise
             finally:
                 connection.set_progress_handler(None, 0)
@@ -195,17 +196,17 @@ class Workspace:
                 raise DeskWeaveError("WORKSPACE_CLOSED", "工作空间已关闭。")
             connection = self._connection
             try:
-                self._check_deadline()
+                self.check_deadline()
                 connection.execute("BEGIN IMMEDIATE")
                 yield connection
-                self._check_deadline()
+                self.check_deadline()
                 connection.commit()
             except BaseException:
                 connection.rollback()
                 raise
 
     def _put_object(self, value: object) -> str:
-        self._check_deadline()
+        self.check_deadline()
         data = dumps(value, max_bytes=33_554_432)
         identity = hashlib.sha256(data).hexdigest()
         path = self.path / "objects/sha256" / identity

@@ -1,16 +1,32 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from deskweave.contracts import validator
 from deskweave.domain.values import _shape, matches_type
 from deskweave.errors import DeskWeaveError
 from deskweave.json import dumps
 
 
-def validate_workflow(definition: dict) -> list[dict]:
-    dumps(definition, max_bytes=33_554_432)
+def validate_workflow(
+    definition: dict,
+    *,
+    checkpoint: Callable[[], None] = lambda: None,
+) -> list[dict]:
+    dumps(definition, max_bytes=33_554_432, checkpoint=checkpoint)
     diagnostics = []
+    schema_fields = set()
+
+    def ordered():
+        result = sorted(
+            diagnostics,
+            key=lambda row: (row.get("nodeId", ""), row.get("fieldPath", ""), row["code"]),
+        )
+        checkpoint()
+        return result
 
     def add(code, message, node=None, field=None):
+        checkpoint()
         item = {"code": code, "message": message}
         if node is not None:
             item["nodeId"] = node
@@ -19,12 +35,22 @@ def validate_workflow(definition: dict) -> list[dict]:
         diagnostics.append(item)
 
     for error in validator("urn:deskweave:workflow:1").iter_errors(definition):
-        field = "/" + "/".join(
-            str(part).replace("~", "~0").replace("/", "~1") for part in error.absolute_path
-        )
-        add("WORKFLOW_SCHEMA", "字段不符合流程格式。", field=field)
+        checkpoint()
+        paths = [list(error.absolute_path)]
+        if error.validator == "required":
+            paths = [
+                [*error.absolute_path, name]
+                for name in error.validator_value
+                if name not in error.instance
+            ]
+        for path in paths:
+            field = "/" + "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in path)
+            if field not in schema_fields:
+                schema_fields.add(field)
+                add("WORKFLOW_SCHEMA", "字段不符合流程格式。", field=field)
+    checkpoint()
     if diagnostics:
-        return diagnostics
+        return ordered()
     nodes = {node["id"]: node for node in definition["nodes"]}
     if len(nodes) != len(definition["nodes"]):
         add("DUPLICATE_NODE", "节点名称重复。", field="/nodes")
@@ -39,9 +65,11 @@ def validate_workflow(definition: dict) -> list[dict]:
     }
     edges = {}
     for index, node in enumerate(definition["nodes"]):
+        checkpoint()
         identity, params = node["id"], node["params"]
         edges[identity] = [target for target in node["on"].values() if target is not None]
         for outlet, target in node["on"].items():
+            checkpoint()
             if target is not None and target not in nodes:
                 add(
                     "OUTLET_NOT_FOUND",
@@ -72,18 +100,23 @@ def validate_workflow(definition: dict) -> list[dict]:
         ):
             add("LOOP_CONTEXT_REQUIRED", "循环控制动作需要循环体流程。", identity)
         try:
-            _shape(params)
+            _shape(params, checkpoint)
         except DeskWeaveError as error:
+            if error.code == "DEADLINE_EXCEEDED":
+                raise
             add(error.code, error.message, identity, f"/nodes/{index}/params")
     for name, parameter in definition["parameters"].items():
+        checkpoint()
         if "default" in parameter and not matches_type(parameter["default"], parameter["type"]):
             add("PARAMETER_TYPE", "默认值与参数类型不一致。", field=f"/parameters/{name}/default")
     visited, active = set(), set()
     for root in nodes:
+        checkpoint()
         if root in visited:
             continue
         stack = [(root, False)]
         while stack:
+            checkpoint()
             identity, exiting = stack.pop()
             if exiting:
                 active.discard(identity)
@@ -96,6 +129,7 @@ def validate_workflow(definition: dict) -> list[dict]:
                 stack.extend((target, False) for target in reversed(edges[identity]))
     reachable, pending = set(), [definition["entry"]]
     while pending:
+        checkpoint()
         identity = pending.pop()
         if identity in reachable or identity not in nodes:
             continue
@@ -103,6 +137,4 @@ def validate_workflow(definition: dict) -> list[dict]:
         pending.extend(edges[identity])
     for identity in nodes.keys() - reachable:
         add("UNREACHABLE_NODE", "节点无法从流程入口到达。", identity)
-    return sorted(
-        diagnostics, key=lambda row: (row.get("nodeId", ""), row.get("fieldPath", ""), row["code"])
-    )
+    return ordered()

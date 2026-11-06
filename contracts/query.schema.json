@@ -759,12 +759,26 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256
+        },
+        "collectionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
       },
-      "required": [
-        "snapshotId"
-      ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "snapshotId"
+          ]
+        },
+        {
+          "required": [
+            "collectionId"
+          ]
+        }
+      ]
     },
     "closeResult": {
       "type": "object",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections.abc import Callable
 
 import rfc8785
 
@@ -16,10 +17,17 @@ def _invalid(message: str) -> DeskWeaveError:
     return DeskWeaveError("INVALID_ARGUMENT", message)
 
 
-def check_value(value: object, *, max_bytes: int = MAX_FRAME, max_depth: int = 64) -> None:
+def check_value(
+    value: object,
+    *,
+    max_bytes: int = MAX_FRAME,
+    max_depth: int = 64,
+    checkpoint: Callable[[], None] = lambda: None,
+) -> None:
     stack = [(value, 0)]
     size = 0
     while stack:
+        checkpoint()
         item, depth = stack.pop()
         if depth > max_depth:
             raise _invalid("JSON 嵌套层数超过限制。")
@@ -53,12 +61,18 @@ def check_value(value: object, *, max_bytes: int = MAX_FRAME, max_depth: int = 6
             raise DeskWeaveError("LIMIT_EXCEEDED", "JSON 内容超过大小限制。")
 
 
-def dumps(value: object, *, max_bytes: int = MAX_FRAME) -> bytes:
-    check_value(value, max_bytes=max_bytes)
+def dumps(
+    value: object,
+    *,
+    max_bytes: int = MAX_FRAME,
+    checkpoint: Callable[[], None] = lambda: None,
+) -> bytes:
+    check_value(value, max_bytes=max_bytes, checkpoint=checkpoint)
     try:
         encoded = rfc8785.dumps(value)
     except (ValueError, OverflowError, RecursionError) as error:
         raise _invalid("JSON 内容无法编码。") from error
+    checkpoint()
     if len(encoded) > max_bytes:
         raise DeskWeaveError("LIMIT_EXCEEDED", "JSON 内容超过大小限制。")
     return encoded

@@ -75,6 +75,7 @@ def main():
             checked = call(
                 "workflow.validate", {"workflowId": "welcome", "revision": saved["revision"]}
             )
+            call("query.close", {"collectionId": checked["diagnosticsQuery"]["collectionId"]})
             preview = call(
                 "expression.preview", {"value": {"$expr": {"op": "add", "args": [2, 3]}}}
             )

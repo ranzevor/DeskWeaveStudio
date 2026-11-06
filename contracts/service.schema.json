@@ -201,7 +201,8 @@
               "type": "object",
               "properties": {
                 "definition": {
-                  "$ref": "urn:deskweave:workflow:1"
+                  "type": "object",
+                  "maxProperties": 1000
                 }
               },
               "required": [
@@ -6174,18 +6175,7 @@
           "const": "query.close"
         },
         "params": {
-          "type": "object",
-          "properties": {
-            "snapshotId": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "snapshotId"
-          ],
-          "additionalProperties": false
+          "$ref": "urn:deskweave:query:1#/$defs/closeParams"
         },
         "result": {
           "$ref": "urn:deskweave:query:1#/$defs/closeResult"

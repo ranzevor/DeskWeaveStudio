@@ -3542,5 +3542,41 @@
     "schema": "mcp.schema.json#/$defs/subscriptionAcknowledged",
     "semantic": "none",
     "expected": "schema-fail"
+  },
+  {
+    "file": "queries/close-collection.json",
+    "schema": "query.schema.json#/$defs/closeParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/close-both-targets.json",
+    "schema": "query.schema.json#/$defs/closeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/close-no-target.json",
+    "schema": "query.schema.json#/$defs/closeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/validate-incomplete.json",
+    "schema": "service.schema.json#/$defs/workflow.validate/properties/params",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/validate-non-object.json",
+    "schema": "service.schema.json#/$defs/workflow.validate/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/validate-both-sources.json",
+    "schema": "service.schema.json#/$defs/workflow.validate/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
   }
 ]

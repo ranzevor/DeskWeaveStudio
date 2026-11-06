@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import math
 import operator
+from collections.abc import Callable
 
 from deskweave.contracts import validate
 from deskweave.errors import DeskWeaveError
@@ -32,10 +33,11 @@ def matches_type(value: object, expected: str) -> bool:
     return expected == "any" or value_type(value) == expected
 
 
-def _shape(value: object) -> None:
+def _shape(value: object, checkpoint: Callable[[], None] = lambda: None) -> None:
     operations = 0
     stack = [(value, 0)]
     while stack:
+        checkpoint()
         item, depth = stack.pop()
         if depth > 32:
             raise DeskWeaveError("LIMIT_EXCEEDED", "表达式嵌套超过 32 层。")
@@ -55,11 +57,17 @@ def _shape(value: object) -> None:
                 stack.extend((child, depth + 1) for child in item.values())
 
 
-def evaluate(value: object, context: dict | None = None, expected_type: str = "any") -> object:
+def evaluate(
+    value: object,
+    context: dict | None = None,
+    expected_type: str = "any",
+    *,
+    checkpoint: Callable[[], None] = lambda: None,
+) -> object:
     context = {} if context is None else context
-    dumps(value)
-    dumps(context)
-    _shape(value)
+    dumps(value, checkpoint=checkpoint)
+    dumps(context, checkpoint=checkpoint)
+    _shape(value, checkpoint)
     validate("urn:deskweave:values:1#/$defs/value", value)
     validate(
         "urn:deskweave:service:1#/$defs/expression.preview/properties/params",
@@ -81,6 +89,7 @@ def evaluate(value: object, context: dict | None = None, expected_type: str = "a
         return item
 
     def visit(item):
+        checkpoint()
         if type(item) is list:
             return [visit(child) for child in item]
         if type(item) is not dict:
@@ -94,6 +103,7 @@ def evaluate(value: object, context: dict | None = None, expected_type: str = "a
         if op == "path":
             result = context
             for key in expr["path"]:
+                checkpoint()
                 if type(result) is dict and type(key) is str and key in result:
                     result = result[key]
                 elif type(result) is list and type(key) is int and 0 <= key < len(result):
@@ -124,7 +134,7 @@ def evaluate(value: object, context: dict | None = None, expected_type: str = "a
             return len(first.encode("utf-16-le")) // 2 if type(first) is str else len(first)
         second = visit(args[1])
         if op in {"equal", "notEqual"}:
-            equal = dumps(first) == dumps(second)
+            equal = dumps(first, checkpoint=checkpoint) == dumps(second, checkpoint=checkpoint)
             return equal if op == "equal" else not equal
         left, right = number(first), number(second)
         if op == "divide" and right == 0:
@@ -146,8 +156,9 @@ def evaluate(value: object, context: dict | None = None, expected_type: str = "a
         return result
 
     result = visit(value)
-    dumps(result, max_bytes=MAX_FRAME)
+    dumps(result, max_bytes=MAX_FRAME, checkpoint=checkpoint)
     validate("urn:deskweave:values:1#/$defs/raw", result)
+    checkpoint()
     if not matches_type(result, expected_type):
         raise DeskWeaveError("VALUE_TYPE_MISMATCH", "表达式结果类型与字段要求不一致。")
     return result

@@ -121,3 +121,22 @@ class Pages:
     def release(self, owner: str) -> None:
         with self.workspace.transaction() as connection:
             connection.execute("DELETE FROM query_snapshot WHERE owner=?", (owner,))
+
+    def active_collections(self) -> set[str]:
+        with self.workspace.transaction() as connection:
+            connection.execute("DELETE FROM query_snapshot WHERE expires_at<=?", (self.clock(),))
+            return {
+                row[0]
+                for row in connection.execute(
+                    "SELECT DISTINCT json_extract(extra,'$.collectionId') FROM query_snapshot "
+                    "WHERE json_extract(extra,'$.collectionId') IS NOT NULL"
+                )
+            }
+
+    def release_collection(self, owner: str, collection_id: str) -> None:
+        with self.workspace.transaction() as connection:
+            connection.execute(
+                "DELETE FROM query_snapshot WHERE owner=? "
+                "AND json_extract(extra,'$.collectionId')=?",
+                (owner, collection_id),
+            )
