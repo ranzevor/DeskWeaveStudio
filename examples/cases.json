@@ -3614,5 +3614,17 @@
     "schema": "values.schema.json#/$defs/expressionErrorDetails",
     "semantic": "none",
     "expected": "schema-fail"
+  },
+  {
+    "file": "queries/node-structural-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/workflow-structural-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
   }
 ]

@@ -56,3 +56,13 @@ class WorkflowTests(unittest.TestCase):
             for i in range(1000)
         ]
         self.assertEqual(validate_workflow(value), [])
+
+    def test_schema_diagnostics_do_not_assign_malformed_nodes(self):
+        for nodes in (None, {}, [None], ["invalid node"]):
+            with self.subTest(nodes=nodes):
+                definition = workflow()
+                definition["nodes"] = nodes
+                diagnostics = validate_workflow(definition)
+                self.assertTrue(diagnostics)
+                self.assertTrue(all("nodeId" not in item for item in diagnostics))
+                self.assertTrue(all(item["fieldPath"].startswith("/nodes") for item in diagnostics))

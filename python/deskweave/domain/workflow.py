@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 
-from deskweave.contracts import schema_issues
+from deskweave.contracts import schema_issues, validator
 from deskweave.domain.values import _shape, matches_type
 from deskweave.errors import DeskWeaveError
 from deskweave.json import dumps
@@ -15,6 +16,19 @@ def validate_workflow(
 ) -> list[dict]:
     dumps(definition, max_bytes=33_554_432, checkpoint=checkpoint)
     diagnostics = []
+    node_ids = {}
+    entries = definition.get("nodes") if type(definition) is dict else None
+    if type(entries) is list:
+        identity_validator = validator("urn:deskweave:workflow:1#/$defs/nodeId")
+        for index, entry in enumerate(entries):
+            checkpoint()
+            if type(entry) is dict and identity_validator.is_valid(entry.get("id")):
+                node_ids[index] = entry["id"]
+    occurrences = Counter(node_ids.values())
+    node_ids = {
+        index: identity for index, identity in node_ids.items() if occurrences[identity] == 1
+    }
+    unique_ids = set(node_ids.values())
 
     def ordered():
         result = sorted(
@@ -27,7 +41,7 @@ def validate_workflow(
     def add(code, message, node=None, field=None):
         checkpoint()
         item = {"code": code, "message": message}
-        if node is not None:
+        if node in unique_ids:
             item["nodeId"] = node
         if field is not None:
             item["fieldPath"] = field[:256]
@@ -35,7 +49,12 @@ def validate_workflow(
 
     for path, _reason in schema_issues("urn:deskweave:workflow:1", definition, checkpoint):
         field = "/" + "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in path)
-        add("WORKFLOW_SCHEMA", "字段不符合流程格式。", field=field)
+        node = (
+            node_ids.get(path[1])
+            if len(path) >= 2 and path[0] == "nodes" and type(path[1]) is int
+            else None
+        )
+        add("WORKFLOW_SCHEMA", "字段不符合流程格式。", node=node, field=field)
     checkpoint()
     if diagnostics:
         return ordered()

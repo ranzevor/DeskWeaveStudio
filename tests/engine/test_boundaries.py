@@ -530,3 +530,134 @@ class BoundaryTests(EngineCase):
                     response = self.request(method, {**params, "pageSize": invalid})
                     self.assertEqual(response["error"]["code"], "INVALID_ARGUMENT")
         self.assertTrue(saved["revision"])
+
+    def test_structural_diagnostics_keep_node_filter_and_pagination(self):
+        definition = workflow()
+        del definition["name"]
+        definition["nodes"][0].update(action="time.wait", params={"unexpected": 1})
+        definition["nodes"][1]["action"] = "unknown"
+        result = self.success("workflow.validate", {"definition": definition})
+        identity = result["diagnosticsQuery"]["collectionId"]
+        base = {"collectionId": identity, "kind": "diagnostics", "includeTotal": True}
+        all_rows = self.success("query.read", base)
+        self.assertEqual(result["diagnosticCount"], 4)
+        self.assertEqual(all_rows["matchedCount"], 4)
+        self.assertNotIn(
+            "nodeId",
+            next(
+                item["value"] for item in all_rows["items"] if item["value"]["fieldPath"] == "/name"
+            ),
+        )
+        expected = [
+            item for item in all_rows["items"] if item["value"]["fieldPath"].startswith("/nodes/0/")
+        ]
+        for order in ("asc", "desc"):
+            params = {
+                **base,
+                "pageSize": 1,
+                "order": order,
+                "filter": {"nodeId": "assign", "codes": ["WORKFLOW_SCHEMA"], "text": "字段"},
+            }
+            first = self.success("query.read", params)
+            self.assertEqual(first["matchedCount"], 2)
+            self.assertEqual(first["countState"], "exact")
+            following = {**params, "cursor": first["nextCursor"]}
+            second = self.success("query.read", following)
+            self.assertEqual(second, self.success("query.read", following))
+            self.assertEqual(second["matchedCount"], 2)
+            self.assertIsNone(second["nextCursor"])
+            items = first["items"] + second["items"]
+            self.assertEqual(items, expected if order == "asc" else expected[::-1])
+            self.assertEqual({item["value"]["nodeId"] for item in items}, {"assign"})
+            self.success("query.close", {"snapshotId": first["querySnapshot"]["snapshotId"]})
+        other = self.success("query.read", {**base, "filter": {"nodeId": "wait"}})
+        self.assertEqual(other["matchedCount"], 1)
+        self.assertEqual(other["items"][0]["value"]["fieldPath"], "/nodes/1/action")
+        empty = self.success(
+            "query.read", {**base, "filter": {"nodeId": "assign", "codes": ["ENTRY_NOT_FOUND"]}}
+        )
+        self.assertEqual(empty["matchedCount"], 0)
+        self.assertEqual(empty["items"], [])
+        self.assertIsNone(empty["nextCursor"])
+
+    def test_structural_diagnostics_skip_invalid_or_missing_node_ids(self):
+        for identity in (None, True, 12, [], {}, "", "0bad", "with space", "x" * 65):
+            with self.subTest(identity=identity):
+                definition = workflow()
+                definition["nodes"][0].update(action="time.wait", params={})
+                if identity is None:
+                    del definition["nodes"][0]["id"]
+                else:
+                    definition["nodes"][0]["id"] = identity
+                result = self.success("workflow.validate", {"definition": definition})
+                collection_id = result["diagnosticsQuery"]["collectionId"]
+                params = {
+                    "collectionId": collection_id,
+                    "kind": "diagnostics",
+                    "includeTotal": True,
+                }
+                rows = self.success("query.read", params)
+                self.assertIn(
+                    "/nodes/0/params/durationMs",
+                    {item["value"]["fieldPath"] for item in rows["items"]},
+                )
+                self.assertTrue(all("nodeId" not in item["value"] for item in rows["items"]))
+                filtered = self.success("query.read", {**params, "filter": {"nodeId": "assign"}})
+                self.assertEqual(filtered["matchedCount"], 0)
+                self.success("query.close", {"collectionId": collection_id})
+
+    def test_duplicate_node_ids_do_not_claim_diagnostics(self):
+        for structural in (True, False):
+            definition = workflow()
+            definition["entry"] = "shared"
+            definition["nodes"] = [
+                {
+                    "id": "shared",
+                    "title": "等待",
+                    "action": "time.wait",
+                    "params": {} if structural else {"durationMs": 0},
+                    "on": {"next": "missing"},
+                }
+                for _ in range(2)
+            ]
+            result = self.success("workflow.validate", {"definition": definition})
+            identity = result["diagnosticsQuery"]["collectionId"]
+            params = {"collectionId": identity, "kind": "diagnostics", "includeTotal": True}
+            page = self.success("query.read", params)
+            self.assertTrue(page["items"])
+            self.assertTrue(all("nodeId" not in item["value"] for item in page["items"]))
+            self.assertEqual(
+                self.success("query.read", {**params, "filter": {"nodeId": "shared"}})[
+                    "matchedCount"
+                ],
+                0,
+            )
+            self.success("query.close", {"collectionId": identity})
+
+    def test_structural_diagnostics_use_outer_node_identity(self):
+        definition = workflow()
+        node_id = "A" + "x" * 63
+        definition["nodes"][0].update(
+            id=node_id,
+            action="time.wait",
+            params={"durationMs": {"$literal": "bad"}, "nested": {"nodes": [{"id": "impostor"}]}},
+        )
+        definition["nodes"][1].update(id="n", action="unknown")
+        result = self.success("workflow.validate", {"definition": definition})
+        identity = result["diagnosticsQuery"]["collectionId"]
+        params = {"collectionId": identity, "kind": "diagnostics", "includeTotal": True}
+        outer = self.success("query.read", {**params, "filter": {"nodeId": node_id}})
+        self.assertEqual(outer["matchedCount"], 2)
+        self.assertEqual(
+            {item["value"]["fieldPath"] for item in outer["items"]},
+            {"/nodes/0/params/durationMs/$literal", "/nodes/0/params/nested"},
+        )
+        self.assertEqual(
+            self.success("query.read", {**params, "filter": {"nodeId": "n"}})["matchedCount"], 1
+        )
+        self.assertEqual(
+            self.success("query.read", {**params, "filter": {"nodeId": "impostor"}})[
+                "matchedCount"
+            ],
+            0,
+        )

@@ -815,7 +815,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "在当前流程定义中合法且唯一的节点身份；流程级诊断或节点身份缺失、无效、重复时省略。"
         },
         "fieldPath": {
           "type": "string",
