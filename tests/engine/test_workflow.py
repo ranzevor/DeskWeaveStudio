@@ -66,3 +66,8 @@ class WorkflowTests(unittest.TestCase):
                 self.assertTrue(diagnostics)
                 self.assertTrue(all("nodeId" not in item for item in diagnostics))
                 self.assertTrue(all(item["fieldPath"].startswith("/nodes") for item in diagnostics))
+
+    def test_root_diagnostic_pointer_is_empty(self):
+        diagnostics = validate_workflow([])
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0]["fieldPath"], "")

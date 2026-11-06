@@ -3626,5 +3626,23 @@
     "schema": "query.schema.json#/$defs/diagnosticsItem",
     "semantic": "none",
     "expected": "pass"
+  },
+  {
+    "file": "queries/long-field-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/root-field-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/invalid-field-pointer.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "schema-fail"
   }
 ]

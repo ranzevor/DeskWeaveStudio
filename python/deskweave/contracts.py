@@ -10,6 +10,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 from deskweave.errors import DeskWeaveError
+from deskweave.json import json_pointer
 
 
 @lru_cache(maxsize=1)
@@ -51,6 +52,52 @@ def schema_contents(reference: str) -> dict:
         reference = value["$ref"]
         if reference.startswith("#"):
             reference = identity + reference
+
+
+def value_roots(reference: str, value: object, checkpoint: Callable[[], None] = lambda: None):
+    def visit(schema, item, path, base):
+        pending = [(schema, base)]
+        shapes = []
+        while pending:
+            checkpoint()
+            current, identity = pending.pop()
+            if type(current) is not dict:
+                continue
+            target = current.get("$ref")
+            if target:
+                target = identity + target if target.startswith("#") else target
+                if target in {
+                    "urn:deskweave:values:1#/$defs/value",
+                    "urn:deskweave:values:1#/$defs/expressionValue",
+                }:
+                    yield path, item
+                    return
+                if target == "urn:deskweave:values:1#/$defs/raw":
+                    continue
+                pending.append((schema_contents(target), target.partition("#")[0]))
+            shapes.append((current, identity))
+            for keyword in ("allOf", "anyOf", "oneOf"):
+                pending.extend((branch, identity) for branch in current.get(keyword, []))
+        for current, identity in shapes:
+            if type(item) is dict:
+                properties = current.get("properties", {})
+                for key, child in item.items():
+                    child_schema = properties.get(key, current.get("additionalProperties"))
+                    if type(child_schema) is dict:
+                        yield from visit(child_schema, child, (*path, key), identity)
+            elif type(item) is list:
+                prefix = current.get("prefixItems", [])
+                for index, child in enumerate(item):
+                    child_schema = prefix[index] if index < len(prefix) else current.get("items")
+                    if type(child_schema) is dict:
+                        yield from visit(child_schema, child, (*path, index), identity)
+
+    seen = set()
+    for path, item in visit({"$ref": reference}, value, (), reference.partition("#")[0]):
+        checkpoint()
+        if path not in seen:
+            seen.add(path)
+            yield path, item
 
 
 def schema_issues(reference: str, value: object, checkpoint: Callable[[], None] = lambda: None):
@@ -148,7 +195,7 @@ def schema_issues(reference: str, value: object, checkpoint: Callable[[], None] 
 def validate(reference: str, value: object) -> None:
     issue = next(schema_issues(reference, value), None)
     if issue is not None:
-        path = "/" + "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in issue[0])
+        path = json_pointer(issue[0])
         raise DeskWeaveError(
             "INVALID_ARGUMENT", "参数不符合接口要求。", details={"fieldPath": path}
         )

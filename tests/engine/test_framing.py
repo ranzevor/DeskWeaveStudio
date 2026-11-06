@@ -167,6 +167,23 @@ class JsonTests(unittest.TestCase):
             with self.subTest(reference=reference):
                 validate(reference, payload)
 
+    def test_diagnostic_pointer_contract(self):
+        reference = "urn:deskweave:query:1#/$defs/diagnosticsItem"
+        for pointer in ("", "/", "/a~1b/~0/~01/汉/", "/" + "k" * 300, "/line\nname"):
+            validate(
+                reference,
+                {"code": "WORKFLOW_SCHEMA", "message": "字段无效。", "fieldPath": pointer},
+            )
+        for pointer in ("field", "#/field", "/~", "/~2", "\n"):
+            with self.subTest(pointer=pointer), self.assertRaises(DeskWeaveError):
+                validate(
+                    reference,
+                    {"code": "WORKFLOW_SCHEMA", "message": "字段无效。", "fieldPath": pointer},
+                )
+        with self.assertRaises(DeskWeaveError) as caught:
+            validate("urn:deskweave:workflow:1", [])
+        self.assertEqual(caught.exception.details["fieldPath"], "")
+
 
 class FramingTests(unittest.TestCase):
     def test_fragmentation_and_concatenation(self):

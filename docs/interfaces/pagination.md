@@ -62,6 +62,8 @@ asc 按固定序号递增，desc 递减。来源序号按以下规则建立：�
 
 流程诊断中，nodeId 标识当前定义中合法且唯一的节点；nodes 数组成员下的结构错误和语义错误使用相同的归属规则。流程级错误、节点身份缺失、无效或重复时省略 nodeId，保留 fieldPath。filter.nodeId 只匹配已归属诊断，matchedCount 统计当前筛选条件下的匹配数量。
 
+诊断 fieldPath 沿用[本机协议的字段路径](local-protocol.md#错误与兼容)约定，完整保留长属性名、空属性名、Unicode 和 JSON Pointer 转义。字段路径不设置独立字符截断；排序、定位与复制均使用完整路径。单条诊断无法放入页面时返回 QUERY_ITEM_TOO_LARGE，初次查询登记回滚；集合仍可主动关闭。
+
 查询页最多 100 项，完整 result（包含查询元数据、数量与下一游标）按 RFC 8785 编码最多 256KiB UTF-8，由方法 Schema 的 x-maxUtf8Bytes 与共享分发器执行，并遵守 1MiB 控制帧预算。读取按页面预算提前结束时，nextCursor 指向最后实际返回成员之后。服务端使用索引和一个额外成员判断是否还有后续数据。
 
 nextCursor 为 null 表示末页。空结果返回 items=[]、nextCursor=null。客户端根据 nextCursor 判断是否继续，不能用本页不足 pageSize 判断末页。

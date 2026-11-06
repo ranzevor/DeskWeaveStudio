@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from itertools import chain
 
 import rfc8785
@@ -12,6 +12,10 @@ from deskweave.errors import DeskWeaveError
 
 MAX_FRAME = 1_048_576
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
+
+
+def json_pointer(path: Iterable[str | int]) -> str:
+    return "".join("/" + str(part).replace("~", "~0").replace("/", "~1") for part in path)
 
 
 def _invalid(message: str) -> DeskWeaveError:

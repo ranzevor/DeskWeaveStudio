@@ -777,3 +777,228 @@ class BoundaryTests(EngineCase):
                         else:
                             self.assertFalse(response["ok"])
                             self.assertEqual(response["error"]["code"], "INVALID_ARGUMENT")
+
+    @staticmethod
+    def nested_value(depth):
+        value = 7
+        for _ in range(depth):
+            value = [value]
+        return value
+
+    @staticmethod
+    def pointer_target(document, pointer):
+        if pointer == "":
+            return document
+        if not pointer.startswith("/"):
+            raise ValueError("invalid JSON Pointer")
+        for part in pointer[1:].split("/"):
+            key = part.replace("~1", "/").replace("~0", "~")
+            document = document[int(key)] if isinstance(document, list) else document[key]
+        return document
+
+    def check_action_value(self, definition, value, value_path, expected):
+        preview = self.request("expression.preview", {"value": value})
+        result = self.success("workflow.validate", {"definition": definition})
+        collection_id = result["diagnosticsQuery"]["collectionId"]
+        page = self.success("query.read", {"collectionId": collection_id, "kind": "diagnostics"})
+        self.assertEqual(preview["ok"], expected, preview)
+        self.assertEqual(result["valid"], expected, page)
+        if expected:
+            self.assertEqual(page["items"], [])
+            saved = self.save(definition)
+            read = self.success(
+                "workflow.read", {"workflowId": definition["id"], "revision": saved["revision"]}
+            )
+            self.assertEqual(read["definition"], definition)
+        else:
+            self.assertEqual(preview["error"]["code"], "LIMIT_EXCEEDED")
+            details = preview["error"]["details"]
+            expected_path = value_path + "".join(
+                "/" + str(part).replace("~", "~0").replace("/", "~1")
+                for part in details["expressionPath"]
+            )
+            self.assertEqual(len(page["items"]), 1)
+            diagnostic = page["items"][0]["value"]
+            self.assertEqual(diagnostic["code"], details["reason"])
+            self.assertEqual(diagnostic["nodeId"], "assign")
+            self.assertEqual(diagnostic["fieldPath"], expected_path)
+            self.assertEqual(
+                self.pointer_target(definition, expected_path),
+                self.pointer_target(value, expected_path[len(value_path) :]),
+            )
+            response = self.request(
+                "workflow.save",
+                {
+                    "workflowId": definition["id"],
+                    "draftVersion": 1,
+                    "baseRevision": None,
+                    "definition": definition,
+                    "dependencies": {},
+                },
+            )
+            self.assertEqual(response["error"]["code"], "INVALID_WORKFLOW")
+        self.success("query.close", {"collectionId": collection_id})
+
+    def test_value_depth_matches_preview_validation_and_save(self):
+        for action in ("data.assign", "flow.return"):
+            for depth in (31, 32, 33):
+                with self.subTest(action=action, depth=depth):
+                    value = self.nested_value(depth)
+                    definition = workflow(identity=f"depth-{action}-{depth}")
+                    key = "out/~汉"
+                    params = (
+                        {"name": "answer", "value": value}
+                        if action == "data.assign"
+                        else {"values": {key: value}}
+                    )
+                    definition["nodes"] = [
+                        {
+                            "id": "assign",
+                            "title": "赋值",
+                            "action": action,
+                            "params": params,
+                            "on": {},
+                        }
+                    ]
+                    location = (
+                        "/nodes/0/params/value"
+                        if action == "data.assign"
+                        else "/nodes/0/params/values/out~1~0汉"
+                    )
+                    self.check_action_value(definition, value, location, depth <= 32)
+
+    def test_typed_expression_depth_uses_its_value_root(self):
+        for depth in (31, 32, 33):
+            with self.subTest(depth=depth):
+                value = expr("length", self.nested_value(depth - 1))
+                definition = workflow(identity=f"typed-depth-{depth}")
+                definition["nodes"] = [
+                    {
+                        "id": "assign",
+                        "title": "等待",
+                        "action": "time.wait",
+                        "params": {"durationMs": value},
+                        "on": {},
+                    }
+                ]
+                self.check_action_value(
+                    definition, value, "/nodes/0/params/durationMs", depth <= 32
+                )
+
+    def test_operation_budget_is_separate_for_each_value(self):
+        self.engine.monotonic = lambda: 0.0
+        for count in (256, 257):
+            with self.subTest(count=count):
+                value = [expr("add", 0, 1)] * count
+                definition = workflow(identity=f"operations-{count}")
+                definition["nodes"] = [
+                    {
+                        "id": "assign",
+                        "title": "返回",
+                        "action": "flow.return",
+                        "params": {"values": {"first": [expr("add", 0, 1)] * 256, "second": value}},
+                        "on": {},
+                    }
+                ]
+                self.check_action_value(
+                    definition, value, "/nodes/0/params/values/second", count <= 256
+                )
+
+    def test_raw_fields_and_literal_data_do_not_consume_ast_depth(self):
+        value = {"$literal": self.nested_value(40)}
+        definition = workflow(identity="literal-depth")
+        definition["nodes"][0]["params"]["value"] = value
+        self.check_action_value(definition, value, "/nodes/0/params/value", True)
+        definition = workflow(identity="raw-schema-depth")
+        definition["targets"]["screen"] = {"kind": "display", "required": True}
+        definition["nodes"] = [
+            {
+                "id": "assign",
+                "title": "观察",
+                "action": "vision.observe",
+                "on": {},
+                "params": {
+                    "target": "screen",
+                    "connection": "vision",
+                    "prompt": "读取",
+                    "timeoutMs": 1000,
+                    "outputMode": "json",
+                    "outputSchema": {"nested": self.nested_value(40)},
+                },
+            }
+        ]
+        result = self.success("workflow.validate", {"definition": definition})
+        self.assertTrue(result["valid"], result)
+        self.save(definition)
+        self.success("query.close", {"collectionId": result["diagnosticsQuery"]["collectionId"]})
+
+    def test_long_diagnostic_pointers_preserve_distinct_fields_and_pagination(self):
+        prefix = "k" * 250
+        keys = [prefix + "~/汉", prefix + "/~汉"]
+        definition = workflow()
+        definition["variables"]["data"] = {"nest/~": {key: {"": [None] * 10001} for key in keys}}
+        result = self.success("workflow.validate", {"definition": definition})
+        collection_id = result["diagnosticsQuery"]["collectionId"]
+        self.assertEqual(result["diagnosticCount"], 2)
+        expected = sorted(
+            "/variables/data/nest~1~0/" + key.replace("~", "~0").replace("/", "~1") + "/"
+            for key in keys
+        )
+        for order in ("asc", "desc"):
+            params = {
+                "collectionId": collection_id,
+                "kind": "diagnostics",
+                "pageSize": 1,
+                "includeTotal": True,
+                "order": order,
+            }
+            first = self.success("query.read", params)
+            second = self.success("query.read", {**params, "cursor": first["nextCursor"]})
+            self.assertEqual(
+                second, self.success("query.read", {**params, "cursor": first["nextCursor"]})
+            )
+            self.assertEqual((first["matchedCount"], second["matchedCount"]), (2, 2))
+            self.assertIsNone(second["nextCursor"])
+            items = first["items"] + second["items"]
+            pointers = [item["value"]["fieldPath"] for item in items]
+            self.assertEqual(pointers, expected if order == "asc" else expected[::-1])
+            for pointer in pointers:
+                self.assertGreater(len(pointer), 256)
+                self.assertEqual(self.pointer_target(definition, pointer), [None] * 10001)
+            self.success("query.close", {"snapshotId": first["querySnapshot"]["snapshotId"]})
+        self.success("query.close", {"collectionId": collection_id})
+
+    def test_oversized_diagnostic_pointer_returns_page_error_without_clipping(self):
+        key = "路" * 90000
+        definition = workflow()
+        definition["variables"]["data"] = {key: [None] * 10001}
+        result = self.validate_definition_frame(definition, self.editor)
+        collection_id = result["diagnosticsQuery"]["collectionId"]
+        diagnostic = self.engine._collections[collection_id]["items"][0]
+        self.assertEqual(diagnostic["fieldPath"], "/variables/data/" + key)
+        response = self.request(
+            "query.read", {"collectionId": collection_id, "kind": "diagnostics"}
+        )
+        self.assertEqual(response["error"]["code"], "QUERY_ITEM_TOO_LARGE")
+        self.assertNotIn("result", response)
+        with self.workspace.transaction() as connection:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM query_snapshot").fetchone()[0], 0
+            )
+        self.success("query.close", {"collectionId": collection_id})
+
+    def test_value_map_names_are_not_expression_markers(self):
+        value = self.nested_value(33)
+        for key in ("$expr", "$literal"):
+            with self.subTest(key=key):
+                definition = workflow()
+                definition["nodes"] = [
+                    {
+                        "id": "assign",
+                        "title": "返回",
+                        "action": "flow.return",
+                        "on": {},
+                        "params": {"values": {key: value}},
+                    }
+                ]
+                self.check_action_value(definition, value, "/nodes/0/params/values/" + key, False)

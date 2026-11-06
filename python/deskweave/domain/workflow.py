@@ -3,10 +3,9 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable
 
-from deskweave.contracts import schema_issues, validator
-from deskweave.domain.values import _shape, matches_type
-from deskweave.errors import DeskWeaveError
-from deskweave.json import dumps
+from deskweave.contracts import schema_issues, validator, value_roots
+from deskweave.domain.values import ExpressionError, _shape, matches_type
+from deskweave.json import dumps, json_pointer
 
 
 def validate_workflow(
@@ -44,11 +43,11 @@ def validate_workflow(
         if node in unique_ids:
             item["nodeId"] = node
         if field is not None:
-            item["fieldPath"] = field[:256]
+            item["fieldPath"] = field
         diagnostics.append(item)
 
     for path, _reason in schema_issues("urn:deskweave:workflow:1", definition, checkpoint):
-        field = "/" + "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in path)
+        field = json_pointer(path)
         node = (
             node_ids.get(path[1])
             if len(path) >= 2 and path[0] == "nodes" and type(path[1]) is int
@@ -106,12 +105,13 @@ def validate_workflow(
             and definition.get("kind") != "loopBody"
         ):
             add("LOOP_CONTEXT_REQUIRED", "循环控制动作需要循环体流程。", identity)
-        try:
-            _shape(params, checkpoint)
-        except DeskWeaveError as error:
-            if error.code == "DEADLINE_EXCEEDED":
-                raise
-            add(error.code, error.message, identity, f"/nodes/{index}/params")
+        action_params = f"urn:deskweave:actions:1#/$defs/{node['action']}/properties/params"
+        for value_path, value in value_roots(action_params, params, checkpoint):
+            try:
+                _shape(value, checkpoint)
+            except ExpressionError as error:
+                location = ("nodes", index, "params", *value_path, *error.details["expressionPath"])
+                add(error.details["reason"], error.message, identity, json_pointer(location))
     for name, parameter in definition["parameters"].items():
         checkpoint()
         if "default" in parameter and not matches_type(parameter["default"], parameter["type"]):

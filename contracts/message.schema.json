@@ -84,6 +84,11 @@
               "type": "object",
               "additionalProperties": {
                 "$ref": "#/$defs/jsonValue"
+              },
+              "properties": {
+                "fieldPath": {
+                  "$ref": "#/$defs/jsonPointer"
+                }
               }
             }
           },
@@ -245,6 +250,11 @@
       "additionalProperties": {
         "$ref": "#/$defs/jsonValue"
       }
+    },
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^(?:/(?:[^~]|~[01])*)?(?![\\s\\S])",
+      "description": "RFC 6901 JSON Pointer；空字符串表示文档根。路径完整传递，长度受所在消息或查询页的字节预算约束。"
     }
   }
 }

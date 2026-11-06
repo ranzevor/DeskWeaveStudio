@@ -108,7 +108,7 @@ event.subscribe 返回订阅身份、epoch 和序号 S 的一致运行快照，�
 
 ## 错误与兼容
 
-错误包含 code、message、retry、details；retry 为 never、sameRequest 或 afterQuery。字段错误附 nodeId、fieldPath 与用户可读名称，堆栈只进入诊断。
+错误包含 code、message、retry、details；retry 为 never、sameRequest 或 afterQuery。字段位置 fieldPath 使用完整 RFC 6901 JSON Pointer，空字符串表示文档根，/ 表示名称为空的属性；对象键中的 ~ 和 / 分别编码为 ~0 和 ~1。消费端保留原路径并按 ~1、~0 的顺序解码，定位时根据实际容器区分对象键和数组下标。可可靠归属节点时附 nodeId；用户界面显示对应名称与处理入口，堆栈只进入诊断。
 
 核心错误码：INVALID_ARGUMENT、SCHEMA_UNSUPPORTED、REVISION_CONFLICT、REQUEST_CONFLICT、RESOURCE_DENIED、TARGET_LOST、DESKTOP_BUSY、LEASE_EXPIRED、INPUT_RELEASE_FAILED、INPUT_TIMING_OVERRUN、EFFECT_UNCERTAIN、LIMIT_EXCEEDED、STORAGE_UNAVAILABLE、NAME_CONFLICT、CURSOR_EXPIRED、PROCESS_INTERRUPTED、CREDENTIAL_UNAVAILABLE、CANCELLED。
 
