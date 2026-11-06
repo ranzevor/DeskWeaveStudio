@@ -1979,7 +1979,7 @@
               ]
             },
             "result": {
-              "$ref": "urn:deskweave:values:1#/$defs/raw"
+              "$ref": "urn:deskweave:message:1#/$defs/jsonValue"
             }
           },
           "required": [
@@ -4831,7 +4831,7 @@
               "pattern": "^[0-9]+$"
             },
             "snapshot": {
-              "$ref": "urn:deskweave:values:1#/$defs/raw"
+              "$ref": "urn:deskweave:message:1#/$defs/jsonValue"
             },
             "scope": {
               "enum": [

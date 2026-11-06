@@ -77,8 +77,8 @@ def evaluate(
     checkpoint: Callable[[], None] = lambda: None,
 ) -> object:
     context = {} if context is None else context
-    dumps(value, checkpoint=checkpoint)
-    dumps(context, checkpoint=checkpoint)
+    dumps(value, max_text_bytes=262_144, checkpoint=checkpoint)
+    dumps(context, max_text_bytes=262_144, checkpoint=checkpoint)
     _shape(value, checkpoint)
     validate("urn:deskweave:values:1#/$defs/value", value)
     validate(
@@ -176,7 +176,7 @@ def evaluate(
         return result
 
     result = visit(value)
-    dumps(result, max_bytes=MAX_FRAME, checkpoint=checkpoint)
+    dumps(result, max_bytes=MAX_FRAME, max_text_bytes=262_144, checkpoint=checkpoint)
     validate("urn:deskweave:values:1#/$defs/raw", result)
     checkpoint()
     if not matches_type(result, expected_type):

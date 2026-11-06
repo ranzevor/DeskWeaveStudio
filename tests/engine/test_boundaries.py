@@ -1,11 +1,13 @@
+import json
 import sqlite3
 import uuid
 from contextlib import closing
 from unittest.mock import patch
 
-from deskweave.contracts import validate
+from deskweave.adapters.framing import FrameDecoder, encode_frame
+from deskweave.contracts import validate, validator
 from deskweave.errors import DeskWeaveError
-from deskweave.json import dumps
+from deskweave.json import MAX_FRAME, dumps
 from tests.engine.test_service import EngineCase, workflow
 from tests.engine.test_values import expr, path
 
@@ -661,3 +663,117 @@ class BoundaryTests(EngineCase):
             ],
             0,
         )
+
+    def validate_definition_frame(self, definition, session):
+        request = {
+            "protocolVersion": "1.0",
+            "kind": "request",
+            "id": uuid.uuid4().hex,
+            "session": session.id,
+            "workspace": self.workspace.id,
+            "method": "workflow.validate",
+            "deadlineMs": 30000,
+            "params": {"definition": definition},
+        }
+        self.assertLess(
+            len(json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8")),
+            MAX_FRAME,
+        )
+        encoded = encode_frame(request)
+        decoder = FrameDecoder()
+        self.assertEqual(decoder.feed(encoded[:7]), [])
+        (decoded,) = decoder.feed(encoded[7:])
+        decoder.finish()
+        response = self.engine.dispatch(session.id, decoded)
+        self.assertTrue(response["ok"], response)
+        validate("urn:deskweave:message:1", response)
+        return response["result"]
+
+    def test_resource_map_cardinality_matches_public_schema(self):
+        for session in (self.editor, self.remote):
+            for count in (1000, 1001, 10000, 10001):
+                with self.subTest(local=session.local, count=count):
+                    definition = workflow()
+                    definition["resources"] = {f"r{i}": {"kind": "image"} for i in range(count)}
+                    expected_valid = count <= 10000
+                    self.assertEqual(
+                        validator("urn:deskweave:workflow:1").is_valid(definition), expected_valid
+                    )
+                    result = self.validate_definition_frame(definition, session)
+                    self.assertEqual(result["valid"], expected_valid)
+                    self.assertEqual(result["diagnosticCount"], int(not expected_valid))
+                    collection_id = result["diagnosticsQuery"]["collectionId"]
+                    page = self.success(
+                        "query.read",
+                        {
+                            "collectionId": collection_id,
+                            "kind": "diagnostics",
+                            "includeTotal": True,
+                        },
+                        session=session,
+                    )
+                    self.assertEqual(page["matchedCount"], int(not expected_valid))
+                    if expected_valid:
+                        self.assertEqual(page["items"], [])
+                    else:
+                        diagnostic = page["items"][0]["value"]
+                        self.assertEqual(diagnostic["code"], "WORKFLOW_SCHEMA")
+                        self.assertEqual(diagnostic["fieldPath"], "/resources")
+                        self.assertNotIn("nodeId", diagnostic)
+                    self.success("query.close", {"collectionId": collection_id}, session=session)
+
+    def test_workflow_map_limits_report_field_diagnostics(self):
+        for field in ("variables", "runVariables"):
+            with self.subTest(field=field):
+                definition = workflow()
+                definition[field] = {f"v{i}": None for i in range(1001)}
+                result = self.validate_definition_frame(definition, self.editor)
+                self.assertFalse(result["valid"])
+                self.assertEqual(result["diagnosticCount"], 1)
+                collection_id = result["diagnosticsQuery"]["collectionId"]
+                page = self.success(
+                    "query.read", {"collectionId": collection_id, "kind": "diagnostics"}
+                )
+                self.assertEqual(page["items"][0]["value"]["fieldPath"], f"/{field}")
+                self.success("query.close", {"collectionId": collection_id})
+
+    def test_wide_extensions_survive_save_read(self):
+        definition = workflow()
+        definition["extensions"] = {f"example.k{i}": None for i in range(1001)}
+        saved = self.save(definition)
+        read = self.success(
+            "workflow.read",
+            {"workflowId": definition["id"], "revision": saved["revision"]},
+            session=self.remote,
+        )
+        self.assertEqual(read["definition"], definition)
+        decoder = FrameDecoder()
+        (decoded,) = decoder.feed(encode_frame(read))
+        decoder.finish()
+        self.assertEqual(decoded, read)
+
+    def test_expression_collection_schema_limits(self):
+        self.engine.monotonic = lambda: 0.0
+        for kind, limit in (("object", 1000), ("array", 10000)):
+            for count in (limit, limit + 1):
+                value = (
+                    {f"k{i}": None for i in range(count)} if kind == "object" else [None] * count
+                )
+                for source, params in (
+                    ("value", {"value": value}),
+                    ("literal", {"value": {"$literal": value}}),
+                    (
+                        "context",
+                        {"value": path("vars", "payload"), "context": {"vars": {"payload": value}}},
+                    ),
+                ):
+                    with self.subTest(kind=kind, count=count, source=source):
+                        self.assertLess(len(dumps(params)), 262144)
+                        response = self.request("expression.preview", params)
+                        validate("urn:deskweave:message:1", response)
+                        if count <= limit:
+                            self.assertTrue(response["ok"], response)
+                            self.assertEqual(response["result"]["value"], value)
+                        else:
+                            self.assertFalse(response["ok"])
+                            self.assertEqual(response["error"]["code"], "INVALID_ARGUMENT")

@@ -31,7 +31,7 @@
           "const": true
         },
         "result": {
-          "$ref": "urn:deskweave:values:1#/$defs/raw"
+          "$ref": "#/$defs/jsonValue"
         }
       },
       "required": [
@@ -83,7 +83,7 @@
             "details": {
               "type": "object",
               "additionalProperties": {
-                "$ref": "urn:deskweave:values:1#/$defs/raw"
+                "$ref": "#/$defs/jsonValue"
               }
             }
           },
@@ -140,7 +140,7 @@
         "payload": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "urn:deskweave:values:1#/$defs/raw"
+            "$ref": "#/$defs/jsonValue"
           }
         }
       },
@@ -212,7 +212,7 @@
         "params": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "urn:deskweave:values:1#/$defs/raw"
+            "$ref": "#/$defs/jsonValue"
           }
         }
       },
@@ -227,6 +227,24 @@
         "params"
       ],
       "additionalProperties": false
+    },
+    "jsonValue": {
+      "type": [
+        "null",
+        "boolean",
+        "number",
+        "string",
+        "array",
+        "object"
+      ],
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "items": {
+        "$ref": "#/$defs/jsonValue"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/jsonValue"
+      }
     }
   }
 }

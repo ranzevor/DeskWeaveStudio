@@ -84,3 +84,27 @@ class ExpressionTests(unittest.TestCase):
             value = [value]
         with self.assertRaises(DeskWeaveError):
             evaluate(value)
+
+    def test_text_budget_is_measured_in_utf8_bytes(self):
+        for size in (262143, 262144, 262145):
+            text = "汉" * (size // 3) + "x" * (size % 3)
+            self.assertEqual(len(text.encode("utf-8")), size)
+            for value, context in (
+                (text, None),
+                ({"$literal": {"text": text}}, None),
+                (path("vars", "text"), {"vars": {"text": text}}),
+            ):
+                with self.subTest(
+                    size=size, literal=isinstance(value, str), context=context is not None
+                ):
+                    if size <= 262144:
+                        expected = (
+                            {"text": text}
+                            if isinstance(value, dict) and "$literal" in value
+                            else text
+                        )
+                        self.assertEqual(evaluate(value, context), expected)
+                    else:
+                        with self.assertRaises(DeskWeaveError) as caught:
+                            evaluate(value, context)
+                        self.assertEqual(caught.exception.code, "LIMIT_EXCEEDED")

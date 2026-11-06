@@ -2,6 +2,7 @@ import struct
 import unittest
 
 from deskweave.adapters.framing import FrameDecoder, encode_frame
+from deskweave.contracts import validate
 from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME, dumps, loads
 
@@ -51,6 +52,120 @@ class JsonTests(unittest.TestCase):
 
     def test_canonical_equivalence(self):
         self.assertEqual(dumps({"z": -0.0, "a": 1.0}), b'{"a":1,"z":0}')
+
+    def test_container_sizes_follow_schema(self):
+        for reference, value in (
+            (
+                "urn:deskweave:package:1#/properties/resources/items/properties/bindings",
+                {f"r{i}": "resource" for i in range(10000)},
+            ),
+            (
+                "urn:deskweave:service:1#/$defs/template.names/properties/params/properties/overrides",
+                {f"candidate{i}": f"名称{i}" for i in range(2000)},
+            ),
+            (
+                "urn:deskweave:trajectory:1#/properties/events",
+                [{"kind": "pointer.move", "atUs": i, "x": i, "y": 0} for i in range(10001)],
+            ),
+            ("urn:deskweave:draft:1#/$defs/modelContent/properties/source", "源码" * 50000),
+        ):
+            with self.subTest(reference=reference):
+                validate(reference, value)
+                encoded = dumps(value)
+                self.assertLess(len(encoded), MAX_FRAME)
+                self.assertEqual(loads(encoded), value)
+
+    def test_wide_containers_keep_frame_budget(self):
+        for value in ({f"k{i}": None for i in range(10001)}, [None] * 100000):
+            encoded = dumps(value)
+            self.assertEqual(loads(encoded), value)
+            with self.assertRaises(DeskWeaveError) as caught:
+                dumps(value, max_bytes=len(encoded) - 1)
+            self.assertEqual(caught.exception.code, "LIMIT_EXCEEDED")
+
+    def test_large_text_keeps_byte_and_unicode_checks(self):
+        value = "x" * (MAX_FRAME - 2)
+        self.assertEqual(len(dumps(value)), MAX_FRAME)
+        self.assertEqual(loads(dumps(value)), value)
+        with self.assertRaises(DeskWeaveError) as caught:
+            dumps(value + "x")
+        self.assertEqual(caught.exception.code, "LIMIT_EXCEEDED")
+        with self.assertRaises(DeskWeaveError) as caught:
+            dumps(value[:-1] + "\ud800")
+        self.assertEqual(caught.exception.code, "INVALID_ARGUMENT")
+
+    def test_envelope_payloads_use_general_json(self):
+        payload = {
+            "records": {f"r{i}": {"kind": "image"} for i in range(1001)},
+            "events": [None] * 10001,
+            "source": "源码" * 50000,
+        }
+        for reference, message in (
+            (
+                "urn:deskweave:message:1#/$defs/requestEnvelope",
+                {
+                    "protocolVersion": "1.0",
+                    "kind": "request",
+                    "id": "request",
+                    "session": "session",
+                    "workspace": "workspace",
+                    "method": "example.payload",
+                    "deadlineMs": 30000,
+                    "params": payload,
+                },
+            ),
+            (
+                "urn:deskweave:message:1",
+                {
+                    "protocolVersion": "1.0",
+                    "kind": "response",
+                    "replyTo": "request",
+                    "ok": True,
+                    "result": payload,
+                },
+            ),
+            (
+                "urn:deskweave:message:1",
+                {
+                    "protocolVersion": "1.0",
+                    "kind": "response",
+                    "replyTo": "request",
+                    "ok": False,
+                    "error": {
+                        "code": "INVALID_ARGUMENT",
+                        "message": "字段无效。",
+                        "retry": "never",
+                        "details": payload,
+                    },
+                },
+            ),
+            (
+                "urn:deskweave:message:1",
+                {
+                    "protocolVersion": "1.0",
+                    "kind": "event",
+                    "streamId": "stream",
+                    "instanceEpoch": "epoch",
+                    "seq": "1",
+                    "event": "example.updated",
+                    "occurredAt": "2026-01-01T00:00:00Z",
+                    "payload": payload,
+                },
+            ),
+        ):
+            with self.subTest(kind=message["kind"], ok=message.get("ok")):
+                validate(reference, message)
+                encoded = dumps(message)
+                self.assertLess(len(encoded), MAX_FRAME)
+                self.assertEqual(loads(encoded), message)
+        for reference in (
+            "urn:deskweave:service:1#/$defs/request.status/properties/result/properties/result",
+            "urn:deskweave:service:1#/$defs/stream.subscribe/properties/result/properties/snapshot",
+            "urn:deskweave:operation-results:1#/$defs/operationSnapshot/properties/result",
+            "urn:deskweave:operation-results:1#/$defs/error/properties/details",
+        ):
+            with self.subTest(reference=reference):
+                validate(reference, payload)
 
 
 class FramingTests(unittest.TestCase):

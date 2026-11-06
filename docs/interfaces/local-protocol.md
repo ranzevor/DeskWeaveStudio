@@ -28,6 +28,8 @@ Engine、Agent 与 Tauri Host 分别验证自己的调用边界。Engine 授予�
 
 控制帧为 4 字节小端无符号长度，再跟随该长度的 UTF-8 JSON，最大 1MiB。接收端在解析前限制长度，JSON 解析深度最多 64 层，拒绝重复键、非有限数和不合法 UTF-8，支持分片和多帧连续读取；中途 EOF 作为传输失败，不解析半份对象。
 
+请求参数、响应结果、错误详情、事件载荷及结果查询使用通用 JSON 定义；对象字段数、数组成员数和文本字符数由对应字段的 Schema 校验，字节预算按完整消息和方法参数、结果分别执行。流程 resources 最多 10,000 项；帧预算内的资源数量超限由 workflow.validate 返回 /resources 字段诊断。Value 数据的对象和数组限额适用于表达式、变量等值字段，其他结构使用各自契约。
+
 控制、事件和资源连接独立。二进制资源经受控句柄、范围和摘要读取，单块上限 4MiB；不把任意路径交给 WebView。单个请求最多 32MiB 输入，超出时使用分块作业。
 
 Engine 消息结构见 [message.schema.json](../../contracts/message.schema.json)，请求的方法与参数同时受 [service.schema.json](../../contracts/service.schema.json) 约束。成功响应按原请求方法的 result 校验；响应本身不携带可重新选择方法的字段。动作负载再按对应参数 Schema 校验。

@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 from collections.abc import Callable
+from itertools import chain
 
 import rfc8785
 
@@ -22,13 +23,19 @@ def check_value(
     *,
     max_bytes: int = MAX_FRAME,
     max_depth: int = 64,
+    max_text_bytes: int | None = None,
     checkpoint: Callable[[], None] = lambda: None,
 ) -> None:
-    stack = [(value, 0)]
+    stack = [(iter((value,)), 0)]
     size = 0
     while stack:
         checkpoint()
-        item, depth = stack.pop()
+        children, depth = stack[-1]
+        try:
+            item = next(children)
+        except StopIteration:
+            stack.pop()
+            continue
         if depth > max_depth:
             raise _invalid("JSON 嵌套层数超过限制。")
         if item is None or type(item) is bool:
@@ -40,21 +47,19 @@ def check_value(
         elif type(item) is str:
             try:
                 length = len(item.encode("utf-8"))
-                if length > 262144:
-                    raise _invalid("JSON 文本超过 256KiB。")
+                if max_text_bytes is not None and length > max_text_bytes:
+                    raise DeskWeaveError("LIMIT_EXCEEDED", "JSON 文本超过大小限制。")
                 size += length + 2
             except UnicodeEncodeError as error:
                 raise _invalid("文本包含无效 Unicode 字符。") from error
         elif type(item) is list:
-            if len(item) > 10000:
-                raise _invalid("JSON 数组超过 10000 项。")
             size += max(0, len(item) - 1) + 2
-            stack.extend((child, depth + 1) for child in item)
+            stack.append((iter(item), depth + 1))
         elif type(item) is dict:
-            if len(item) > 1000 or any(type(key) is not str for key in item):
-                raise _invalid("JSON 对象的键或字段数量无效。")
+            if any(type(key) is not str for key in item):
+                raise _invalid("JSON 对象的键必须是文本。")
             size += len(item) + max(0, len(item) - 1) + 2
-            stack.extend((child, depth + 1) for pair in item.items() for child in pair)
+            stack.append((chain.from_iterable(item.items()), depth + 1))
         else:
             raise _invalid("值不是 JSON 数据。")
         if size > max_bytes:
@@ -65,9 +70,10 @@ def dumps(
     value: object,
     *,
     max_bytes: int = MAX_FRAME,
+    max_text_bytes: int | None = None,
     checkpoint: Callable[[], None] = lambda: None,
 ) -> bytes:
-    check_value(value, max_bytes=max_bytes, checkpoint=checkpoint)
+    check_value(value, max_bytes=max_bytes, max_text_bytes=max_text_bytes, checkpoint=checkpoint)
     try:
         encoded = rfc8785.dumps(value)
     except (ValueError, OverflowError, RecursionError) as error:

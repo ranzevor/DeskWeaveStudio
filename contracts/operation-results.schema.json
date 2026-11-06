@@ -703,7 +703,7 @@
           ]
         },
         "details": {
-          "$ref": "urn:deskweave:values:1#/$defs/raw"
+          "$ref": "urn:deskweave:message:1#/$defs/jsonValue"
         }
       },
       "required": [
@@ -751,7 +751,7 @@
           ]
         },
         "result": {
-          "$ref": "urn:deskweave:values:1#/$defs/raw"
+          "$ref": "urn:deskweave:message:1#/$defs/jsonValue"
         },
         "error": {
           "oneOf": [
