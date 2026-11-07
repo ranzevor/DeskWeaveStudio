@@ -1,5 +1,6 @@
 async page=>{
- const checks=[],contractOutputs=[];
+ await page.waitForFunction(()=>window.DW_AUTHORING&&window.DW_PROTOTYPE);
+ const checks=[],contractOutputs=[],rejectionsOnly=await page.evaluate(()=>window.DW_INTERACTION_OPTIONS?.scope==='content-rejections');
  const render=async id=>{await page.setViewportSize({width:1440,height:900});await page.evaluate(id=>window.DW_PROTOTYPE.renderScreen(id),id);await page.waitForFunction(id=>window.DW_READY===id,id);};
  const check=async(name,fn,arg)=>{if(!await page.evaluate(fn,arg))throw Error(name);checks.push({name,result:'pass'});};
  const click=async action=>{await page.locator('[data-au-action="'+action+'"]').click();await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);};
@@ -26,6 +27,7 @@ async page=>{
   const root=window.DW_DESIGN_STATE.authoring.content,c=root.copy.candidate,old=window.flowRecovery.origin;
   return root.model===old.model&&root.raw===old.raw&&root.baseRevision===old.base&&root.currentRevision===old.head&&root.draftVersion===old.version&&JSON.stringify(root.model)===old.text&&Object.keys(c.model.dependencies).length===2&&JSON.stringify(c.model.dependencies)===JSON.stringify(root.model.dependencies);
  });
+ if(!rejectionsOnly){
  for(const copy of [false,true])for(const failure of ['conflict','storage']){
   const label=(copy?'副本':'流程')+' '+failure;
   await setup(copy,failure);await start(copy);
@@ -106,5 +108,63 @@ async page=>{
   }
   await restore();
  }
+
+ }
+ const rejections=[
+  {code:'INVALID_WORKFLOW',message:'流程存在结构或连接错误，请先校验流程。',retry:'never'},
+  {code:'METHOD_UNAVAILABLE',message:'资源版本绑定服务尚未实现。',retry:'never'},
+  {code:'CONTENT_REFERENCE_INVALID',message:'内容引用的用途、长度或摘要不匹配。',retry:'never'},
+  {code:'CONTENT_HASH_MISMATCH',message:'内容长度或摘要不匹配，请重新上传。',retry:'never'},
+  {code:'CONTENT_INCOMPLETE',message:'内容尚未完整接收。',retry:'never'}
+ ];
+ for(const rejection of rejections)for(const copy of [false,true])for(const lost of [false,true]){
+  const label=rejection.code+' '+(copy?'副本':'流程')+' '+(lost?'响应丢失':'直接响应');
+  await setup(copy,'storage');
+  await page.evaluate(({rejection,lost})=>{
+   const r=window.DW_AUTHORING.runtime,f=window.flowRecovery;
+   r.readContentResult=async request=>{request.error=JSON.parse(JSON.stringify(rejection));if(lost)throw Error('response lost');return f.runtime.readContentResult(request);};
+   r.replayContentSave=async(c,submission)=>{
+    f.replays.push(JSON.parse(JSON.stringify(submission)));
+    const request=c.service.requests[submission.requestId];
+    if(JSON.stringify(submission.params)!==JSON.stringify(request.params))throw Error('changed request');
+    request.error=JSON.parse(JSON.stringify(rejection));return f.runtime.readContentResult(request);
+   };
+  },{rejection,lost});
+  await start(copy);
+  if(lost){
+   await check('业务拒绝响应丢失后保留未决请求 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession();return c.stage==='uncertain'&&!c.requestSettled&&c.service.committed===0;});
+   await click('content-query');
+   await collect('业务拒绝查询回执 '+label,'service.schema.json#/$defs/request.status/properties/result',()=>window.DW_AUTHORING.api.contentSession().lastReceipt);
+   await click('content-recover');
+  }
+  await intact('明确业务拒绝 '+label);
+  await check('明确业务拒绝解除未决并保留原因 '+label,rejection=>{
+   const c=window.DW_AUTHORING.api.contentSession();
+   return c.stage==='failed'&&c.requestSettled&&!c.recoverable&&!c.recovering&&c.error===rejection.message&&c.lastReceipt.error.code===rejection.code&&c.service.committed===0&&!document.querySelector('[data-au-action="content-recover"]');
+  },rejection);
+  await collect('业务拒绝最终错误 '+label,'message.schema.json',()=>{const c=window.DW_AUTHORING.api.contentSession();return{protocolVersion:'1.0',kind:'response',replyTo:c.requestId,ok:false,error:c.lastReceipt.error};});
+  if(copy){
+   await origin('明确业务拒绝 '+label);
+   await click('content-return');await check('业务拒绝后可返回原草稿 '+label,()=>{const c=window.DW_DESIGN_STATE.authoring.content;return !c.copy.active&&c.model===window.flowRecovery.origin.model&&c.raw===window.flowRecovery.origin.raw&&c.stage==='conflict';});
+  }else{
+   await page.evaluate(()=>{const f=window.flowRecovery;f.repaired=true;window.DW_AUTHORING.runtime.readContentResult=f.runtime.readContentResult;});
+   await click('content-submit');
+   await check('业务条件修正后保存当前草稿 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession();return c.stage==='saved'&&c.result.revision==='13'&&c.requestId!==window.flowRecovery.submission.id&&c.service.committed===1;});
+   await collect('业务条件修正后的保存参数 '+label,'service.schema.json#/$defs/workflow.save/properties/params',()=>window.DW_AUTHORING.api.contentSession().saveParams);
+   await collect('业务条件修正后的保存结果 '+label,'service.schema.json#/$defs/workflow.save/properties/result',()=>window.DW_AUTHORING.api.contentSession().result);
+  }
+  await restore();
+ }
+ for(const code of ['DEADLINE_EXCEEDED','LIMIT_EXCEEDED','INTERNAL_ERROR','REQUEST_CONFLICT','ACCESS_DENIED'])for(const copy of [false,true]){
+  const label=code+' '+(copy?'副本':'流程');await setup(copy,'storage');
+  await page.evaluate(code=>{const r=window.DW_AUTHORING.runtime;window.flowRecovery.repaired=true;r.readContentResult=async request=>({requestId:request.id,ok:false,result:null,error:{code,message:'保存结果需要查询。',retry:'afterQuery'}});},code);
+  await start(copy);
+  await check('未核定错误继续保护原保存结果 '+label,()=>{
+   const c=window.DW_AUTHORING.api.contentSession();return c.stage==='uncertain'&&!c.requestSettled&&c.service.committed===1&&!document.querySelector('[data-au-action="content-submit"]')&&(!c.isCopy||document.querySelector('[data-au-action="content-return"]').disabled);
+  });
+  await click('content-query');await check('未核定错误按原回执恢复实际版本 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession();return c.stage==='saved'&&c.requestSettled&&c.requestId===window.flowRecovery.submission.id&&c.service.committed===1&&Object.keys(c.service.requests).length===1;});
+  await restore();
+ }
+
  return{checks,contractOutputs};
 }

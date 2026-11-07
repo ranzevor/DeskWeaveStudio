@@ -132,7 +132,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--interactions-only", action="store_true")
     parser.add_argument("--check-only", action="store_true", help="检查全部页面和交互，不生成截图")
-    parser.add_argument("--interaction-suite", choices=("all", "baseline", "completion", "authoring", "content", "content-recovery", "recording", "query", "platform"), default="all")
+    parser.add_argument("--interaction-suite", choices=("all", "baseline", "completion", "authoring", "content", "content-recovery", "content-rejections", "recording", "query", "platform"), default="all")
     parser.add_argument("--group", help="只预览指定任务组")
     parser.add_argument("--ids", help="逗号分隔的界面 ID，可与 --group 一起筛选")
     parser.add_argument("--skip-interactions", action="store_true", help="截图后不运行交互检查")
@@ -213,9 +213,11 @@ def main():
             assert value["count"] == len(expected_ids)
             print(f"{group['name']}：{value['count']} 个界面", flush=True)
         if not skip_interactions:
-            suites = ["prototype_interactions.js", "prototype_completion_interactions.js", "prototype_authoring_interactions.js", "prototype_content_recovery_interactions.js", "prototype_recording_interactions.js", "prototype_query_interactions.js", "prototype_platform_interactions.js"] if args.interaction_suite == "all" else [{"baseline":"prototype_interactions.js", "completion":"prototype_completion_interactions.js", "authoring":"prototype_authoring_interactions.js", "content":"prototype_authoring_interactions.js", "content-recovery":"prototype_content_recovery_interactions.js", "recording":"prototype_recording_interactions.js", "query":"prototype_query_interactions.js", "platform":"prototype_platform_interactions.js"}[args.interaction_suite]]
+            suites = ["prototype_interactions.js", "prototype_completion_interactions.js", "prototype_authoring_interactions.js", "prototype_content_recovery_interactions.js", "prototype_recording_interactions.js", "prototype_query_interactions.js", "prototype_platform_interactions.js"] if args.interaction_suite == "all" else [{"baseline":"prototype_interactions.js", "completion":"prototype_completion_interactions.js", "authoring":"prototype_authoring_interactions.js", "content":"prototype_authoring_interactions.js", "content-recovery":"prototype_content_recovery_interactions.js", "content-rejections":"prototype_content_recovery_interactions.js", "recording":"prototype_recording_interactions.js", "query":"prototype_query_interactions.js", "platform":"prototype_platform_interactions.js"}[args.interaction_suite]]
             if args.interaction_suite == "content":
                 command("eval", "window.DW_INTERACTION_OPTIONS={scope:'content'}")
+            if args.interaction_suite == "content-rejections":
+                command("eval", "window.DW_INTERACTION_OPTIONS={scope:'content-rejections'}")
             checks = []
             for suite in suites:
                 interaction = command("run-code", "--filename", str(ROOT / "tools" / suite))

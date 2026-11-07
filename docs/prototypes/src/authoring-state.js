@@ -172,7 +172,7 @@ async function readContentReceipt(c,request,query=false,readResult=runtime.readC
   else{
    if(!value.error)throw Error('保存结果缺少错误原因。');
    c.saving=false;c.error=value.error.message;
-   if(['REVISION_CONFLICT','STORAGE_UNAVAILABLE','RESOURCE_NOT_FOUND'].includes(value.error.code)){
+   if(['REVISION_CONFLICT','STORAGE_UNAVAILABLE','RESOURCE_NOT_FOUND','INVALID_WORKFLOW','METHOD_UNAVAILABLE','CONTENT_REFERENCE_INVALID','CONTENT_HASH_MISMATCH','CONTENT_INCOMPLETE'].includes(value.error.code)){
     c.requestSettled=true;c.recoverable=false;c.message='';c.stage=value.error.code==='REVISION_CONFLICT'?'conflict':'failed';
     if(c.stage==='conflict')c.currentRevision=c.service.headRevision;
    }else{c.stage='uncertain';c.message='请查询本次保存结果。';}
