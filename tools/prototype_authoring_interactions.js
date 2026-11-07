@@ -1,5 +1,5 @@
 async page=>{
- const checks=[],contractOutputs=[];
+ const checks=[],contractOutputs=[],contentOnly=await page.evaluate(()=>window.DW_INTERACTION_OPTIONS?.scope==='content');
  const render=async id=>{const size=await page.evaluate(id=>window.DW_CATALOG.screens.find(s=>s.id===id).viewport,id);await page.setViewportSize(size);await page.evaluate(id=>window.DW_PROTOTYPE.renderScreen(id),id);await page.waitForFunction(id=>window.DW_READY===id,id);};
  const click=async action=>{await page.locator('[data-au-action="'+action+'"]').first().click();await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);};
  const field=name=>page.locator('[data-au-field="'+name+'"]');
@@ -11,6 +11,7 @@ async page=>{
  const restoreResults=async()=>page.evaluate(()=>{window.DW_AUTHORING.runtime.waitForResult=window.auWaitOriginal;delete window.auDeferred;delete window.auWaitOriginal;});
  const check=async(name,fn,arg)=>{if(!await page.evaluate(fn,arg))throw Error(name);checks.push({name,result:'pass'});};
  const collect=async(name,schema,fn)=>{const value=await page.evaluate(fn);if(value==null)throw Error('缺少输出：'+name);contractOutputs.push({name,schema,value});};
+ if(!contentOnly){
  await render('variables-inspect');
  await check('变量未读取不显示已核定值',()=>window.DW_DESIGN_STATE.authoring.variables.page===null&&document.querySelector('.au-page').textContent.includes('尚未读取'));
  await click('var-read');
@@ -96,6 +97,7 @@ async page=>{
  await collect('轨迹独立资产计划','authoring.schema.json#/$defs/editPlan',()=>window.DW_DESIGN_STATE.authoring.edit.plan);
  await check('轨迹另存创建独立对象并保留来源',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.result.kind==='trajectory'&&e.result.previousVersion===null&&!e.result.createdNewVersion&&e.result.name==='新的归档操作';});
  await collect('轨迹独立资产结果','authoring.schema.json#/$defs/editResult',()=>window.DW_DESIGN_STATE.authoring.edit.result);
+ }
  await render('content-save');await page.evaluate(()=>window.DW_AUTHORING.api.startContent());await check('分块上传开始不标记已保存',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.raw.length>1048576&&c.stage==='uploading'&&c.result===null;});
  await check('缺块禁止提前封存',async()=>{try{await window.DW_AUTHORING.api.sealContent();return false;}catch{return true;}});
  await check('乱序块拒绝且不改变偏移',async()=>{const api=window.DW_AUTHORING.api,c=window.DW_DESIGN_STATE.authoring.content;try{await api.writeChunk({offset:196608});return false;}catch{return c.offset===0;}});
@@ -132,6 +134,7 @@ async page=>{
  await check('取消自动保存后迟到结果不改变草稿',async()=>{const api=window.DW_AUTHORING.api,c=window.DW_DESIGN_STATE.authoring.content;await api.submitContent(()=>{if(c.offset>0)api.cancelContent();});return c.stage==='draft'&&!c.saving&&c.result===null&&c.offset===0;});
  await page.evaluate(async()=>{await window.DW_AUTHORING.api.startContent();window.DW_DESIGN_STATE.authoring.content.expiresAt=Date.now()-1;});await check('上传到期禁止继续写入',async()=>{const c=window.DW_DESIGN_STATE.authoring.content;try{await window.DW_AUTHORING.api.writeChunk();return false;}catch(error){return error.message.includes('到期')&&c.offset===0;}});
  for(const [screen,action,method,key] of [['content-save','content-submit','submitContent','content'],['asset-edit-save','edit-submit','submitEdit','edit'],['connection-draft-test','test-start','testConnection','test']]){
+  if(contentOnly&&key!=='content')continue;
   for(const destination of ['editor-graph','assets','variables-inspect','return','reset']){
    await render(screen);
    await page.evaluate(({screen,method,destination})=>{
@@ -204,6 +207,7 @@ async page=>{
  await check('取消后重存不被旧操作的失败和最终刷新覆盖',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='saved'&&!c.error&&c.result.revision==='13'&&window.auCurrentSave===document.querySelector('.app-window');});
  await page.evaluate(()=>{delete window.auCurrentSave;delete window.auLateSave;});
  for(const [screen,action,key,destination] of [['content-save','content-submit','content','editor-graph'],['asset-edit-save','edit-submit','edit','assets'],['connection-draft-test','test-start','test','connection-browser']]){
+  if(contentOnly&&key!=='content')continue;
   await render(screen);await holdResults();
   await page.evaluate(({screen,key})=>{history.replaceState(null,'','#'+screen);window.auHistoryState=window.DW_DESIGN_STATE.authoring[key];},{screen,key});
   await page.locator('[data-au-action="'+action+'"]').click();
@@ -221,6 +225,7 @@ async page=>{
   await page.evaluate(()=>delete window.auHistoryState);
  }
  for(const [screen,start,cancel,key] of [['connection-draft-test','test-start','test-cancel','test'],['content-save','content-submit','content-cancel','content']]){
+  if(contentOnly&&key!=='content')continue;
   await render(screen);await holdResults();
   const startButton=()=>page.locator('[data-au-action="'+start+'"]'),cancelButton=()=>page.locator('[data-au-action="'+cancel+'"]');
   await startButton().click();await page.waitForFunction(()=>window.auDeferred.length===1);
@@ -260,5 +265,96 @@ async page=>{
   if(['commit','cancel'].includes(outcome))await restoreResults();
   await page.evaluate(()=>delete window.auOriginalDraft);
  }
+
+ for(const scenario of [
+  {copy:false,outcome:'before'},{copy:false,outcome:'after'},{copy:false,outcome:'lost'},
+  {copy:true,outcome:'before'},{copy:true,outcome:'after'},
+  {copy:true,outcome:'lost',destination:'return'},{copy:true,outcome:'lost',destination:'open'}
+ ]){
+  const label=(scenario.copy?'副本':'原流程')+' '+scenario.outcome+' '+(scenario.destination||'');
+  await render(scenario.copy?'content-save-conflict':'content-save');await holdResults();
+  await page.evaluate(({outcome})=>{
+   const runtime=window.DW_AUTHORING.runtime,root=window.DW_DESIGN_STATE.authoring.content;
+   window.auFlow={commit:[],reply:[],wait:runtime.waitForContentCommit,read:runtime.readContentResult,status:runtime.readContentStatus,root:{model:root.model,raw:root.raw,base:root.baseRevision,head:root.currentRevision,version:root.draftVersion,text:JSON.stringify(root.model)}};
+   runtime.waitForContentCommit=()=>new Promise(resolve=>window.auFlow.commit.push(resolve));
+   runtime.readContentResult=async request=>{
+    if(outcome==='lost')throw Error('响应连接中断');
+    await new Promise(resolve=>window.auFlow.reply.push(resolve));
+    return window.auFlow.read(request);
+   };
+  },scenario);
+  if(scenario.copy)await field('content-copy-name').fill('保存结果恢复副本');
+  await page.locator('[data-au-action="'+(scenario.copy?'content-copy':'content-submit')+'"]').click();
+  await page.waitForFunction(()=>window.auDeferred.length===1);
+  await check('正式保存前封存内容仍可区分 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession();return c.stage==='sealed'&&!c.requestId&&!!c.ref&&!c.result;});
+  await releaseResult(0);await page.waitForFunction(()=>window.auFlow.commit.length===1);
+  await page.evaluate(()=>{const c=window.DW_AUTHORING.api.contentSession();window.auFlow.identity={request:c.requestId,params:c.saveParams,ref:c.ref,model:c.model,raw:c.raw,sequence:c.sequence,version:c.draftVersion};});
+  await check('正式提交后提供查询与停止等待 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession();return c.stage==='saving'&&c.service.requests[c.requestId].state==='accepted'&&!document.querySelector('[data-au-action="content-submit"]')&&document.querySelector('[data-au-action="content-cancel"]').textContent==='停止等待';});
+  if(scenario.outcome==='before'){
+   await page.locator('[data-au-action="content-cancel"]').click();
+   await check('提交后停止等待保留原请求与内容 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession(),id=window.auFlow.identity;return c.stage==='uncertain'&&!c.result&&!c.requestSettled&&c.requestId===id.request&&c.saveParams===id.params&&c.ref===id.ref&&c.sequence===id.sequence&&c.service.committed===0&&!document.querySelector('.au-page').textContent.includes('已取消');});
+  }
+  await page.evaluate(()=>window.auFlow.commit[0]());
+  if(scenario.outcome==='lost')await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+  else await page.waitForFunction(()=>window.auFlow.reply.length===1);
+  if(scenario.outcome==='after'){
+   await page.locator('[data-au-action="content-cancel"]').click();
+   await page.waitForFunction(()=>!!window.DW_AUTHORING.api.contentSession().result);
+   await check('已提交成功后的停止等待显示实际版本 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession();return c.stage==='saved'&&c.service.committed===1&&c.lastReceipt.state==='finished'&&c.result.revision===(c.isCopy?'1':'13');});
+   await collect('停止等待读取原保存回执 '+label,'service.schema.json#/$defs/request.status/properties/result',()=>window.DW_AUTHORING.api.contentSession().lastReceipt);
+  }
+  if(scenario.outcome==='lost'){
+   await check('保存成功但响应丢失保持未决状态 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession(),id=window.auFlow.identity;return c.service.committed===1&&!c.result&&c.stage==='uncertain'&&!c.requestSettled&&c.requestId===id.request&&!!document.querySelector('[data-au-action="content-query"]')&&!document.querySelector('[data-au-action="content-submit"]');});
+   for(const response of ['accepted','notReceived','uncertain','network','request','workflow','draft','hash']){
+    await page.evaluate(response=>{
+     window.DW_AUTHORING.runtime.readContentStatus=async request=>{
+      if(response==='network')throw Error('查询连接中断');
+      if(['accepted','notReceived','uncertain'].includes(response))return{requestId:request.id,state:response,operationId:null,result:null};
+      const value=await window.auFlow.status(request);
+      if(response==='request')value.requestId='another-request';
+      if(response==='workflow')value.result.workflowId='another-workflow';
+      if(response==='draft')value.result.draftVersion++;
+      if(response==='hash')value.result.definitionHash='0'.repeat(64);
+      return value;
+     };
+    },response);
+    await click('content-query');
+    await check('查询 '+response+' 不提前释放保存状态 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession(),id=window.auFlow.identity;return c.stage==='uncertain'&&!c.result&&!c.requestSettled&&c.requestId===id.request&&c.ref===id.ref&&c.raw===id.raw&&c.model===id.model&&Object.keys(c.service.requests).length===1&&c.service.committed===1;});
+   }
+   await check('未决期间禁止新传输和副本切换 '+label,async copy=>{
+    const api=window.DW_AUTHORING.api,c=api.contentSession(),id=c.requestId;let blocked=0;
+    try{await api.startContent();}catch{blocked++;}
+    if(copy){try{api.returnOriginalContent();}catch{blocked++;}try{api.openContentCopy();}catch{blocked++;}try{await api.saveContentCopy('重复副本');}catch{blocked++;}}
+    await api.submitContent();await api.saveContent();
+    return blocked===(copy?4:1)&&c.requestId===id&&Object.keys(c.service.requests).length===1&&c.service.committed===1;
+   },scenario.copy);
+   await page.evaluate(()=>{window.DW_AUTHORING.runtime.readContentStatus=window.auFlow.status;});
+   await click('content-query');
+   await collect('响应丢失后查询原保存结果 '+label,'service.schema.json#/$defs/request.status/properties/result',()=>window.DW_AUTHORING.api.contentSession().lastReceipt);
+  }else{
+   await page.evaluate(()=>window.auFlow.reply[0]());await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+  }
+  await check('核定原保存只产生一个正式版本 '+label,()=>{const c=window.DW_AUTHORING.api.contentSession(),id=window.auFlow.identity;return c.stage==='saved'&&c.requestSettled&&c.result.workflowId===id.model.definition.id&&c.result.draftVersion===id.version&&c.result.revision===(c.isCopy?'1':'13')&&c.requestId===id.request&&c.service.committed===1&&Object.keys(c.service.requests).length===1&&document.querySelector('.au-page').textContent.includes('已保存');});
+  if(scenario.copy){
+   await check('结果核定后原草稿身份与非空依赖保留 '+label,()=>{const root=window.DW_DESIGN_STATE.authoring.content,c=root.copy.candidate,old=window.auFlow.root;return root.model===old.model&&root.raw===old.raw&&root.baseRevision===old.base&&root.currentRevision===old.head&&root.draftVersion===old.version&&JSON.stringify(root.model)===old.text&&Object.keys(c.model.dependencies).length===2&&JSON.stringify(c.model.dependencies)===JSON.stringify(old.model.dependencies);});
+   if(scenario.destination==='return'){
+    await click('content-return');await check('回执恢复后返回原冲突草稿 '+label,()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='conflict'&&!c.copy.active&&c.model===window.auFlow.root.model&&c.copy.candidate.result.revision==='1';});
+   }else{
+    await click('content-open-copy');await check('回执恢复后打开已保存副本 '+label,()=>{const a=window.DW_DESIGN_STATE.authoring;return a.content.result.revision==='1'&&a.previousContent.model===window.auFlow.root.model&&a.content.requestSettled;});
+   }
+  }
+  await restoreResults();await page.evaluate(()=>{const r=window.DW_AUTHORING.runtime,f=window.auFlow;r.waitForContentCommit=f.wait;r.readContentResult=f.read;r.readContentStatus=f.status;delete window.auFlow;});
+ }
+ await render('content-save');
+ await page.evaluate(()=>{const r=window.DW_AUTHORING.runtime;window.auReplyRead=r.readContentResult;r.readContentResult=async()=>{throw Error('响应丢失');};});
+ await click('content-submit');
+ await page.evaluate(()=>{const r=window.DW_AUTHORING.runtime;window.auStatusRead=r.readContentStatus;window.auQueries=[];r.readContentStatus=async request=>{const value=await window.auStatusRead(request);return new Promise(resolve=>window.auQueries.push({resolve,value}));};});
+ await page.locator('[data-au-action="content-query"]').click();await page.waitForFunction(()=>window.auQueries.length===1);
+ await page.locator('[data-au-action="content-query"]').click();await page.waitForFunction(()=>window.auQueries.length===2);
+ await page.evaluate(()=>window.auQueries[1].resolve(window.auQueries[1].value));await page.waitForFunction(()=>!!window.DW_AUTHORING.api.contentSession().result);
+ await page.evaluate(()=>{const old=window.auQueries[0];old.resolve({...old.value,state:'accepted',result:null});});await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+ await check('较早查询的迟到状态不覆盖已核定版本',()=>{const c=window.DW_AUTHORING.api.contentSession();return c.stage==='saved'&&c.requestSettled&&c.result.revision==='13'&&c.service.committed===1;});
+ await page.evaluate(()=>{const r=window.DW_AUTHORING.runtime;r.readContentResult=window.auReplyRead;r.readContentStatus=window.auStatusRead;delete window.auReplyRead;delete window.auStatusRead;delete window.auQueries;});
+
  return {checks,contractOutputs};
 }

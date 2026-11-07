@@ -227,7 +227,7 @@ def outputs():
         "```", "",
         "重新生成设计图需要 Node.js/npm、Chrome，以及 requirements-prototypes.txt 中的 Pillow。安装工具后运行 python tools/render_prototypes.py，随后运行 python tools/compose_prototypes.py。渲染器使用固定版本 Playwright CLI，创建独立本机预览与浏览器会话，结束时关闭；合成工具生成图册总览。",
         "",
-        "运行 python tools/render_prototypes.py --check-only 检查全部页面与交互，或使用 --interactions-only 仅检查交互。--interaction-suite baseline、completion、authoring、recording、query 或 platform 可选择单组；交互结果在运行时校验。", "",
+        "运行 python tools/render_prototypes.py --check-only 检查全部页面与交互，或使用 --interactions-only 仅检查交互。--interaction-suite baseline、completion、authoring、content、recording、query 或 platform 可选择单组；交互结果在运行时校验。", "",
     ]
     return {
         PROTOTYPES / "catalog.json": encode(catalog),

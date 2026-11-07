@@ -3,7 +3,13 @@
 const DS=window.DW_DESIGN_STATE,F=window.DW_CATALOG.authoringFixtures,A=DS.authoring={},clone=v=>JSON.parse(JSON.stringify(v)),now=()=>Date.now(),utc=n=>new Date(n??now()).toISOString().replace(/\.\d{3}Z$/,'Z');
 const bytes=v=>new TextEncoder().encode(JSON.stringify(v)),canonical=v=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(canonical).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';
 const hash=async b=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(n=>n.toString(16).padStart(2,'0')).join('');
-const runtime={waitForResult:()=>new Promise(resolve=>setTimeout(resolve,1500)),readEditResult:async op=>({operationId:op.id,version:op.version,state:op.state,result:clone(op.result),error:op.error})};
+const runtime={
+ waitForResult:()=>new Promise(resolve=>setTimeout(resolve,1500)),
+ readEditResult:async op=>({operationId:op.id,version:op.version,state:op.state,result:clone(op.result),error:op.error}),
+ waitForContentCommit:()=>new Promise(resolve=>setTimeout(resolve,300)),
+ readContentResult:async request=>({requestId:request.id,ok:!request.error,result:clone(request.result),error:request.error}),
+ readContentStatus:async request=>({requestId:request.id,state:request.state,operationId:null,result:clone(request.result)})
+};
 function stamp(seconds=300){const n=now();return{snapshotId:'query-'+(++A.sequence),snapshotAt:utc(n),expiresAt:utc(n+seconds*1000)};}
 function seed(id){
  A.sequence=A.sequence||0;
@@ -105,7 +111,14 @@ async function resolveEdit(mode,onProgress=()=>{}){
 function changeEditKind(kind){if(editLive(A.edit))throw Error('请先完成当前保存操作。');A.edit=freshEdit(kind);}
 const contentSession=()=>A.content.copy?.active?A.content.copy.candidate:A.content;
 const contentCurrent=c=>A.content===c||A.content.copy?.candidate===c;
-async function startContent(c=contentSession()){const sequence=c.sequence=(c.sequence||0)+1;c.offset=0;c.parts=[];c.ref=null;c.stage='uploading';c.error='';c.expiresAt=now()+60000;c.fixedDraftVersion=c.draftVersion;c.message='正在保存当前草稿。';const digest=await hash(c.raw);if(c.sequence!==sequence)throw Error('本次保存已取消。');c.digest=digest;}
+const contentPending=c=>!!c.requestId&&!c.requestSettled;
+const contentSaved=c=>!!c.result&&c.result.draftVersion===c.draftVersion;
+async function startContent(c=contentSession()){
+ if(contentPending(c))throw Error('请先查询本次保存结果。');
+ const sequence=c.sequence=(c.sequence||0)+1;
+ c.offset=0;c.parts=[];c.ref=null;c.result=null;c.requestId=null;c.requestSettled=false;c.stage='uploading';c.error='';c.expiresAt=now()+60000;c.fixedDraftVersion=c.draftVersion;c.message='正在保存当前草稿。';
+ const digest=await hash(c.raw);if(c.sequence!==sequence)throw Error('本次保存已取消。');c.digest=digest;
+}
 async function writeChunk({offset=contentSession().offset,chunk=null}={},c=contentSession()){const sequence=c.sequence;if(c.stage!=='uploading'||now()>=c.expiresAt)throw Error('内容传输已到期，请重新保存。');const data=chunk||c.raw.slice(offset,offset+196608);const old=c.parts.find(p=>p.offset===offset),digest=await hash(data);if(c.sequence!==sequence||c.stage!=='uploading')throw Error('本次保存已取消。');if(old){if(old.sha256!==digest)throw Error('已接收的内容发生变化，请重新保存。');return{uploadId:'workflow-upload',nextOffset:c.offset,replayed:true};}if(offset!==c.offset||data.length===0||data.length>196608||offset+data.length>c.raw.length)throw Error('保存数据的顺序或长度不正确。');c.parts.push({offset,sha256:digest,data:[...data]});c.offset+=data.length;c.message='内容传输 '+Math.round(c.offset/c.raw.length*100)+'%。';return{uploadId:'workflow-upload',nextOffset:c.offset,replayed:false};}
 async function sealContent(c=contentSession()){const sequence=c.sequence;if(c.offset!==c.raw.length)throw Error('保存数据尚未完整传输。');if(now()>=c.expiresAt)throw Error('内容上传已到期，请重新保存。');const data=new Uint8Array(c.parts.flatMap(p=>p.data));if(await hash(data)!==c.digest)throw Error('传输内容校验失败，请重新保存。');if(c.sequence!==sequence)throw Error('本次保存已取消。');JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(data));c.ref={kind:'resource',resourceId:'workflow-content',length:data.length,sha256:c.digest};c.stage='sealed';c.refExpiresAt=now()+60000;c.message='内容已接收，正在保存流程版本。';return clone(c.ref);}
 function checkContentVersion(c){
@@ -113,8 +126,57 @@ function checkContentVersion(c){
  c.stage='conflict';c.message='';
  throw Error('流程版本已变化：当前版本 '+(c.currentRevision??'不存在')+'，草稿基于 '+(c.baseRevision??'新流程')+'。可将当前草稿另存为新流程。');
 }
-async function saveContent(c=contentSession()){
- const sequence=c.sequence;if(c.result)return clone(c.result);
+async function executeContentSave(c,request){
+ try{
+  await runtime.waitForContentCommit(request);
+  if(c.service.headRevision!==request.params.baseRevision){request.error={code:'VERSION_CONFLICT',message:'流程版本已变化，请核对当前版本。'};request.state='notReceived';return;}
+  const revision=request.params.baseRevision===null?'1':String(Number(request.params.baseRevision)+1);
+  request.result={workflowId:request.params.workflowId,revision,draftVersion:request.params.draftVersion,definitionHash:request.definitionHash};
+  c.service.headRevision=revision;c.service.committed++;request.state='finished';
+ }catch{request.error={code:'SAVE_FAILED',message:'流程版本保存失败，当前草稿已保留。'};request.state='notReceived';}
+}
+function applyContentResult(c,request,result){
+ if(!result||result.workflowId!==request.params.workflowId||result.draftVersion!==request.params.draftVersion||result.definitionHash!==request.definitionHash||typeof result.revision!=='string'||!result.revision)throw Error('保存结果与本次编辑不一致。');
+ c.result=clone(result);c.requestSettled=true;c.saving=false;c.error='';c.currentRevision=result.revision;c.baseRevision=result.revision;
+ c.stage=contentSaved(c)?'saved':'draft';
+ c.message='流程版本 '+result.revision+' 已保存。'+(contentSaved(c)?'':'当前草稿还有未保存的修改。');
+}
+async function readContentReceipt(c,request,query=false){
+ const read=c.readSequence=(c.readSequence||0)+1;
+ const current=()=>contentCurrent(c)&&c.requestId===request.id&&c.readSequence===read&&!c.requestSettled;
+ try{
+  const value=await(query?runtime.readContentStatus(request):runtime.readContentResult(request));
+  if(!current())return null;
+  if(value.requestId!==request.id)throw Error('保存结果不属于当前请求。');
+  c.lastReceipt=clone(value);
+  if(query){
+   if(value.state==='finished')applyContentResult(c,request,value.result);
+   else{
+    if(!['accepted','notReceived','uncertain'].includes(value.state))throw Error('保存结果状态无效。');
+    c.stage='uncertain';c.saving=false;c.error='';
+    c.message=value.state==='accepted'?'流程版本正在保存，请继续查询结果。':'尚未取得本次保存结果，请继续查询。';
+   }
+  }else if(value.ok)applyContentResult(c,request,value.result);
+  else{
+   if(!value.error)throw Error('保存结果缺少错误原因。');
+   c.requestSettled=true;c.saving=false;c.message='';c.error=value.error.message;
+   c.stage=value.error.code==='VERSION_CONFLICT'?'conflict':'failed';
+   if(c.stage==='conflict')c.currentRevision=c.service.headRevision;
+  }
+  return clone(value);
+ }catch{
+  if(current()){c.stage='uncertain';c.saving=false;c.message='';c.error='保存结果读取失败，请查询本次保存结果。';}
+  return null;
+ }
+}
+async function queryContent(c=contentSession()){
+ const request=c.service?.requests[c.requestId];if(!request)throw Error('当前没有已提交的流程保存。');
+ return readContentReceipt(c,request,true);
+}
+async function saveContent(c=contentSession(),onProgress=()=>{}){
+ if(contentPending(c))return queryContent(c);
+ if(contentSaved(c))return clone(c.result);
+ const sequence=c.sequence;
  if(c.stage!=='sealed'||now()>=c.refExpiresAt)throw Error('保存内容已过期，请重新保存。');
  checkContentVersion(c);
  if(c.draftVersion!==c.fixedDraftVersion)throw Error('草稿已修改，请保存当前编辑内容。');
@@ -122,13 +184,17 @@ async function saveContent(c=contentSession()){
  if(!contentCurrent(c)||c.sequence!==sequence)throw Error('本次保存已取消。');
  checkContentVersion(c);
  if(c.draftVersion!==c.fixedDraftVersion)throw Error('草稿已修改，请保存当前编辑内容。');
- c.saveParams={workflowId:c.model.definition.id,draftVersion:c.draftVersion,baseRevision:c.baseRevision,modelRef:clone(c.ref)};
- const revision=c.currentRevision===null?'1':String(Number(c.currentRevision)+1);
- c.stage='saved';c.currentRevision=revision;c.result={workflowId:c.model.definition.id,revision,draftVersion:c.draftVersion,definitionHash};
- c.message='流程版本 '+revision+' 已保存。';return clone(c.saveParams);
+ c.saveParams={workflowId:c.model.definition.id,draftVersion:c.fixedDraftVersion,baseRevision:c.baseRevision,modelRef:clone(c.ref)};
+ c.service??={headRevision:c.currentRevision,requests:{},committed:0};
+ const request={id:'workflow-save-'+(++A.sequence),params:clone(c.saveParams),definitionHash,state:'accepted',result:null,error:null};
+ c.service.requests[request.id]=request;c.requestId=request.id;c.requestSettled=false;c.stage='saving';c.saving=true;c.error='';c.message='正在保存流程版本。';
+ request.done=executeContentSave(c,request);onProgress();
+ await request.done;
+ await readContentReceipt(c,request);
+ return clone(c.saveParams);
 }
 async function saveContentCopy(name,onProgress=()=>{}){
- const original=A.content;if(original.copy?.active)throw Error('请先处理当前副本的保存结果。');
+ const original=A.content;if(original.copy?.active||contentPending(original)||contentPending(original.copy?.candidate||{}))throw Error('请先处理当前保存结果。');
  if(original.stage!=='conflict')throw Error('请先核对流程的保存状态。');
  original.copyName=name;const title=name.trim();if(!title||[...title].length>120)throw Error('请填写 1～120 个字符的新流程名称。');
  const model=clone(original.model);model.definition.id='workflow-copy-'+(++A.sequence);model.definition.name=title;
@@ -137,10 +203,10 @@ async function saveContentCopy(name,onProgress=()=>{}){
  return submitContent(onProgress,candidate);
 }
 function returnOriginalContent(){
- if(A.content.copy?.active){const c=A.content.copy.candidate;if(c.saving)throw Error('请先完成或取消副本保存。');A.content.copy.active=false;A.content.sequence=(A.content.sequence||0)+1;A.content.error='';A.content.message='已返回原流程草稿。';}
+ if(A.content.copy?.active){const c=A.content.copy.candidate;if(c.saving||contentPending(c))throw Error('请先查询副本保存结果。');A.content.copy.active=false;A.content.sequence=(A.content.sequence||0)+1;A.content.error='';A.content.message='已返回原流程草稿。';}
  else if(A.previousContent){A.content=A.previousContent;A.previousContent=null;A.content.copy.active=false;}
 }
-function openContentCopy(){const root=A.content,c=root.copy?.candidate;if(!c?.result)throw Error('副本尚未保存。');A.previousContent=root;A.content=c;}
+function openContentCopy(){const root=A.content,c=root.copy?.candidate;if(!c?.result||!c.requestSettled)throw Error('请先查询副本保存结果。');A.previousContent=root;A.content=c;}
 async function readVariableResource(){const v=A.variables,row=v.page?.items.find(x=>x.valueResource);if(!row||now()>=Date.parse(v.snapshot.expiresAt)||now()>=Date.parse(row.valueResource.expiresAt))throw Error('变量资源已过期，请重新读取快照。');const data=bytes(F.largeVariable.value);if(data.length!==row.valueResource.length||await hash(data)!==row.valueResource.sha256)throw Error('变量资源内容不完整，请重新读取。');v.resourceValue=clone(F.largeVariable.value);return clone(v.resourceValue);}
 async function testConnection(onProgress=()=>{}){const t=A.test,pending=await beginTest();onProgress();await runtime.waitForResult();if(A.test!==t||!pending||t.sequence!==pending.seq)return;finishTest(null,pending);onProgress();}
 async function submitEdit(onProgress=()=>{}){
@@ -150,18 +216,26 @@ async function submitEdit(onProgress=()=>{}){
  finally{onProgress();}
 }
 const previousReset=DS.resetForScreen;DS.resetForScreen=id=>{previousReset?.(id);seed(id);};
-function cancelContent(){const c=contentSession();if(c.result)return;c.sequence=(c.sequence||0)+1;c.saving=false;c.stage=c.isCopy?'cancelled':'draft';c.parts=[];c.offset=0;c.ref=null;c.message=c.isCopy?'副本保存已取消，可返回原草稿。':'保存已取消，当前草稿继续保留。';}
+async function cancelContent(onProgress=()=>{}){
+ const c=contentSession();if(c.requestSettled&&c.result)return;
+ if(contentPending(c)){
+  c.stage='uncertain';c.saving=false;c.message='正在查询本次保存结果。';onProgress();
+  await queryContent(c);onProgress();return;
+ }
+ c.sequence=(c.sequence||0)+1;c.saving=false;c.stage=c.isCopy?'cancelled':'draft';c.parts=[];c.offset=0;c.ref=null;c.message=c.isCopy?'副本保存已取消，可返回原草稿。':'保存已取消，当前草稿继续保留。';
+}
 async function submitContent(onProgress=()=>{},c=contentSession()){
- if(c.saving||c.result)return;checkContentVersion(c);c.saving=true;const sequence=(c.sequence||0)+1;
+ if(contentPending(c)){await queryContent(c);onProgress();return;}
+ if(c.saving||contentSaved(c))return;checkContentVersion(c);c.saving=true;const sequence=(c.sequence||0)+1;
  try{
   await startContent(c);onProgress();
   while(c.offset<c.raw.length){if(!contentCurrent(c)||c.sequence!==sequence)return;await writeChunk({},c);onProgress();await new Promise(resolve=>requestAnimationFrame(resolve));}
   if(!contentCurrent(c)||c.sequence!==sequence)return;
   await sealContent(c);onProgress();await runtime.waitForResult();
   if(!contentCurrent(c)||c.sequence!==sequence)return;
-  await saveContent(c);
- }catch(error){if(!contentCurrent(c)||c.sequence!==sequence)return;if(c.stage!=='conflict')c.stage='failed';c.error=error.message;c.message='';if(!c.isCopy)throw error;}
+  await saveContent(c,onProgress);
+ }catch(error){if(!contentCurrent(c)||c.sequence!==sequence)return;if(contentPending(c)){c.stage='uncertain';c.error='保存结果读取失败，请查询本次保存结果。';}else{if(c.stage!=='conflict')c.stage='failed';c.error=error.message;}c.message='';if(!c.isCopy)throw error;}
  finally{if(contentCurrent(c)&&c.sequence===sequence){c.saving=false;onProgress();}}
 }
-window.DW_AUTHORING={runtime,api:{seed,readVariables,variablesNext,readRevisions,readConnections,beginTest,finishTest,changeTest,testConnection,prepareEdit,commitEdit,finishEdit,cancelEdit,submitEdit,queryEdit,reviewEdit,resolveEdit,changeEditKind,startContent,writeChunk,sealContent,saveContent,saveContentCopy,contentSession,returnOriginalContent,openContentCopy,cancelContent,submitContent,readVariableResource,hash,canonical}};
+window.DW_AUTHORING={runtime,api:{seed,readVariables,variablesNext,readRevisions,readConnections,beginTest,finishTest,changeTest,testConnection,prepareEdit,commitEdit,finishEdit,cancelEdit,submitEdit,queryEdit,reviewEdit,resolveEdit,changeEditKind,startContent,writeChunk,sealContent,saveContent,saveContentCopy,contentSession,contentPending,queryContent,returnOriginalContent,openContentCopy,cancelContent,submitContent,readVariableResource,hash,canonical}};
 })();
