@@ -20,7 +20,7 @@ DeskWeaveStudio is designed to record desktop actions, compose workflows, locate
 
 ## Project status
 
-The execution core is under development. The Python service library provides expression previews, workflow validation, inline workflow version storage, catalog and revision pagination, and saved-request lookup. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, standalone Engine process, Rust Agent, MCP Bridge and installers follow the [roadmap (Chinese only)](ROADMAP.md).
+The execution core is under development. The Python service library provides expression previews, workflow validation, workflow version storage, chunked content transfer, catalog and revision pagination, and saved-request lookup. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, standalone Engine process, Rust Agent, MCP Bridge and installers follow the [roadmap (Chinese only)](ROADMAP.md).
 
 ## Execution core
 
@@ -31,7 +31,7 @@ uv sync --frozen
 uv run --frozen python examples/engine/workspace.py
 ```
 
-The example saves, reads and validates a workflow and previews an expression in a temporary workspace. See [Engine development (Chinese only)](docs/development/engine.md) for available methods and development commands.
+The example saves, reads and validates a workflow and previews an expression in a temporary workspace. Run `uv run --frozen python examples/engine/content_transfer.py` for the [large-workflow example](examples/engine/content_transfer.py), including chunked upload, resource reads and cleanup. See [Engine development (Chinese only)](docs/development/engine.md) for available methods and development commands.
 
 ## Interface prototypes
 

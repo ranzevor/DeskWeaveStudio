@@ -335,8 +335,29 @@ class Workspace:
             raise DeskWeaveError("STORAGE_CORRUPT", "流程引用的内容损坏。")
         return loads(data, max_bytes=33_554_432)
 
-    def save(self, client: str, request_id: str, params: dict) -> dict:
+    def save_receipt(self, client: str, request_id: str, params: dict) -> dict | None:
         payload_hash = digest({"method": "workflow.save", "params": params})
+        with self.transaction() as connection:
+            row = connection.execute(
+                "SELECT payload_hash,result FROM command_receipt "
+                "WHERE client_id=? AND request_id=?",
+                (client, request_id),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["payload_hash"] != payload_hash:
+                raise DeskWeaveError("REQUEST_CONFLICT", "请求标识已用于另一项修改。")
+            return loads(row["result"])
+
+    def save(
+        self, client: str, request_id: str, params: dict, *, request_params: dict | None = None
+    ) -> dict:
+        payload_hash = digest(
+            {
+                "method": "workflow.save",
+                "params": params if request_params is None else request_params,
+            }
+        )
         with self._mutex:
             with self.transaction() as connection:
                 receipt = connection.execute(

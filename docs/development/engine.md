@@ -9,9 +9,10 @@ Python 包位于 `python/deskweave`。`Engine` 统一分发方法、权限校验
 ```bash
 uv sync --frozen
 uv run --frozen python examples/engine/workspace.py
+uv run --frozen python examples/engine/content_transfer.py
 ```
 
-示例在临时目录创建工作空间，完成流程保存、读取、校验和表达式预览，退出时删除临时数据。
+两个示例均使用临时工作空间。`workspace.py` 完成流程保存、读取、校验和表达式预览；`content_transfer.py` 上传超过 1MiB 的合成模型，通过引用保存，再分块读取并校验完整模型。内容传输示例在完成或发生异常时关闭 Engine；两个示例退出时均删除临时数据。
 
 ```bash
 uv run --frozen ruff check python tests examples/engine
@@ -27,23 +28,30 @@ uv build
 | 方法 | 当前行为 |
 |---|---|
 | expression.preview | 复合值、全部已定义运算、短路、路径、类型和容量校验；限可信本地编辑会话 |
-| workflow.save | 保存内嵌定义且不含资源依赖的流程；版本比较、不可变内容和重复请求去重 |
-| workflow.read | 读取指定版本的内嵌定义、依赖和定义摘要 |
+| workflow.save | 从内嵌模型或 modelRef 保存流程；版本比较、不可变内容和重复请求去重 |
+| workflow.read | 读取指定版本；支持 auto、inline 和 resource，协商后大于 256KiB 的模型默认资源化 |
 | workflow.validate | 校验格式、节点、出口、入口、可达性、图环、目标槽、资源类型和参数默认值 |
 | workflow.revisions | 固定快照中的历史版本分页 |
 | workspace.catalog | 流程目录的名称查询、排序和分页 |
 | query.read / query.close | 诊断筛选、稳定序号、总数、快照和诊断集合释放 |
 | request.status | 查询当前客户端已提交的保存请求；按当前权限读取结果 |
+| content.begin / content.write / content.seal | 预留容量、顺序分块上传、校验编码与摘要、按用途封存 JSON |
+| content.discard | 按 uploadId 或 resourceId 释放当前会话的临时内容；参数互斥、重复释放幂等 |
+| resource.read | 按偏移读取最多 192KiB；返回整段资源摘要与实际块长度 |
 
-独立 Engine 进程、认证 IPC、内容资源传输、运行调度和原生输入按 M1 后续步骤实现。方法与参数的完整设计见[本机协议](../interfaces/local-protocol.md)。
+含资源声明或依赖绑定的流程保存仍返回 `METHOD_UNAVAILABLE`；`trajectoryEdit` 仅校验并封存完整轨迹，正式资产提交与依赖版本绑定尚未实现。独立 Engine 进程、认证 IPC、运行调度和原生输入按 M1 后续步骤实现。方法与参数的完整设计见[本机协议](../interfaces/local-protocol.md)。
 
 ## 服务调用
 
 `Workspace(path, create=True)` 只在空目录创建工作空间；已有工作空间使用 `Workspace(path)`。实例持有操作系统文件锁，直到关闭才释放；同一目录的别名解析到相同位置。数据库事务与内容发布分开，文件写入失败或提交前超时不会更新流程头版本。
 
-`Engine.open_session` 由受信启动器或适配器调用，传入已认证的稳定客户端身份、权限和流程范围。网络消息不能创建会话或覆盖这些字段。`dispatch` 使用会话身份和公共消息信封；返回值符合公共响应契约。
+`Engine.open_session` 由受信启动器或适配器调用，传入已认证的稳定客户端身份、权限、流程范围和已协商的 `capabilities`。使用内容传输时传入 `capabilities={"contentRefsV1"}`；能力选择独立于用途权限。当前服务库通过该入口接收可信调用参数，认证与握手由后续 IPC 适配器实现。网络消息不能创建会话或覆盖这些字段。`dispatch` 使用会话身份和公共消息信封；返回值符合公共响应契约。
 
-`local=True` 仅用于已经完成本地窗口身份核验的调用方。表达式预览保持本地准入限制；其他入口对相同业务参数调用相同方法处理器。`revoke_client` 关闭该客户端全部会话及查询，`close` 释放 Engine 与工作空间。
+`local=True` 仅用于已经完成本地窗口身份核验的调用方。表达式预览保持本地准入限制；其他入口对相同业务参数调用相同方法处理器。`revoke_client` 关闭该客户端全部会话、查询与临时内容，`close` 释放 Engine 与工作空间。单个临时文件关闭失败时仍清理其余资源及会话，随后向调用方报告存储异常。
+
+内容上传与读取结果分别使用每工作空间 16 项、64MiB 的容量池，单项不超过 32MiB；暂存与封存各有最多 60 秒的期限。同一会话重复读取相同流程内容复用原资源和期限，读取完成或取消后调用 `content.discard({resourceId})`。会话关闭与撤权释放全部临时内容；过期内容不可访问，在后续资源准入或访问时回收。完整的权限、重传、期限和摘要规则见[内容传输](../interfaces/content-transfer.md)。
+
+引用保存使用原始 `modelRef` 参数识别重复请求，已成功的保存可在引用释放、到期或 Engine 重启后重放；同一请求键换引用返回 `REQUEST_CONFLICT`。引用内容仍执行流程身份、静态校验、版本比较与原子保存，失败不会发布流程版本。
 
 集合游标绑定会话、权限代次、筛选、排序和每页数量。目录与版本查询固定 SQLite 版本序号，使用索引和最后排序键读取 pageSize+1 条匹配记录；诊断页共享来源集合。快照保存查询条件、版本上界和期限，游标保存最后实际返回的位置。查询默认五分钟到期，诊断页不超过来源集合期限；每个会话最多八个快照，工作空间最多三十二个。
 

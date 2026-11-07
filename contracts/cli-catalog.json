@@ -1155,7 +1155,7 @@
       },
       "permissions": [],
       "completion": "result",
-      "authorization": "仅释放调用者拥有的暂存；不删除正式资产或版本。",
+      "authorization": "仅释放当前会话拥有的临时内容，重验来源权限与对象范围；正式资产和版本保持。",
       "localBindings": {},
       "fixedParams": {}
     },

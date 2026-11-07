@@ -4338,7 +4338,8 @@
             },
             "sha256": {
               "type": "string",
-              "pattern": "^[0-9a-f]{64}$"
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "完整资源原始字节的 SHA-256；不表示当前块的摘要。"
             },
             "chunk": {
               "type": "string",

@@ -10,6 +10,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from deskweave.adapters.content import MAX_CONTENT, Content, ContentStore
 from deskweave.adapters.workspace import Workspace, utc_time
 from deskweave.contracts import method_schema, schema_contents, validate
 from deskweave.domain.values import evaluate
@@ -27,6 +28,7 @@ class Session:
     workflow_ids: frozenset[str] | None
     local: bool
     authorization_version: int = 1
+    capabilities: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,9 @@ class Engine:
         self.clock = clock
         self.monotonic = monotonic
         self.pages = Pages(workspace, clock)
+        self.contents = ContentStore(
+            clock=clock, monotonic=lambda: self.monotonic(), checkpoint=workspace.check_deadline
+        )
         self._mutex = threading.RLock()
         self._sessions: dict[str, Session] = {}
         self._collections: dict[str, dict] = {}
@@ -85,6 +90,11 @@ class Engine:
         )
         self.register("query.close", self._close_query, set())
         self.register("request.status", self._request_status, set())
+        self.register("content.begin", self._content_begin, set())
+        self.register("content.write", self._content_write, set())
+        self.register("content.seal", self._content_seal, set())
+        self.register("content.discard", self._content_discard, set())
+        self.register("resource.read", self._resource_read, set())
 
     @property
     def methods(self) -> tuple[str, ...]:
@@ -122,6 +132,7 @@ class Engine:
         *,
         local: bool = False,
         workflow_ids: set[str] | None = None,
+        capabilities: set[str] | None = None,
     ) -> Session:
         with self._mutex:
             if self.workspace.closed:
@@ -134,6 +145,7 @@ class Engine:
                 frozenset(permissions),
                 None if workflow_ids is None else frozenset(workflow_ids),
                 local,
+                capabilities=frozenset(capabilities or ()),
             )
             self._sessions[session.id] = session
             return session
@@ -142,25 +154,40 @@ class Engine:
         with self._mutex:
             self._sessions.clear()
             self._collections.clear()
-            self.workspace.close()
+            try:
+                self.contents.close()
+            finally:
+                self.workspace.close()
 
     def revoke_client(self, client_id: str) -> None:
         with self._mutex:
+            failure = None
             for identity, session in tuple(self._sessions.items()):
                 if session.client_id == client_id:
-                    self.close_session(identity)
+                    try:
+                        self.close_session(identity)
+                    except OSError as error:
+                        if failure is None:
+                            failure = error
+            if failure is not None:
+                raise failure
 
     def close_session(self, session_id: str) -> None:
         with self._mutex:
             session = self._sessions.pop(session_id, None)
             if session:
-                if not self.workspace.closed:
-                    self.pages.release(session.id)
-                self._collections = {
-                    key: value
-                    for key, value in self._collections.items()
-                    if value["owner"] != session.id
-                }
+                try:
+                    self.contents.release(session.id)
+                finally:
+                    try:
+                        if not self.workspace.closed:
+                            self.pages.release(session.id)
+                    finally:
+                        self._collections = {
+                            key: value
+                            for key, value in self._collections.items()
+                            if value["owner"] != session.id
+                        }
 
     def dispatch(self, session_id: str, request: dict) -> dict:
         reply_id = request.get("id", "invalid") if type(request) is dict else "invalid"
@@ -259,8 +286,18 @@ class Engine:
         }
 
     def _save(self, session, params, request_id):
+        request_params = None
         if "modelRef" in params:
-            raise DeskWeaveError("METHOD_UNAVAILABLE", "内容引用保存服务尚未实现。")
+            self._require_content(session)
+            receipt = self.workspace.save_receipt(session.client_id, request_id, params)
+            if receipt is not None:
+                return receipt
+            item = self.contents.resource(session.id, params["modelRef"]["resourceId"])
+            self._authorize_content(session, item)
+            model = self.contents.resolve(item, params["modelRef"], "workflowModel")
+            request_params = params
+            params = {key: value for key, value in params.items() if key != "modelRef"} | model
+            dumps(params, max_bytes=MAX_CONTENT, checkpoint=self.workspace.check_deadline)
         if params["workflowId"] != params["definition"]["id"]:
             raise DeskWeaveError("INVALID_ARGUMENT", "流程定义与保存目标不一致。")
         diagnostics = validate_workflow(
@@ -270,12 +307,97 @@ class Engine:
             raise DeskWeaveError("INVALID_WORKFLOW", "流程存在结构或连接错误，请先校验流程。")
         if params["definition"]["resources"] or params["dependencies"]:
             raise DeskWeaveError("METHOD_UNAVAILABLE", "资源版本绑定服务尚未实现。")
-        return self.workspace.save(session.client_id, request_id, params)
+        return self.workspace.save(
+            session.client_id, request_id, params, request_params=request_params
+        )
 
-    def _read(self, _session, params, _request_id):
-        if params["contentMode"] == "resource":
-            raise DeskWeaveError("METHOD_UNAVAILABLE", "资源内容读取服务尚未实现。")
-        return self.workspace.read(params["workflowId"], params["revision"])
+    def _read(self, session, params, _request_id):
+        mode = params["contentMode"]
+        if mode == "resource":
+            self._require_content(session)
+        result = self.workspace.read(params["workflowId"], params["revision"])
+        if mode == "inline" or "contentRefsV1" not in session.capabilities:
+            return result
+        model = {key: result[key] for key in ("definition", "dependencies")}
+        data = dumps(model, max_bytes=MAX_CONTENT, checkpoint=self.workspace.check_deadline)
+        if mode == "auto" and len(data) <= 262144:
+            return result
+        resource = self.contents.export(session.id, params["workflowId"], data)
+        return {key: result[key] for key in ("workflowId", "revision", "definitionHash")} | {
+            "modelResource": resource
+        }
+
+    @staticmethod
+    def _require_content(session: Session) -> None:
+        if "contentRefsV1" not in session.capabilities:
+            raise DeskWeaveError("CAPABILITY_REQUIRED", "此会话未协商内容引用功能。")
+
+    @staticmethod
+    def _content_permission(session: Session, purpose: str) -> str:
+        permission = "workflow.write" if purpose == "workflowModel" else "asset.write"
+        if permission not in session.permissions:
+            raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有上传此类内容的权限。")
+        return permission
+
+    def _authorize_content(self, session: Session, item: Content) -> None:
+        self._require_content(session)
+        if item.permission not in session.permissions:
+            raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有访问此内容的权限。")
+        if item.workflow_id is not None:
+            self._authorize_workflow(session, item.workflow_id)
+
+    def _content_begin(self, session, params, _request_id):
+        self._require_content(session)
+        permission = self._content_permission(session, params["purpose"])
+        return self.contents.begin(session.id, params, permission)
+
+    def _content_write(self, session, params, _request_id):
+        self._require_content(session)
+        item = self.contents.upload(session.id, params["uploadId"])
+        self._authorize_content(session, item)
+        return self.contents.write(item, params)
+
+    def _content_seal(self, session, params, _request_id):
+        self._require_content(session)
+        item = self.contents.upload(session.id, params["uploadId"])
+        self._authorize_content(session, item)
+
+        def validate_content(purpose, value):
+            reference = (
+                "urn:deskweave:content:1#/$defs/workflowModel"
+                if purpose == "workflowModel"
+                else "urn:deskweave:trajectory:1"
+            )
+            try:
+                validate(reference, value)
+            except DeskWeaveError as error:
+                if error.code != "INVALID_ARGUMENT":
+                    raise
+                details = {"contentPath": error.details["fieldPath"]} if error.details else None
+                raise DeskWeaveError(
+                    "INVALID_CONTENT", "上传内容不符合所选格式。", details=details
+                ) from error
+            if purpose == "workflowModel":
+                identity = value["definition"]["id"]
+                self._authorize_workflow(session, identity)
+                return identity
+            return None
+
+        return self.contents.seal(item, validate_content)
+
+    def _content_discard(self, session, params, _request_id):
+        self._require_content(session)
+        item = self.contents.discard_target(session.id, params)
+        if item is not None:
+            self._authorize_content(session, item)
+        self.contents.discard(session.id, params)
+        return {"discarded": True}
+
+    def _resource_read(self, session, params, _request_id):
+        self._require_content(session)
+        item = self.contents.resource(session.id, params["resourceId"])
+        self._authorize_content(session, item)
+        return self.contents.read(item, params["offset"], params["length"])
 
     def _validate(self, session, params, _request_id):
         definition = params.get("definition")

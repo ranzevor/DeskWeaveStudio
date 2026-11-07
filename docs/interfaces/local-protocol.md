@@ -130,7 +130,7 @@ observation.start 的 detached 默认 false，是否脱离客户端与记录状�
 
 operation.get/cancel 的结果包含原作业 method。作业成功时 result 按[作业结果目录](../../contracts/operation-catalog.json)引用的结构验证；接收回执不能替代最终结果。模板保存或观察导出结果的资源仍需独立授权读取。
 
-resource.read 接受授权资源身份、偏移与块长度，返回内容摘要和 Base64 块。bridge.* 为可信本地管理命令，不经 MCP 公开。system.capabilities 提供版本、平台、允许动作、有界容量和已协商的 desktop 平台能力摘要；各项状态、显示覆盖和原生坐标契约见[跨平台架构](../architecture/platforms.md)。
+resource.read 接受授权资源身份、偏移与块长度，返回完整资源摘要和 Base64 块；读取完成或取消时通过 content.discard({resourceId}) 释放临时结果。content.discard 的 resourceId 与原 uploadId 分支互斥，旧上传释放请求保持有效。内容结构错误使用 INVALID_CONTENT 和 details.contentPath 定位上传 JSON，路径编码与 fieldPath 相同。bridge.* 为可信本地管理命令，不经 MCP 公开。system.capabilities 提供版本、平台、允许动作、有界容量和已协商的 desktop 平台能力摘要；各项状态、显示覆盖和原生坐标契约见[跨平台架构](../architecture/platforms.md)。
 
 ## 编辑草稿的持久化
 

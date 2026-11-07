@@ -20,7 +20,7 @@ DeskWeaveStudio 用于录制桌面操作、编排流程、定位屏幕目标和�
 
 ## 当前状态
 
-项目进入执行核心开发阶段。Python 服务库已提供表达式预览、流程校验、内嵌流程版本保存与读取、目录及历史分页和原请求查询。系统设计、交互原型、高清效果图和公共契约随仓库提供。桌面应用、独立 Engine 进程、Rust Agent、MCP Bridge 与安装包按[路线图](ROADMAP.md)实施。
+项目进入执行核心开发阶段。Python 服务库已提供表达式预览、流程校验、流程版本保存与读取、内容分块传输、目录及历史分页和原请求查询。系统设计、交互原型、高清效果图和公共契约随仓库提供。桌面应用、独立 Engine 进程、Rust Agent、MCP Bridge 与安装包按[路线图](ROADMAP.md)实施。
 
 ## 执行核心
 
@@ -31,7 +31,7 @@ uv sync --frozen
 uv run --frozen python examples/engine/workspace.py
 ```
 
-示例在临时工作空间执行保存、读取、校验和表达式预览。方法范围和开发命令见[Engine 开发](docs/development/engine.md)。
+示例在临时工作空间执行保存、读取、校验和表达式预览。大流程的分块上传、资源读取和释放见[内容传输示例](examples/engine/content_transfer.py)，运行 `uv run --frozen python examples/engine/content_transfer.py`。方法范围和开发命令见[Engine 开发](docs/development/engine.md)。
 
 ## 界面原型
 

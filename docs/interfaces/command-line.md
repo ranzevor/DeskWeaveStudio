@@ -31,8 +31,11 @@ CLI 只接受目录中的具名命令，不提供 method、shell 或脚本透传
 | 模板生产 | template extract、candidates、names、commit、export、discard | template.* |
 | 观察 | observation start、stop、status、query、read、export | observation.* |
 | 资产 | asset list、read、import、references | workspace.catalog、asset.* |
+| 内容传输 | content begin、write、seal、discard | content.* |
 | 状态与资源 | operation status/cancel、request status、resource read、capabilities | operation.*、request.status、resource.read、system.capabilities |
 | 本地控制 | emergency stop、mcp status/start/stop/serve | emergency.stop、bridge.* |
+
+内容传输沿用[内容引用契约](content-transfer.md)。`content discard` 通过参数对象中互斥的 uploadId 或 resourceId 释放临时内容；读取完成或取消时释放对应 resourceId。
 
 list 的 kind 由具名命令固定，调用者不能把 workflow list 改成读取另一类对象。目录权限表列出基本能力，具体流程动作、资源来源、目标、模型与输出位置继续执行对象检查。localPermissions 中的 workspace.manage 只授予可信本地管理客户端，不属于 MCP tokenGrant 的 14 项权限，也不能通过网络令牌取得。
 

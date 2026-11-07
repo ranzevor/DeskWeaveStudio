@@ -2,6 +2,13 @@
 
 这些文件用于实现公共格式、解析器和客户端。运行语义与[工作流设计](../docs/design/workflow.md)、[执行设计](../docs/design/execution.md)共同定义。
 
+## 可运行服务示例
+
+- [工作空间](engine/workspace.py)：流程保存、读取、校验与表达式预览。
+- [内容传输](engine/content_transfer.py)：大于 1MiB 的模型分块上传、引用保存、资源化读取、整段摘要校验和临时资源释放。
+
+运行方式见[Engine 开发](../docs/development/engine.md)。
+
 ## 合法示例
 
 | 文件 | 用途与预期 |
@@ -22,6 +29,8 @@
 演示令牌不具备真实授权。工作流样例的读取与验证不发送输入；轨迹和 input 请求仅在独立测试目标中执行。应用实现后还需验证目标窗口实际收到的输入。
 
 parent 使用资源逻辑键 child。导入时由包清单固定其对应文件；运行时固定为工作空间内的具体内容版本。
+
+内容释放参数见[上传释放](authoring/content-discard-upload.json)和[读取资源释放](authoring/content-discard-resource.json)；[内容格式错误](messages/content-invalid.json)中的 contentPath 定位上传 JSON，区别于请求参数的 fieldPath。
 
 ## 拒绝示例
 

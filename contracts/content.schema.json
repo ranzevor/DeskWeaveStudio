@@ -201,12 +201,26 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256
+        },
+        "resourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
       },
-      "required": [
-        "uploadId"
-      ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "uploadId"
+          ]
+        },
+        {
+          "required": [
+            "resourceId"
+          ]
+        }
+      ]
     },
     "discardResult": {
       "type": "object",

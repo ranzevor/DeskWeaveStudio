@@ -106,7 +106,7 @@ deskweave_input 映射 input.submit，仅接收一个输入节点，target=main�
 
 URI 路径绑定目录的 pathBindings，查询字段限定为 queryParameters，并按目录 defaults 补齐；路径参数进行单次百分号解码和字段校验，不能借 URI 切换工作空间。运行事件必须携带当前 instanceEpoch；新连接先取得运行快照。读取结果为资源目录声明的 JSON，图像内容通过资源身份继续分块读取。
 
-资源支持分页、MIME、长度、摘要及过期状态，读取每一块仍核对对象授权。resource.read 每次最多读取 192KiB，Base64 编码后保持在控制消息预算内；较大图像通过多个块或资源链接交付。系统能力返回版本、平台、允许动作、有界容量及已协商的 desktop 能力摘要，不包含私有目录、凭据、原生句柄或授权票据；原生能力状态不授予 MCP 新权限。
+资源支持分页、MIME、长度、摘要及过期状态，读取每一块仍核对对象授权。resource.read 每次最多读取 192KiB，Base64 编码后保持在控制消息预算内；sha256 对应完整资源原始字节，客户端收齐后验证。临时内容读取完成或取消后，通过 deskweave_content_discard 的 resourceId 分支释放；uploadId 与 resourceId 互斥。较大图像通过多个块或资源链接交付。系统能力返回版本、平台、允许动作、有界容量及已协商的 desktop 能力摘要，不包含私有目录、凭据、原生句柄或授权票据；原生能力状态不授予 MCP 新权限。
 
 预设任务包括创建流程草稿、诊断指定流程和制作模板。每个 Prompt 有明确参数和返回消息，读取 Prompt 不保存草稿、不调用模型、不启动输入或提取。arguments 定义发现结果，argumentSchema 限制实际参数；可选参数按 defaults 填充。参数作为普通文本插入消息，不递归解析其中的占位符，不把参数解释成方法、路径或授权。模型生成的定义必须经过 workflow.validate/save 与显式运行路径，结果内容不能改变授权。
 

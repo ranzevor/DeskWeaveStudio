@@ -13130,7 +13130,8 @@
             },
             "sha256": {
               "type": "string",
-              "pattern": "^[0-9a-f]{64}$"
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "完整资源原始字节的 SHA-256；不表示当前块的摘要。"
             },
             "chunk": {
               "type": "string",
@@ -13492,10 +13493,10 @@
       {
         "name": "deskweave_content_discard",
         "title": "释放暂存内容",
-        "description": "释放暂存内容。",
+        "description": "按 uploadId 释放上传，或按 resourceId 释放封存引用及临时读取结果。两个参数互斥。",
         "method": "content.discard",
         "permissions": [],
-        "objectAuthorization": "仅释放调用者拥有的暂存；不删除正式资产或版本。",
+        "objectAuthorization": "仅释放当前会话拥有的临时内容，重验来源权限与对象范围；正式资产和版本保持。",
         "inputSchema": {
           "$ref": "urn:deskweave:service:1#/$defs/content.discard/properties/params"
         },
@@ -13515,12 +13516,26 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 256
+            },
+            "resourceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
             }
           },
-          "required": [
-            "uploadId"
-          ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "uploadId"
+              ]
+            },
+            {
+              "required": [
+                "resourceId"
+              ]
+            }
+          ]
         },
         "result": {
           "$ref": "urn:deskweave:content:1#/$defs/discardResult"
