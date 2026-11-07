@@ -47,13 +47,55 @@ async page=>{
  await page.evaluate(async()=>{await window.DW_AUTHORING.api.beginTest();window.DW_AUTHORING.api.finishTest('networkFailed');window.DW_PROTOTYPE.go('connection-draft-test');});await check('网络失败与模型不可用分别投影',()=>{const r=window.DW_DESIGN_STATE.authoring.test.result;return r.configurationValid&&!r.reachable&&!r.modelAvailable&&r.reason==='networkFailed';});
  await collect('未保存连接失败结果','authoring.schema.json#/$defs/draftTestResult',()=>window.DW_DESIGN_STATE.authoring.test.result);
  await click('test-save');await check('明确保存才改变连接版本',()=>window.DW_DESIGN_STATE.authoring.test.saved.model==='vision-edited'&&window.DW_DESIGN_STATE.authoring.test.savedVersion===3);
- await render('asset-edit-save');await page.evaluate(()=>window.DW_AUTHORING.api.prepareEdit());await check('准备资产不生成版本',()=>window.DW_DESIGN_STATE.authoring.edit.committed===0);await page.evaluate(()=>window.DW_AUTHORING.api.commitEdit());await check('提交接收后仍等待保存结果',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.pending&&e.result===null&&e.committed===0;});await page.evaluate(()=>window.DW_AUTHORING.api.cancelEdit());await click('edit-submit');await check('一次保存自动追加图像版本',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.result.assetVersion==='4'&&e.result.previousVersion==='3'&&e.committed===1;});await collect('图像保存计划','authoring.schema.json#/$defs/editPlan',()=>window.DW_DESIGN_STATE.authoring.edit.plan);await collect('图像正式版本结果','authoring.schema.json#/$defs/editResult',()=>window.DW_DESIGN_STATE.authoring.edit.result);
- await page.evaluate(()=>window.DW_AUTHORING.api.finishEdit());await check('重复查询保存结果不重复追加版本',()=>window.DW_DESIGN_STATE.authoring.edit.committed===1);
- await page.evaluate(()=>window.DW_AUTHORING.api.cancelEdit());await check('提交完成后取消仍返回实际成功结果',()=>window.DW_DESIGN_STATE.authoring.edit.result.assetVersion==='4');
- await render('asset-edit-conflict');await check('版本冲突保留图像编辑',async()=>{const e=window.DW_DESIGN_STATE.authoring.edit;try{await window.DW_AUTHORING.api.commitEdit();return false;}catch(error){return error.message.includes('版本')&&e.roi.width===32&&e.result===null&&e.committed===0;}});await click('edit-submit');await check('重新保存使用核对后的资产版本',()=>window.DW_DESIGN_STATE.authoring.edit.result.previousVersion==='4');
- await render('asset-edit-save');await page.evaluate(async()=>{const api=window.DW_AUTHORING.api;api.prepareEdit();await api.commitEdit();window.DW_DESIGN_STATE.authoring.edit.saving=true;window.DW_PROTOTYPE.go('asset-edit-save');});await check('保存中固定编辑目标',()=>document.querySelector('[data-au-field="edit-destination"]').disabled&&document.querySelector('[data-au-kind="trajectory"]').disabled);await click('edit-cancel');await check('取消保存不新增版本',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.plan===null&&!e.pending&&!e.saving&&e.committed===0&&e.roi.width===32;});
- await check('取消进行中的保存后迟到结果不生成版本',async()=>{const api=window.DW_AUTHORING.api,e=window.DW_DESIGN_STATE.authoring.edit;await api.submitEdit(()=>{if(e.pending)api.cancelEdit();});return !e.saving&&!e.pending&&e.result===null&&e.committed===0;});
- await page.locator('[data-au-kind="trajectory"]').click();await field('edit-destination').selectOption({label:'创建独立资产'});await field('edit-name').fill('   ');await field('edit-name').press('Tab');await click('edit-submit');await check('独立资产空名称不能保存',()=>window.DW_DESIGN_STATE.authoring.edit.plan===null&&window.DW_DESIGN_STATE.authoring.edit.error.includes('名称'));await field('edit-name').fill('新的归档操作');await field('edit-name').press('Tab');await click('edit-submit');await collect('轨迹独立资产计划','authoring.schema.json#/$defs/editPlan',()=>window.DW_DESIGN_STATE.authoring.edit.plan);await check('轨迹另存创建独立对象并保留来源',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.result.kind==='trajectory'&&e.result.previousVersion===null&&!e.result.createdNewVersion&&e.result.name==='新的归档操作';});await collect('轨迹独立资产结果','authoring.schema.json#/$defs/editResult',()=>window.DW_DESIGN_STATE.authoring.edit.result);
+ await render('asset-edit-save');await click('edit-submit');
+ await check('资产保存按原作业完成一次',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.result.assetVersion==='4'&&e.result.previousVersion==='3'&&e.service.committed===1&&Object.keys(e.service.operations).length===1;});
+ await collect('图像保存计划','authoring.schema.json#/$defs/editPlan',()=>window.DW_DESIGN_STATE.authoring.edit.plan);
+ await collect('图像正式版本结果','authoring.schema.json#/$defs/editResult',()=>window.DW_DESIGN_STATE.authoring.edit.result);
+ await check('重复准入与查询返回原作业',async()=>{const e=window.DW_DESIGN_STATE.authoring.edit,id=e.operationId,accepted=await window.DW_AUTHORING.api.commitEdit();await window.DW_AUTHORING.api.queryEdit();return accepted.operationId===id&&e.operationId===id&&e.service.committed===1;});
+ await render('asset-edit-save');await holdResults();
+ await page.locator('[data-au-action="edit-submit"]').click();await page.waitForFunction(()=>window.auDeferred.length===1);
+ await page.evaluate(()=>{const e=window.DW_DESIGN_STATE.authoring.edit;window.auEditIdentity={operation:e.operationId,edit:e.plan.editId};});
+ await check('保存中固定编辑目标',()=>document.querySelector('[data-au-field="edit-destination"]').disabled&&document.querySelector('[data-au-kind="trajectory"]').disabled);
+ await page.locator('[data-au-action="edit-cancel"]').click();
+ await check('准入后取消先等待原作业终态',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='cancelling'&&e.pending&&e.plan.editId===window.auEditIdentity.edit&&e.operationId===window.auEditIdentity.operation&&e.service.committed===0;});
+ await releaseResult(0);await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);await restoreResults();
+ await check('取消核定后保留原作业且不新增版本',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='cancelled'&&!e.pending&&e.plan.editId===window.auEditIdentity.edit&&e.operationId===window.auEditIdentity.operation&&e.service.committed===0&&e.roi.width===32;});
+ await click('edit-submit');await check('原作业已取消后允许新计划保存一次',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.result.assetVersion==='4'&&e.service.committed===1&&e.operationId!==window.auEditIdentity.operation&&e.service.operations[window.auEditIdentity.operation].state==='cancelled';});
+ await page.evaluate(()=>delete window.auEditIdentity);
+ await render('asset-edit-save');await holdResults();
+ await page.evaluate(()=>{const runtime=window.DW_AUTHORING.runtime;window.auReadOriginal=runtime.readEditResult;let first=true;runtime.readEditResult=async op=>{if(first){first=false;return new Promise(resolve=>{window.auLateEdit=()=>resolve({operationId:op.id,version:1,state:'running',result:null,error:null});});}return window.auReadOriginal(op);};});
+ await page.locator('[data-au-action="edit-submit"]').click();await page.waitForFunction(()=>window.auDeferred.length===1);await releaseResult(0);await page.waitForFunction(()=>!!window.auLateEdit);
+ await page.locator('[data-au-action="edit-cancel"]').click();await page.waitForFunction(()=>!!window.DW_DESIGN_STATE.authoring.edit.result);
+ await page.evaluate(()=>window.auLateEdit());await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+ await check('提交已成功时取消与迟到回执保持实际保存结果',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='succeeded'&&e.result.assetVersion==='4'&&e.service.committed===1&&Object.keys(e.service.operations).length===1&&document.querySelector('.au-page').textContent.includes('版本 4 已保存');});
+ await restoreResults();await page.evaluate(()=>{window.DW_AUTHORING.runtime.readEditResult=window.auReadOriginal;delete window.auReadOriginal;delete window.auLateEdit;});
+ await render('asset-edit-save');
+ await page.evaluate(()=>{const runtime=window.DW_AUTHORING.runtime;window.auReadOriginal=runtime.readEditResult;let reads=0;runtime.readEditResult=async op=>{if(++reads===1)throw Error('结果响应中断');if(reads===4){op.state='succeeded';op.version++;}const value=await window.auReadOriginal(op);if(reads===2)value.operationId='another-save';if(reads===3){op.state='uncertain';op.version++;return{...value,version:op.version,state:'uncertain',result:null};}return value;};});
+ await click('edit-submit');
+ await page.evaluate(()=>{const e=window.DW_DESIGN_STATE.authoring.edit;window.auEditIdentity={operation:e.operationId,edit:e.plan.editId};});
+ await check('保存结果丢失后显示原操作查询入口',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='uncertain'&&!e.result&&e.service.committed===1&&!document.querySelector('[data-au-action="edit-submit"]')&&!!document.querySelector('[data-au-action="edit-query"]');});
+ await click('edit-query');await check('异作业回执不替换原查询或新建保存计划',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='uncertain'&&e.operationId===window.auEditIdentity.operation&&e.plan.editId===window.auEditIdentity.edit&&Object.keys(e.service.operations).length===1;});
+ await click('edit-query');await check('作业结果未决时保留查询入口且不显示保存完成',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='uncertain'&&!e.result&&e.operationId===window.auEditIdentity.operation&&document.querySelector('.au-page').textContent.includes('保存结果待查询')&&!!document.querySelector('[data-au-action="edit-query"]');});
+ await click('edit-query');await check('查询原请求恢复实际保存版本',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='succeeded'&&e.result.assetVersion==='4'&&e.operationId===window.auEditIdentity.operation&&e.service.committed===1;});
+ await page.evaluate(()=>{window.DW_AUTHORING.runtime.readEditResult=window.auReadOriginal;delete window.auReadOriginal;delete window.auEditIdentity;});
+ for(const mode of ['append','copy']){
+  await render('asset-edit-conflict');await check('资产冲突未核对内容前禁止直接提交 '+mode,()=>!document.querySelector('[data-au-action="edit-submit"]')&&!document.querySelector('[data-au-action="edit-append"]'));
+  await click('edit-review');await check('查看当前版本展示实际内容与来源 '+mode,()=>{const e=window.DW_DESIGN_STATE.authoring.edit,images=[...document.querySelectorAll('.au-version-image img')];return e.review.version==='4'&&e.source.version==='3'&&e.review.width===32&&e.source.width===64&&images.length===2&&images[0].getAttribute('src')!==images[1].getAttribute('src');});
+  if(mode==='copy'){await field('edit-name').fill('保留当前外观');await field('edit-name').press('Tab');}
+  await click('edit-'+mode);await check('明确选择后提交资产 '+mode,mode=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='succeeded'&&e.service.committed===1&&e.result.sourceSha256===window.DW_CATALOG.authoringFixtures['asset-image-plan'].sourceSha256&&(mode==='append'?e.result.previousVersion==='4'&&e.result.assetVersion==='5':e.result.previousVersion===null&&e.result.assetVersion==='1'&&e.service.head==='4');},mode);
+ }
+ await render('asset-edit-conflict');await click('edit-review');await page.evaluate(()=>{const e=window.DW_DESIGN_STATE.authoring.edit;e.service.versions['5']={...e.service.versions['4'],version:'5'};e.service.head='5';});await click('edit-append');
+ await check('查看后再次发生外部更新时要求重新核对',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.status==='conflict'&&e.review===null&&e.service.committed===0&&Object.keys(e.service.operations).length===0;});
+ await click('edit-review');await click('edit-append');await check('重新查看当前版本后追加正确版本',()=>window.DW_DESIGN_STATE.authoring.edit.result.previousVersion==='5');
+ await render('asset-edit-save');await page.locator('[data-au-kind="trajectory"]').click();await page.evaluate(()=>window.DW_DESIGN_STATE.authoring.edit.service.head='5');await click('edit-submit');await click('edit-review');
+ await check('轨迹版本对比包含全部事件及实际输入值',()=>{const e=window.DW_DESIGN_STATE.authoring.edit,rows=document.querySelectorAll('.au-version-events tbody tr');return e.review.version==='5'&&rows.length===e.source.trajectory.events.length+e.review.trajectory.events.length&&document.querySelector('.au-version-compare').textContent.includes('Ctrl 左');});
+ await click('edit-append');await check('轨迹冲突经内容核对后追加到所选版本',()=>window.DW_DESIGN_STATE.authoring.edit.result.previousVersion==='5');
+ await render('asset-edit-save');await page.locator('[data-au-kind="trajectory"]').click();await field('edit-destination').selectOption({label:'创建独立资产'});await field('edit-name').fill('   ');await field('edit-name').press('Tab');await click('edit-submit');
+ await check('独立资产空名称不能保存',()=>window.DW_DESIGN_STATE.authoring.edit.plan===null&&window.DW_DESIGN_STATE.authoring.edit.error.includes('名称'));
+ await field('edit-name').fill('新的归档操作');await field('edit-name').press('Tab');await click('edit-submit');
+ await collect('轨迹独立资产计划','authoring.schema.json#/$defs/editPlan',()=>window.DW_DESIGN_STATE.authoring.edit.plan);
+ await check('轨迹另存创建独立对象并保留来源',()=>{const e=window.DW_DESIGN_STATE.authoring.edit;return e.result.kind==='trajectory'&&e.result.previousVersion===null&&!e.result.createdNewVersion&&e.result.name==='新的归档操作';});
+ await collect('轨迹独立资产结果','authoring.schema.json#/$defs/editResult',()=>window.DW_DESIGN_STATE.authoring.edit.result);
  await render('content-save');await page.evaluate(()=>window.DW_AUTHORING.api.startContent());await check('分块上传开始不标记已保存',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.raw.length>1048576&&c.stage==='uploading'&&c.result===null;});
  await check('缺块禁止提前封存',async()=>{try{await window.DW_AUTHORING.api.sealContent();return false;}catch{return true;}});
  await check('乱序块拒绝且不改变偏移',async()=>{const api=window.DW_AUTHORING.api,c=window.DW_DESIGN_STATE.authoring.content;try{await api.writeChunk({offset:196608});return false;}catch{return c.offset===0;}});
@@ -77,12 +119,13 @@ async page=>{
  await check('另存名称无效时保留冲突草稿',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='conflict'&&c.model===window.auConflictOrigin.model&&c.error.includes('名称');});
  await field('content-copy-name').fill('季度归档副本');await click('content-copy');
  await check('冲突草稿另存为独立流程并保留完整内容与依赖',()=>{
-  const c=window.DW_DESIGN_STATE.authoring.content,original=window.auConflictOrigin,copy=JSON.parse(JSON.stringify(c.model));
+  const root=window.DW_DESIGN_STATE.authoring.content,c=root.copy.candidate,original=window.auConflictOrigin,copy=JSON.parse(JSON.stringify(c.model));
   copy.definition.id=original.model.definition.id;copy.definition.name=original.model.definition.name;
-  return c.stage==='saved'&&c.result.revision==='1'&&c.result.workflowId!==original.model.definition.id&&c.saveParams.baseRevision===null&&c.model.definition.name==='季度归档副本'&&JSON.stringify(copy)===JSON.stringify(original.model)&&original.revision==='14'&&new TextDecoder().decode(original.raw)===JSON.stringify(original.model);
+  return root.model===original.model&&root.baseRevision==='12'&&c.stage==='saved'&&c.result.revision==='1'&&c.result.workflowId!==original.model.definition.id&&c.saveParams.baseRevision===null&&c.model.definition.name==='季度归档副本'&&JSON.stringify(copy)===JSON.stringify(original.model)&&original.revision==='14'&&new TextDecoder().decode(original.raw)===JSON.stringify(original.model);
  });
- await collect('冲突后另存流程参数','service.schema.json#/$defs/workflow.save/properties/params',()=>window.DW_DESIGN_STATE.authoring.content.saveParams);
- await collect('冲突后另存流程结果','service.schema.json#/$defs/workflow.save/properties/result',()=>window.DW_DESIGN_STATE.authoring.content.result);
+ await collect('冲突后另存流程参数','service.schema.json#/$defs/workflow.save/properties/params',()=>window.DW_DESIGN_STATE.authoring.content.copy.candidate.saveParams);
+ await collect('冲突后另存流程结果','service.schema.json#/$defs/workflow.save/properties/result',()=>window.DW_DESIGN_STATE.authoring.content.copy.candidate.result);
+ await click('content-open-copy');await check('副本成功后按用户选择切换流程',()=>window.DW_DESIGN_STATE.authoring.content.result.revision==='1'&&window.DW_DESIGN_STATE.authoring.previousContent.model===window.auConflictOrigin.model);
  await page.evaluate(()=>delete window.auConflictOrigin);
  await render('content-save');await click('content-submit');await check('一次保存自动完成分块传输和版本保存',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='saved'&&!c.saving&&c.result.revision==='13'&&c.saveParams.modelRef&&!c.saveParams.definition;});await collect('大流程保存请求参数','service.schema.json#/$defs/workflow.save/properties/params',()=>window.DW_DESIGN_STATE.authoring.content.saveParams);await collect('大流程保存实际结果','service.schema.json#/$defs/workflow.save/properties/result',()=>window.DW_DESIGN_STATE.authoring.content.result);
  await render('content-transfer-failed');await page.evaluate(async()=>{const api=window.DW_AUTHORING.api;await api.startContent();await api.writeChunk();window.DW_PROTOTYPE.go('content-transfer-failed');});await click('content-cancel');await check('取消传输保留草稿且没有保存结果',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='draft'&&c.result===null&&c.raw.length>1048576&&c.offset===0;});
@@ -177,7 +220,7 @@ async page=>{
   await check(screen+' 显式初始化建立独立会话',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return state!==window.auHistoryState&&state.result===null;},key);
   await page.evaluate(()=>delete window.auHistoryState);
  }
- for(const [screen,start,cancel,key] of [['connection-draft-test','test-start','test-cancel','test'],['asset-edit-save','edit-submit','edit-cancel','edit'],['content-save','content-submit','content-cancel','content']]){
+ for(const [screen,start,cancel,key] of [['connection-draft-test','test-start','test-cancel','test'],['content-save','content-submit','content-cancel','content']]){
   await render(screen);await holdResults();
   const startButton=()=>page.locator('[data-au-action="'+start+'"]'),cancelButton=()=>page.locator('[data-au-action="'+cancel+'"]');
   await startButton().click();await page.waitForFunction(()=>window.auDeferred.length===1);
@@ -194,6 +237,28 @@ async page=>{
   await releaseResult(2);await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
   await check(screen+' 重新发起后按当前操作完成一次',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return !!state.result&&!state.error&&(key==='edit'?state.committed===1&&state.currentVersion==='4':key==='content'?state.currentRevision==='13':state.status==='passed'&&state.savedVersion===2);},key);
   await restoreResults();await page.evaluate(()=>delete window.auPendingApp);
+ }
+ for(const outcome of ['success','transfer','commit','cancel']){
+  await render('content-save-conflict');
+  await page.evaluate(()=>{const c=window.DW_DESIGN_STATE.authoring.content;window.auOriginalDraft={model:c.model,raw:c.raw,base:c.baseRevision,head:c.currentRevision,version:c.draftVersion,text:JSON.stringify(c.model)};});
+  await check('非空依赖样例固定子流程与资产版本 '+outcome,()=>{const d=window.DW_DESIGN_STATE.authoring.content.model.dependencies;return Object.keys(d).length===2&&d.checkDownload.revision==='7'&&d.downloadTemplate.assetVersion==='3'&&d.checkDownload.dependencies.successTemplate.assetVersion==='2';});
+  if(outcome==='transfer')await page.evaluate(()=>{const api=window.DW_AUTHORING.api,original=api.saveContentCopy;api.saveContentCopy=async(name,update)=>{try{return await original(name,()=>{const c=api.contentSession();if(c.offset===c.raw.length)c.digest='0'.repeat(64);update();});}finally{api.saveContentCopy=original;}};});
+  if(['commit','cancel'].includes(outcome))await holdResults();
+  await field('content-copy-name').fill('完整流程副本');await page.locator('[data-au-action="content-copy"]').click();
+  if(['commit','cancel'].includes(outcome)){
+   await page.waitForFunction(()=>window.auDeferred.length===1);
+   if(outcome==='commit')await page.evaluate(()=>window.DW_AUTHORING.api.contentSession().refExpiresAt=Date.now()-1);
+   else await page.locator('[data-au-action="content-cancel"]').click();
+   await releaseResult(0);
+  }
+  await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+  await check('另存过程完整保留原草稿与依赖 '+outcome, outcome=>{
+   const root=window.DW_DESIGN_STATE.authoring.content,c=root.copy.candidate,old=window.auOriginalDraft;
+   return root.model===old.model&&root.raw===old.raw&&root.baseRevision===old.base&&root.currentRevision===old.head&&root.draftVersion===old.version&&JSON.stringify(root.model)===old.text&&JSON.stringify(c.model.dependencies)===JSON.stringify(old.model.dependencies)&&(outcome==='success'?c.stage==='saved'&&!!c.result:outcome==='cancel'?c.stage==='cancelled'&&!c.result:c.stage==='failed'&&!c.result);
+  },outcome);
+  await click('content-return');await check('另存后真实按钮返回原冲突草稿 '+outcome,()=>{const c=window.DW_DESIGN_STATE.authoring.content,old=window.auOriginalDraft;return c.stage==='conflict'&&!c.copy.active&&c.model===old.model&&c.raw===old.raw&&c.baseRevision===old.base&&c.currentRevision===old.head&&!!document.querySelector('[data-au-action="content-copy"]');});
+  if(['commit','cancel'].includes(outcome))await restoreResults();
+  await page.evaluate(()=>delete window.auOriginalDraft);
  }
  return {checks,contractOutputs};
 }

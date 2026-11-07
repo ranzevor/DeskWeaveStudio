@@ -27,6 +27,8 @@
 | 表达式类型错误 | [2880 × 1800](../prototypes/high-fidelity/E26-expression-invalid@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E26-expression-invalid-board.png) |
 | 精确轨迹裁剪 | [2880 × 1800](../prototypes/high-fidelity/R18-trajectory-trim@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R18-trajectory-trim-board.png) |
 | 多个配对问题修复 | [2880 × 1800](../prototypes/high-fidelity/R19-trajectory-repair-many@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R19-trajectory-repair-many-board.png) |
+| 轨迹裁剪预览结果 | [2880 × 1800](../prototypes/high-fidelity/R27-trajectory-trim-preview@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R27-trajectory-trim-preview-board.png) |
+| 轨迹配对修复预览 | [2880 × 1800](../prototypes/high-fidelity/R28-trajectory-repair-preview@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R28-trajectory-repair-preview-board.png) |
 | 键盘与数值截图选区 | [2880 × 1800](../prototypes/high-fidelity/R20-capture-keyboard@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R20-capture-keyboard-board.png) |
 | 截图选区越界 | [2880 × 1800](../prototypes/high-fidelity/R21-capture-boundary@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R21-capture-boundary-board.png) |
 | 继续前核对输入 | [2880 × 1800](../prototypes/high-fidelity/U19-resume-review@2x.png) | [3200 × 2200](../prototypes/high-fidelity/U19-resume-review-board.png) |
@@ -56,8 +58,12 @@
 | 保存手工编辑资产 | [2880 × 1800](../prototypes/high-fidelity/A14-asset-edit-save@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A14-asset-edit-save-board.png) |
 | 资产版本冲突 | [2880 × 1800](../prototypes/high-fidelity/A15-asset-edit-conflict@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A15-asset-edit-conflict-board.png) |
 | 资产保存已取消 | [2880 × 1800](../prototypes/high-fidelity/A16-asset-edit-cancelled@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A16-asset-edit-cancelled-board.png) |
+| 资产版本内容比较 | [2880 × 1800](../prototypes/high-fidelity/A17-asset-edit-review@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A17-asset-edit-review-board.png) |
+| 资产保存结果查询 | [2880 × 1800](../prototypes/high-fidelity/A18-asset-edit-uncertain@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A18-asset-edit-uncertain-board.png) |
 | 保存流程 | [2880 × 1800](../prototypes/high-fidelity/E29-content-save@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E29-content-save-board.png) |
 | 流程保存失败 | [2880 × 1800](../prototypes/high-fidelity/E30-content-transfer-failed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E30-content-transfer-failed-board.png) |
+| 流程冲突与另存 | [2880 × 1800](../prototypes/high-fidelity/E31-content-save-conflict@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E31-content-save-conflict-board.png) |
+| 副本失败与原草稿恢复 | [2880 × 1800](../prototypes/high-fidelity/E32-content-copy-failed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E32-content-copy-failed-board.png) |
 | 录制准备 | [2880 × 1800](../prototypes/high-fidelity/R01-record-config@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R01-record-config-board.png) |
 | 录制显示屏布局 | [2880 × 1800](../prototypes/high-fidelity/R22-record-displays@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R22-record-displays-board.png) |
 | 录制显示布局已变化 | [2880 × 1800](../prototypes/high-fidelity/R23-record-topology-changed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R23-record-topology-changed-board.png) |
@@ -166,6 +172,18 @@
 ![多个配对问题修复高保真效果图](../prototypes/high-fidelity/R19-trajectory-repair-many-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/R19-trajectory-repair-many@2x.png) · [打开此界面](../prototypes/index.html#trajectory-repair-many)
+
+## 轨迹裁剪预览结果
+
+![轨迹裁剪预览结果高保真效果图](../prototypes/high-fidelity/R27-trajectory-trim-preview-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/R27-trajectory-trim-preview@2x.png) · [打开此界面](../prototypes/index.html#trajectory-trim-preview)
+
+## 轨迹配对修复预览
+
+![轨迹配对修复预览高保真效果图](../prototypes/high-fidelity/R28-trajectory-repair-preview-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/R28-trajectory-repair-preview@2x.png) · [打开此界面](../prototypes/index.html#trajectory-repair-preview)
 
 ## 键盘与数值截图选区
 
@@ -341,6 +359,18 @@
 
 [查看高清原图](../prototypes/high-fidelity/A16-asset-edit-cancelled@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-cancelled)
 
+## 资产版本内容比较
+
+![资产版本内容比较高保真效果图](../prototypes/high-fidelity/A17-asset-edit-review-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/A17-asset-edit-review@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-review)
+
+## 资产保存结果查询
+
+![资产保存结果查询高保真效果图](../prototypes/high-fidelity/A18-asset-edit-uncertain-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/A18-asset-edit-uncertain@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-uncertain)
+
 ## 保存流程
 
 ![保存流程高保真效果图](../prototypes/high-fidelity/E29-content-save-board.png)
@@ -352,6 +382,18 @@
 ![流程保存失败高保真效果图](../prototypes/high-fidelity/E30-content-transfer-failed-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/E30-content-transfer-failed@2x.png) · [打开此界面](../prototypes/index.html#content-transfer-failed)
+
+## 流程冲突与另存
+
+![流程冲突与另存高保真效果图](../prototypes/high-fidelity/E31-content-save-conflict-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/E31-content-save-conflict@2x.png) · [打开此界面](../prototypes/index.html#content-save-conflict)
+
+## 副本失败与原草稿恢复
+
+![副本失败与原草稿恢复高保真效果图](../prototypes/high-fidelity/E32-content-copy-failed-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/E32-content-copy-failed@2x.png) · [打开此界面](../prototypes/index.html#content-copy-failed)
 
 ## 录制准备
 

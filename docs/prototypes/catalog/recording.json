@@ -562,6 +562,48 @@
       "theme": "light",
       "primaryKind": "local",
       "primaryResult": "完整有效的显示屏映射写入轨迹动作。"
+    },
+    {
+      "code": "R27",
+      "id": "trajectory-trim-preview",
+      "title": "轨迹裁剪预览结果",
+      "view": "completion",
+      "variant": "trajectory-trim-preview",
+      "parent": null,
+      "purpose": "核对裁剪后的事件时序、相对位移与来源单位。",
+      "primary": null,
+      "primaryLabel": "应用裁剪",
+      "primaryKind": "local",
+      "primaryResult": "应用预览中的轨迹与配对修复。",
+      "requirements": [
+        "DW-004"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "R28",
+      "id": "trajectory-repair-preview",
+      "title": "轨迹配对修复预览",
+      "view": "completion",
+      "variant": "trajectory-repair-preview",
+      "parent": null,
+      "purpose": "同时查看配对修复方案和完整事件预览。",
+      "primary": null,
+      "primaryLabel": "应用裁剪",
+      "primaryKind": "local",
+      "primaryResult": "保留原来源和逐点位移。",
+      "requirements": [
+        "DW-004"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
     }
   ]
 }

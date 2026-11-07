@@ -3680,5 +3680,11 @@
     "schema": "message.schema.json",
     "semantic": "none",
     "expected": "schema-fail"
+  },
+  {
+    "file": "authoring/workflow-model-dependencies.json",
+    "schema": "content.schema.json#/$defs/workflowModel",
+    "semantic": "none",
+    "expected": "pass"
   }
 ]

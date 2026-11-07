@@ -12,14 +12,15 @@ DEST=BASE/"high-fidelity"
 IDS=["welcome","editor-graph","editor-source","assets","templates-candidates",
      "observations-center","run-paused","connection-advanced","mcp-transport","run-start-ready",
      "topology-edit","topology-invalid","expression-builder","expression-invalid",
-     "trajectory-trim","trajectory-repair-many","capture-keyboard","capture-boundary",
+     "trajectory-trim","trajectory-repair-many","trajectory-trim-preview","trajectory-repair-preview","capture-keyboard","capture-boundary",
      "resume-review","resume-stale","breakpoints-edit","breakpoints-conflict",
      "package-target-map","package-target-invalid","asset-delete-review","asset-delete-stale",
      "settings-overrides","settings-conflict","mcp-config-read","mcp-token-query",
      "update-trust","update-verification-failed","update-downgrade","mcp-token-revoke",
      "variables-inspect","variables-expired","variables-redacted","revision-browser","revision-query-expired",
      "connection-browser","connection-draft-test","connection-test-stale","asset-edit-save","asset-edit-conflict",
-     "asset-edit-cancelled","content-save","content-transfer-failed",
+     "asset-edit-cancelled","asset-edit-review","asset-edit-uncertain","content-save","content-transfer-failed",
+     "content-save-conflict","content-copy-failed",
      "record-config","record-displays","record-topology-changed","trajectory-displays","trajectory-displays-invalid","mcp-query","mcp-query-expired",
      "platform-capabilities","platform-macos-permissions","platform-wayland-session","platform-wayland-recording","platform-display-mapping"]
 
@@ -62,11 +63,17 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--check",action="store_true")
     parser.add_argument("--from-existing",action="store_true")
+    parser.add_argument("--ids",help="逗号分隔的界面 ID；仅更新指定图像，目录仍覆盖全部核心界面")
     args=parser.parse_args()
     catalog=json.loads((BASE/"catalog.json").read_text(encoding="utf-8"))
     screens=[next(s for s in catalog["screens"] if s["id"]==key) for key in IDS]
     outputs=[{"screen":s["id"],"image":s["code"]+"-"+s["id"]+"@2x.png",
               "board":s["code"]+"-"+s["id"]+"-board.png"} for s in screens]
+    selected=set(args.ids.split(",")) if args.ids else set(IDS)
+    if selected-set(IDS):
+        parser.error("未知核心界面："+", ".join(sorted(selected-set(IDS))))
+    if args.check and args.ids:
+        parser.error("--check 不能与 --ids 同时使用")
     from PIL import Image
     if args.check:
         expected={item[key]:size for item in outputs
@@ -80,10 +87,12 @@ def main():
         print(f"高保真效果图：{len(IDS)} 个核心界面，{len(expected)} 个图像")
         return 0
     if not args.from_existing:
-        subprocess.run([sys.executable,str(ROOT/"tools/render_prototypes.py"),"--ids",",".join(IDS),
+        subprocess.run([sys.executable,str(ROOT/"tools/render_prototypes.py"),"--ids",",".join(key for key in IDS if key in selected),
                         "--scale","2","--skip-interactions"],cwd=ROOT,check=True)
     DEST.mkdir(parents=True,exist_ok=True)
     for screen,item in zip(screens,outputs):
+        if screen["id"] not in selected:
+            continue
         original=ROOT/".cache/prototype-browser/output/playwright/previews-2x"/screen["image"]
         with Image.open(original) as image:
             assert image.size==(2880,1800),(screen["id"],image.size)

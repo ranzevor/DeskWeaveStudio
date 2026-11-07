@@ -666,6 +666,50 @@
         "height": 900
       },
       "theme": "light"
+    },
+    {
+      "code": "E31",
+      "id": "content-save-conflict",
+      "title": "流程冲突与另存",
+      "view": "authoring",
+      "variant": "content-save-conflict",
+      "parent": null,
+      "purpose": "核对当前版本与草稿基准，将当前内容另存为新流程。",
+      "primary": null,
+      "primaryLabel": "另存为新流程",
+      "primaryKind": "local",
+      "primaryResult": "副本成功后可打开新流程，或返回原草稿。",
+      "requirements": [
+        "DW-003",
+        "DW-013"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "E32",
+      "id": "content-copy-failed",
+      "title": "副本失败与原草稿恢复",
+      "view": "authoring",
+      "variant": "content-copy-failed",
+      "parent": null,
+      "purpose": "处理副本保存失败，并返回身份与内容完整的原草稿。",
+      "primary": null,
+      "primaryLabel": "返回原草稿",
+      "primaryKind": "local",
+      "primaryResult": "恢复原流程、草稿基准及依赖绑定。",
+      "requirements": [
+        "DW-003",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
     }
   ]
 }

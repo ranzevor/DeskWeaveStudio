@@ -117,6 +117,39 @@ class ServiceTests(EngineCase):
             first["revision"],
         )
 
+    def test_resource_bound_copy_is_rejected_without_writing(self):
+        baseline = self.save()
+        model = json.loads(
+            (ROOT / "examples/authoring/workflow-model-dependencies.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(model["dependencies"]["checkDownload"]["revision"], "7")
+        self.assertEqual(model["dependencies"]["downloadTemplate"]["assetVersion"], "3")
+        response = self.request(
+            "workflow.save",
+            {
+                "workflowId": model["definition"]["id"],
+                "draftVersion": 1,
+                "baseRevision": None,
+                **model,
+            },
+            request_id="resource-bound-copy",
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "METHOD_UNAVAILABLE")
+        self.assertEqual(
+            self.success("request.status", {"requestId": "resource-bound-copy"})["state"],
+            "notReceived",
+        )
+        catalog = self.success("workspace.catalog", {"kind": "workflow"})
+        self.assertEqual([item["id"] for item in catalog["items"]], ["hello"])
+        saved = self.success(
+            "workflow.read", {"workflowId": "hello", "revision": baseline["revision"]}
+        )
+        self.assertEqual(saved["definition"], workflow())
+        self.assertEqual(saved["dependencies"], {})
+
     def test_concurrent_compare_and_save(self):
         first = self.save()
 

@@ -156,3 +156,7 @@ python tools/check_docs.py --contracts
 [新版发现](mcp/modern-discover-request.json)、[发现结果](mcp/modern-discover-result.json)、[工具调用](mcp/modern-tool-call.json)与[HTTP 请求头](mcp/modern-tool-headers.json)使用 2026-07-28。[订阅请求](mcp/modern-listen-request.json)、[确认](mcp/modern-listen-acknowledged.json)、[资源更新](mcp/modern-resource-updated.json)和[正常结束](mcp/modern-listen-complete.json)形成同一订阅序列。[旧版初始化](mcp/legacy-initialize.json)使用 2025-11-25；两代工具参数继续引用同一服务契约。
 
 拒绝样例覆盖缺少版本/能力、错误类型、null 请求 ID、遗漏缓存字段、缺少结果类型、订阅身份缺失及容量超限。HTTP 头体冲突、Base64 名称、跨订阅通知和适配规则混用由 tools/mcp_protocol_checks.py 校验，入口为 `python tools/check_docs.py --contracts`。真实 SDK 互通与 Engine 副作用按 Q28/Q59 验证。
+
+## 流程副本与固定依赖
+
+[完整流程模型](authoring/workflow-model-dependencies.json)包含固定版本的子流程和两项图像资产绑定。原型在冲突另存成功、传输失败、提交失败和取消后分别核对依赖身份、版本及资源关联。

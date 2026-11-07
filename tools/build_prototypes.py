@@ -113,12 +113,13 @@ def outputs():
         "screens": screens, "fixture": {"workflow": main, "child": child},
     }
     catalog["authoringFixtures"] = {name: json.loads((ROOT / ("examples/authoring/" + name + ".json")).read_text(encoding="utf-8"))
-        for name in ("asset-image-plan", "asset-image-commit", "asset-image-result", "connection-test-draft", "workflow-model", "edited-trajectory")}
+        for name in ("asset-image-plan", "asset-image-commit", "asset-image-result", "connection-test-draft", "workflow-model", "workflow-model-dependencies", "edited-trajectory")}
     catalog["recordingFixtures"] = {key: json.loads((ROOT / ("examples/recording/" + name + ".json")).read_text(encoding="utf-8")) for key, name in {"topology":"topology", "source":"source", "trajectory":"cross-screen-drag"}.items()}
     variable_value = [{"month": "2026-10", "amount": i} for i in range(200)]
     variable_bytes = json.dumps(variable_value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     catalog["authoringFixtures"]["largeVariable"] = {"value": variable_value, "reference": {"mediaType": "application/json", "resourceId": "variable-rows", "length": len(variable_bytes), "sha256": hashlib.sha256(variable_bytes).hexdigest()}}
     catalog["authoringFixtures"]["trajectorySourceHash"] = hashlib.sha256((ROOT / "examples/trajectories/shortcut.json").read_bytes()).hexdigest()
+    catalog["authoringFixtures"]["trajectorySource"] = json.loads((ROOT / "examples/trajectories/shortcut.json").read_text(encoding="utf-8"))
     action_schema = json.loads((ROOT / "contracts/actions.schema.json").read_text(encoding="utf-8"))
     action_catalog = json.loads((ROOT / "contracts/action-catalog.json").read_text(encoding="utf-8"))["actions"]
     groups_zh = {"time": "时间", "data": "数据", "logic": "逻辑", "flow": "流程", "vision": "定位与观察", "input": "输入"}

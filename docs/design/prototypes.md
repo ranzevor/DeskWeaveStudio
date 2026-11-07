@@ -3,7 +3,7 @@
 设计版本：0.1.0  
 更新日期：2026-11-07
 
-共 248 个界面，覆盖页面、属性面板、抽屉、弹窗、浮条、选区覆盖层、安装维护及关键异常状态。
+共 254 个界面，覆盖页面、属性面板、抽屉、弹窗、浮条、选区覆盖层、安装维护及关键异常状态。
 
 [打开可点击原型](../prototypes/index.html) · [原型使用说明](../prototypes/README.md) · [界面数据清单](../prototypes/catalog.json)
 
@@ -90,6 +90,8 @@
 | E28 | [版本查询已过期](../prototypes/images/E28-revision-query-expired.png) · [交互](../prototypes/index.html#revision-query-expired) | 重新建立历史查询，保留所选版本。 | 重新查询：重新建立历史查询，保留所选版本。 |
 | E29 | [保存流程](../prototypes/images/E29-content-save.png) · [交互](../prototypes/index.html#content-save) | 保存当前草稿，查看进度并在需要时取消。 | 保存流程：保存完成后显示流程版本。 |
 | E30 | [流程保存失败](../prototypes/images/E30-content-transfer-failed.png) · [交互](../prototypes/index.html#content-transfer-failed) | 查看保存失败原因，保留当前草稿并重试。 | 重新保存：重新保存当前草稿。 |
+| E31 | [流程冲突与另存](../prototypes/images/E31-content-save-conflict.png) · [交互](../prototypes/index.html#content-save-conflict) | 核对当前版本与草稿基准，将当前内容另存为新流程。 | 另存为新流程：副本成功后可打开新流程，或返回原草稿。 |
+| E32 | [副本失败与原草稿恢复](../prototypes/images/E32-content-copy-failed.png) · [交互](../prototypes/index.html#content-copy-failed) | 处理副本保存失败，并返回身份与内容完整的原草稿。 | 返回原草稿：恢复原流程、草稿基准及依赖绑定。 |
 
 ## 动作属性与专用输入
 
@@ -155,6 +157,8 @@
 | R24 | [录制显示屏不可用](../prototypes/images/R24-record-unavailable.png) · [交互](../prototypes/index.html#record-unavailable) | 刷新不可用的显示列表，恢复后选择录制范围。 | 刷新显示屏：录制准备 |
 | R25 | [轨迹回放显示屏映射](../prototypes/images/R25-trajectory-displays.png) · [交互](../prototypes/index.html#trajectory-displays) | 核对来源与当前屏幕，使用原布局或逐屏平移映射。 | 应用显示屏映射：完整有效的显示屏映射写入轨迹动作。 |
 | R26 | [轨迹显示屏映射不完整](../prototypes/images/R26-trajectory-displays-invalid.png) · [交互](../prototypes/index.html#trajectory-displays-invalid) | 补齐缺失屏幕映射；未匹配或越界时禁止应用。 | 应用显示屏映射：完整有效的显示屏映射写入轨迹动作。 |
+| R27 | [轨迹裁剪预览结果](../prototypes/images/R27-trajectory-trim-preview.png) · [交互](../prototypes/index.html#trajectory-trim-preview) | 核对裁剪后的事件时序、相对位移与来源单位。 | 应用裁剪：应用预览中的轨迹与配对修复。 |
+| R28 | [轨迹配对修复预览](../prototypes/images/R28-trajectory-repair-preview.png) · [交互](../prototypes/index.html#trajectory-repair-preview) | 同时查看配对修复方案和完整事件预览。 | 应用裁剪：保留原来源和逐点位移。 |
 
 ## 模板生产与批次
 
@@ -232,8 +236,10 @@
 | A12 | [删除资产与引用检查](../prototypes/images/A12-asset-delete-review.png) · [交互](../prototypes/index.html#asset-delete-review) | 重新读取全部引用总数，确认无依赖后删除整个资产及其版本。 | 删除整个资产：版本和引用检查通过后删除资产。 |
 | A13 | [资产删除检查失效](../prototypes/images/A13-asset-delete-stale.png) · [交互](../prototypes/index.html#asset-delete-stale) | 版本或引用变化时保留资产，重新检查可见与不可见引用数量。 | 重新检查引用：读取当前版本与完整引用数量，仍被引用时阻止删除。 |
 | A14 | [保存手工编辑资产](../prototypes/images/A14-asset-edit-save.png) · [交互](../prototypes/index.html#asset-edit-save) | 选择保存方式和名称，保存编辑后的图像或轨迹。 | 保存资产：保存完成后显示资产版本。 |
-| A15 | [资产版本冲突](../prototypes/images/A15-asset-edit-conflict.png) · [交互](../prototypes/index.html#asset-edit-conflict) | 核对更新后的资产版本，保留编辑内容并重新保存。 | 重新保存：以核对后的版本保存当前编辑。 |
+| A15 | [资产版本冲突](../prototypes/images/A15-asset-edit-conflict.png) · [交互](../prototypes/index.html#asset-edit-conflict) | 保留草稿，查看当前版本内容后选择追加版本或独立另存。 | 查看当前版本：展示来源与当前版本内容，并提供明确的保存选择。 |
 | A16 | [资产保存已取消](../prototypes/images/A16-asset-edit-cancelled.png) · [交互](../prototypes/index.html#asset-edit-cancelled) | 保留当前编辑内容，按需重新保存。 | 保存资产：保存当前编辑内容。 |
+| A17 | [资产版本内容比较](../prototypes/images/A17-asset-edit-review.png) · [交互](../prototypes/index.html#asset-edit-review) | 查看草稿来源和当前版本，选择追加版本或独立另存。 | 选择保存方式：按明确选择提交固定内容。 |
+| A18 | [资产保存结果查询](../prototypes/images/A18-asset-edit-uncertain.png) · [交互](../prototypes/index.html#asset-edit-uncertain) | 沿用原保存操作查询实际结果。 | 查询保存结果：显示原操作的终态与已保存版本。 |
 
 ## 运行、调试与恢复
 
@@ -389,17 +395,17 @@
 |---|---|
 | DW-001 | W01、W02、W03、W04、W05、W06、W07、W08、W09、W10、O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13 |
 | DW-002 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E23、E24、F01、F02、F03、F04、F05、F06、F07、F08、F09、F10、F11、F12、F13、F14、F15、F16、F17、F18、F19、F20、F21 |
-| DW-003 | W01、W02、W03、W04、W05、W06、W07、W08、W09、E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E17、E27、E28、E29、E30 |
-| DW-004 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R15、R16、R17、R18、R19、R22、R23、R24、R25、R26、A14、P01、P02、P03、P04、P05 |
+| DW-003 | W01、W02、W03、W04、W05、W06、W07、W08、W09、E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E17、E27、E28、E29、E30、E31、E32 |
+| DW-004 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R15、R16、R17、R18、R19、R22、R23、R24、R25、R26、R27、R28、A14、P01、P02、P03、P04、P05 |
 | DW-005 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R13、R14、R15、R16、R17、R20、R21、T01、T02、T03、T04、T05、T06、T07、T08、T09、T10、T11、T12、T13、T14、T15、T16、T17、T18、T19、T20、A01、A02、A03、A04、A05、A06、A07、A08、A09、A14 |
 | DW-006 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E25、E26、F01、F02、F03、F04、F05、F06、F07、F08、F09、F10、F11、F12、F13、F14、F15、F16、F17、F18、F19、F20、F21 |
 | DW-007 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、F01、F02、F03、F04、F05、F06、F07、F08、F09、F10、F11、F12、F13、F14、F15、F16、F17、F18、F19、F20、F21 |
-| DW-008 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E27、A15、U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U21、U22 |
+| DW-008 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E27、A15、A17、U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U21、U22 |
 | DW-009 | U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U19、U20 |
 | DW-010 | U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15 |
 | DW-011 | U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U21、U22、U23、U24、U25 |
-| DW-012 | T01、T02、T03、T04、T05、T06、T07、T08、T09、T10、T11、T12、T13、T14、T15、T16、T17、T18、T19、T20、A01、A02、A03、A04、A05、A06、A07、A08、A09、A10、A11、A12、A13、A14、A15、A16 |
-| DW-013 | E29、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、C15、C16、C20、C21、C22 |
+| DW-012 | T01、T02、T03、T04、T05、T06、T07、T08、T09、T10、T11、T12、T13、T14、T15、T16、T17、T18、T19、T20、A01、A02、A03、A04、A05、A06、A07、A08、A09、A10、A11、A12、A13、A14、A15、A16、A17、A18 |
+| DW-013 | E29、E31、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、C15、C16、C20、C21、C22 |
 | DW-014 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R15、R16、R17、B01、B02、B03、B04、B05、B06、B07、B08、B09、B10、B11、B12、B13、B14、B15、B16、B17、B18、B19、B20、B21、B22、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10 |
 | DW-015 | O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13、P01、P02、P03、P04、P05 |
 | DW-016 | E23、E24、E25、E26、R18、R19、R20、R21、R22、R23、R24、R25、R26、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、S11、S12、H01、H02、H03、H04、H05、H06、H07、V01、V02、V03、V04、V05、V06、V07、V08、V09、P01、P02、P03、P04、P05 |
@@ -421,7 +427,7 @@
 | DW-N02 | B01、B02、B03、B04、B05、B06、B07、B08、B09、B10、B11、B12、B13、B14、B15、B16、B17、B18、B19、B20、B21、B22、U23、U25、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、S13 |
 | DW-N03 | V01、V02、V03、V04、V05、V06、V07、V08、V09 |
 | DW-N04 | O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13 |
-| DW-N05 | W10、E29、E30、O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13、P01、P02、P03、P04、P05 |
+| DW-N05 | W10、E29、E30、E32、A18、O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13、P01、P02、P03、P04、P05 |
 | DW-N06 | V01、V02、V03、V04、V05、V06、V07、V08、V09 |
 
 ## 使用与验收

@@ -124,11 +124,11 @@ CaptureSelectionSession 保存捕获帧身份、目标与拓扑代次、targetPi
 
 ## 版本、变量与提交会话
 
-RevisionQuerySession 和 ConnectionQuerySession 保存服务返回的固定分页；VariableInspectionSession 保存快照、范围、调用帧和dataVersion，过期重查而不拼接新旧值。ConnectionTestSession 固定编辑代次与原作业，修改后取消并丢弃过期投影。AssetEditSession 保存源、目标头、编辑计划、未提交内容和原作业；成功回执匹配当前文档后才绑定新版本。完整事务见[制作设计](authoring-transactions.md)，变量和查询见[运行检查](runtime-inspection.md)。
+RevisionQuerySession 和 ConnectionQuerySession 保存服务返回的固定分页；VariableInspectionSession 保存快照、范围、调用帧和dataVersion，过期重查而不拼接新旧值。ConnectionTestSession 固定编辑代次与原作业，修改后取消并丢弃过期投影。AssetEditSession 保存源、目标头、编辑计划、未提交内容和原作业；成功回执匹配当前文档后才绑定新版本。资产操作的执行状态与界面等待状态分开保存，结果查询沿用原 operationId 和 editId，取消意图不替代作业终态。完整事务见[制作设计](authoring-transactions.md)，变量和查询见[运行检查](runtime-inspection.md)。
 
 异步进度与最终刷新同时核对实际活动路由、会话对象和操作代次。离开页面后不改变当前导航；返回同一编辑会话时继续显示原操作的最新状态，重新建立会话后丢弃旧回调。取消、重新测试和编辑代次变化使旧操作回调失效；视图刷新不发起导航或新增历史记录。浏览器后退、前进恢复现有会话；原型目录选取画板及显式初始化建立对应初始状态。
 
-流程保存先检查当前头与草稿基准，提交时再次核对。版本冲突与传输错误使用不同恢复路径：冲突状态停止重复上传，另存时创建新的流程身份与初始版本，并重新编码完整流程及依赖；传输错误保留当前目标供重试。
+流程保存先检查当前头与草稿基准，提交时再次核对。版本冲突与传输错误使用不同恢复路径：冲突状态停止重复上传，另存使用独立候选会话创建新的流程身份与初始版本，并重新编码完整流程及依赖；原会话的模型、草稿身份和版本基准保持原值，失败或取消时提供返回入口；传输错误保留当前目标供重试。
 
 ## 三个平台的宿主行为
 
