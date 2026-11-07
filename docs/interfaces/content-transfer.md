@@ -2,7 +2,7 @@
 
 ## 能力与容量
 
-控制帧继续保持 1MiB 上限，计入完整 JSON 信封的实际 UTF-8 字节。单个内容对象的原始字节与 RFC 8785 规范编码各不超过 32MiB。workflowModel 的容量对象是完整的 definition/dependencies 模型；workflowId、draftVersion、baseRevision 等保存命令字段计入控制帧，不能挤占模型额度。分块传输不能绕过内容上限。握手能力 contentRefsV1 表示支持本文的内容引用与资源化结果；未协商的客户端只能使用能放入控制帧的原有内嵌格式，超限返回 LIMIT_EXCEEDED，不静默截断。
+控制帧继续保持 1MiB 上限，计入完整 JSON 信封的实际 UTF-8 字节。单个内容对象的原始字节与 RFC 8785 规范编码各不超过 32MiB。workflowModel 的容量对象是完整的 definition/dependencies 模型；workflowId、draftVersion、baseRevision 等保存命令字段计入控制帧，不能挤占模型额度。分块传输不能绕过内容上限。握手能力 contentRefsV1 启用内容引用与资源化结果；未协商的客户端只能使用能放入控制帧的原有内嵌格式，超限返回 LIMIT_EXCEEDED，不静默截断。
 
 [内容契约](../../contracts/content.schema.json)定义短时上传和 contentRef。每工作空间最多 16 个暂存上传，包含已封存的上传，累计声明长度最多 64MiB；写入长度不能超过声明。资源化读取结果使用独立容量池，同样最多 16 项、64MiB，单项不超过 32MiB。达到任一容量上限返回 LIMIT_EXCEEDED，释放已有临时内容后可继续申请。只允许 workflowModel 与 trajectoryEdit 两种用途，分别检查 workflow.write 或 asset.write；每一步还核对创建者、工作空间、接收实例、用途和当前授权。
 
@@ -19,11 +19,13 @@ Engine 重启后不恢复临时上传、封存引用或读取结果；已成功�
 
 ## 流程保存和读取
 
+工作台的“保存流程”自动完成内容上传、封存和版本保存。界面显示整体进度、失败原因和保存后的版本，提供取消及失败重试；分块顺序、重传和引用处理由客户端完成。取消或失败时保留当前草稿。
+
 workflow.save 保留小内容 definition/dependencies，增加互斥的 modelRef 分支。两种形式解析为同一流程模型，使用同一静态校验、依赖授权、draftVersion/baseRevision 比较和原子保存。客户端不能同时传两种来源，服务端重验引用实际内容中的流程身份、依赖与摘要。
 
-workflow.read 支持 contentMode=auto/inline/resource，省略为 auto。协商 contentRefsV1 后，模型的规范 JSON 字节大于 256KiB 时，以 modelResource 返回含 definition/dependencies 的不可变 JSON；definitionHash 仍覆盖实际流程定义，不是句柄或整个资源文件的摘要。指定 inline 且超限时明确拒绝。
+workflow.read 支持 contentMode=auto/inline/resource，省略为 auto。协商 contentRefsV1 后，模型的规范 JSON 字节大于 256KiB 时，以 modelResource 返回含 definition/dependencies 的不可变 JSON；definitionHash 覆盖实际流程定义。指定 inline 且超限时明确拒绝。
 
-资源化结果通过 resource.read 分块读取，每次请求 length 为 1～196608 字节。响应 offset 是当前偏移，length 是本块解码后的实际字节数，totalLength 和 sha256 分别是完整资源的长度与原始字节摘要；sha256 不是当前块摘要。offset 等于总长时返回空块和 length=0，超过总长返回 INVALID_ARGUMENT。客户端逐块核对资源身份、偏移、长度与总长，接收完整字节后校验整段 SHA-256，再解析并建立工作台模型。
+资源化结果通过 resource.read 分块读取，每次请求 length 为 1～196608 字节。响应 offset 是当前偏移，length 是本块解码后的实际字节数，totalLength 和 sha256 分别是完整资源的长度与原始字节摘要。offset 等于总长时返回空块和 length=0，超过总长返回 INVALID_ARGUMENT。客户端逐块核对资源身份、偏移、长度与总长，接收完整字节后校验整段 SHA-256，再解析并建立工作台模型。
 
 同一会话对同一流程的相同模型重复读取复用临时资源，且不续期。读取完成或取消时调用 content.discard({resourceId}) 释放容量；取消仅丢弃未完成的新模型，原草稿继续保留。其他读取操作仍引用同一资源时，由客户端在最后一个使用者结束后释放。内容身份或摘要不匹配不能显示为加载成功。
 

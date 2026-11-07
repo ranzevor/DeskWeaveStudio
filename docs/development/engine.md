@@ -39,7 +39,7 @@ uv build
 | content.discard | 按 uploadId 或 resourceId 释放当前会话的临时内容；参数互斥、重复释放幂等 |
 | resource.read | 按偏移读取最多 192KiB；返回整段资源摘要与实际块长度 |
 
-含资源声明或依赖绑定的流程保存仍返回 `METHOD_UNAVAILABLE`；`trajectoryEdit` 仅校验并封存完整轨迹，正式资产提交与依赖版本绑定尚未实现。独立 Engine 进程、认证 IPC、运行调度和原生输入按 M1 后续步骤实现。方法与参数的完整设计见[本机协议](../interfaces/local-protocol.md)。
+`workflow.save` 在资源声明或依赖绑定非空时返回 `METHOD_UNAVAILABLE`。`trajectoryEdit` 的处理结果为通过结构校验的封存内容引用；资产提交和依赖版本绑定未实现。M1 后续组件包括独立 Engine 进程、认证 IPC、运行调度和原生输入，见[路线图](../../ROADMAP.md)。方法与参数见[本机协议](../interfaces/local-protocol.md)。
 
 ## 服务调用
 

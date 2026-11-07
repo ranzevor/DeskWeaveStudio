@@ -53,10 +53,10 @@ function dialogData(s){
  body='<div class="stack"><div class="upload-area">'+icon('upload',28)+'<strong>拖入文件，或选择本地文件</strong><span>PNG、JPEG、WebP 或轨迹 JSON</span></div><div class="file-row">'+square('image')+'<div><strong>下载按钮.png</strong><small>126 × 40 px · 4.2 KB</small></div><span class="spacer"></span>'+pill('格式有效','green')+'</div>'+field('资产名称','下载按钮')+check('保留为新资产，不覆盖同名内容',true)+'</div>';break;
  case 'package-import':
  subtitle='月度报表下载任务包';
- body='<div class="stack"><div class="file-row">'+square('file')+'<div><strong>月度报表下载.dwpack</strong><small>2 个流程 · 2 个模板</small></div><span class="spacer"></span>'+pill('校验通过','green')+'</div>'+table(['检查项','结果'],[['内容长度与摘要',pill('一致','green')],['主流程与依赖',pill('完整','green')],['文件路径与类型',pill('有效','green')]])+notice('导入后重新绑定目标','工作空间凭据与活动运行不在任务包中。')+'</div>';break;
+ body='<div class="stack"><div class="file-row">'+square('file')+'<div><strong>月度报表下载.dwpack</strong><small>2 个流程 · 2 个模板</small></div><span class="spacer"></span>'+pill('校验通过','green')+'</div>'+table(['检查项','结果'],[['文件完整性',pill('一致','green')],['主流程与依赖',pill('完整','green')],['文件路径与类型',pill('有效','green')]])+notice('导入后重新绑定目标','工作空间凭据与活动运行不在任务包中。')+'</div>';break;
  case 'package-conflict':
  subtitle='检测到同名流程，内容与当前版本不同。';
- body='<div class="stack">'+table(['对象','当前内容','包内内容'],[['月度报表下载','版本 12','新内容'],['下载按钮','v3','不同图像']])+choices([['作为新对象导入','为不同内容建立新对象，保留现有版本。',true],['只复用相同内容','相同摘要的资源可复用，不同内容另建。',false]])+field('新流程名称','月度报表下载（导入）')+'</div>';break;
+ body='<div class="stack">'+table(['对象','当前内容','包内内容'],[['月度报表下载','版本 12','新内容'],['下载按钮','v3','不同图像']])+choices([['作为新对象导入','为不同内容建立新对象，保留现有版本。',true],['只复用相同内容','内容相同的素材可复用，不同内容另建。',false]])+field('新流程名称','月度报表下载（导入）')+'</div>';break;
  case 'package-export':
  subtitle='固定流程版本与完整依赖闭包。';
  body='<div class="stack">'+field('流程版本','版本 12','',{select:['版本 12','版本 11','版本 10']})+table(['包含内容','版本'],[['月度报表下载','版本 12'],['校验下载结果','版本 2'],['下载按钮','v3'],['下载完成提示','v2']])+'<div class="field"><span class="field-label">保存位置</span><div class="inline-control"><input class="fake-input" value="文档 / 导出" aria-label="保存位置">'+btn('选择','native-folder','small')+'</div></div>'+check('包含流程依赖资产',true)+notice('导出范围','仅包含所选版本及依赖，不包含密钥或无关运行记录。')+'</div>';break;
@@ -76,7 +76,7 @@ function dialogData(s){
  subtitle='当前桌面正在执行另一项任务。';
  body='<div class="stack"><div class="file-row">'+square('play')+'<div><strong>账单附件整理</strong><small>财务工作台 · 正在录入表单</small></div>'+pill('运行中','blue')+'</div>'+notice('桌面输入按任务独占','可以查看当前任务或明确加入运行队列。单次输入请求遇忙即拒绝。')+'<div class="row">'+btn('加入运行队列','run-queued','','clock')+btn('返回编辑','editor-graph')+'</div></div>';break;
  case 'connection-edit':
- subtitle='连接仅供显式模型观察使用。';
+ subtitle='设置观察图像使用的模型连接。';
  body='<div class="stack">'+field('连接名称','本地视觉服务')+field('服务地址','http://127.0.0.1:11434/v1')+field('模型','vision-local')+field('密钥模式','无密钥','',{select:['无密钥','保留现有密钥','替换密钥']})+field('新的 API 密钥','','只在替换密钥时填写。',{password:true})+'<div class="between"><span class="muted" style="font-size:11px">最近测试：可以连接，模型可用</span>'+btn('高级参数','connection-advanced','small')+btn('测试连接','connection-tested','small','connect')+'</div></div>';break;
  case 'connection-failed':
  subtitle='本地视觉服务';
@@ -85,8 +85,8 @@ function dialogData(s){
  subtitle='本地集成客户端 · 个人自动化';
  body='<div class="stack">'+field('目标范围','报表中心','',{select:['报表中心','重新选择目标']})+'<div class="section-label">允许的操作</div>'+check('读取流程与版本',true)+check('创建与控制运行',true)+check('采集所选目标',true)+check('单次桌面输入',false)+check('使用远程模型连接',false)+'<div class="divider"></div>'+field('授权期限','本次连接','',{select:['本次连接','1 小时']})+notice('授权只作用于所选对象','断开或撤销后，旧权限不能重新生效。')+'</div>';break;
  case 'backup-create':
- subtitle='使用数据库一致快照和对应对象集合。';
- body='<div class="stack">'+field('工作空间','个人自动化')+field('备份名称','个人自动化-2026-10-29')+'<div class="field"><span class="field-label">备份位置</span><div class="inline-control"><input class="fake-input" value="备份 / 个人自动化" aria-label="备份位置">'+btn('选择目录','native-folder','small')+'</div></div>'+details([['流程与资产','12 个流程 · 28 份资产'],['最近备份','今天 08:30']])+check('完成后校验对象摘要',true)+'</div>';break;
+ subtitle='保存当前工作空间中的流程、资产和配置。';
+ body='<div class="stack">'+field('工作空间','个人自动化')+field('备份名称','个人自动化-2026-10-29')+'<div class="field"><span class="field-label">备份位置</span><div class="inline-control"><input class="fake-input" value="备份 / 个人自动化" aria-label="备份位置">'+btn('选择目录','native-folder','small')+'</div></div>'+details([['流程与资产','12 个流程 · 28 份资产'],['最近备份','今天 08:30']])+check('备份后检查文件完整性',true)+'</div>';break;
  case 'backup-restore':
  subtitle='先校验备份，再恢复到独立的新目录。';
  body='<div class="stack"><div class="file-row">'+square('database')+'<div><strong>个人自动化-2026-10-29</strong><small>今天 08:30 · 一致备份</small></div>'+pill('可读取','green')+'</div>'+field('恢复后的工作空间名称','个人自动化（恢复）')+'<div class="field"><span class="field-label">新目录</span><div class="inline-control"><input class="fake-input" value="文档 / 个人自动化（恢复）" aria-label="恢复新目录">'+btn('选择目录','native-folder','small')+'</div></div>'+notice('保留原工作空间','恢复后重新绑定目标，不恢复桌面租约或活动输入。')+'</div>';break;
@@ -119,7 +119,7 @@ window.DW_DIALOG=s=>{
  if(s.id==='emergency')primary='<button type="button" class="btn primary" data-confirm-button data-go="workspace" disabled>确认接管并解除锁定</button>';
  if(s.id==='package-import')d.body+=btn('预览对象映射','package-target-map');
 
- if(s.id==='update-available')d.body+=btn('通道与信任校验','update-trust');
+ if(s.id==='update-available')d.body+=btn('检查版本与安装包','update-trust');
  if(s.id==='asset-delete')primary=btn('保留资产','assets','primary');
  if(s.id==='close-unsaved')primary=btn('保存并处理运行后关闭','workspace','primary').replace('data-go=','data-ve-close-studio data-go=');
  if(s.id==='run-from-node')primary=btn('填写前置值','run-start-values','primary');

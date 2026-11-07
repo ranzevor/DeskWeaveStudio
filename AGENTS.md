@@ -1,7 +1,7 @@
 # 项目工作指引
 
-- 从 README.md 和 docs/README.md 恢复范围；修改前阅读对应设计和相关契约。
-- 应用组件按 ROADMAP.md 创建，当前文档中的设计目标不视为已实现功能。
+- 依据当前任务确定修改范围；从 README.md 和 docs/README.md 查阅对应设计和契约。
+- 应用组件按 ROADMAP.md 实施，接口与行为以当前代码及对应测试核对。
 - 开发变更使用独立分支；合并 main 必须取得仓库所有者明确授权。
 - 公共字段变更同步 Schema、动作目录、示例、设计和兼容处理；参数范围以 Schema 为准。
 - Python 实现使用 uv.lock；运行 uv run --frozen python -m unittest discover -s tests -q。

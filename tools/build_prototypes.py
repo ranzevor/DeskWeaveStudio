@@ -108,7 +108,7 @@ def outputs():
             assert screen["completion"] in ids and screen["completion"] != screen["id"], screen["id"]
     main, child = fixtures()
     catalog = {
-        "designVersion": "0.1.0", "updatedAt": "2026-10-29",
+        "designVersion": "0.1.0", "updatedAt": "2026-11-07",
         "groups": [{k: g[k] for k in ("key", "name", "order")} for g in groups],
         "screens": screens, "fixture": {"workflow": main, "child": child},
     }
@@ -144,7 +144,7 @@ def outputs():
     catalog["platformFixtures"] = {name: json.loads((ROOT / "examples/platform" / (name + ".json")).read_text(encoding="utf-8")) for name in ("macos-capabilities", "macos-permissions", "wayland-capabilities", "macos-cross-display", "context-cross-backend")}
     doc = [
         "# 全界面原型设计", "",
-        "设计版本：0.1.0  ", "更新日期：2026-10-29", "",
+        "设计版本：0.1.0  ", "更新日期：2026-11-07", "",
         f"共 {len(screens)} 个界面，覆盖页面、属性面板、抽屉、弹窗、浮条、选区覆盖层、安装维护及关键异常状态。",
         "", "[打开可点击原型](../prototypes/index.html) · [原型使用说明](../prototypes/README.md) · [界面数据清单](../prototypes/catalog.json)",
         "", "## 主要界面", "", "![主要界面概览](../prototypes/overview/key-screens.png)", "",

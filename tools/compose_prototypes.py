@@ -36,7 +36,7 @@ def sheet(screens, source, destination, title, columns=3, tile_width=390):
                               top + rows * cell_height + max(0, rows - 1) * gap + margin), "#eff3f8")
     draw = ImageDraw.Draw(image)
     draw.text((margin, 21), title, font=title_font, fill="#26364b")
-    draw.text((margin, 60), f"DeskWeaveStudio  /  2026-10-29  /  {len(screens)} 个界面", font=sub_font, fill="#73839a")
+    draw.text((margin, 60), f"DeskWeaveStudio  /  {len(screens)} 个界面", font=sub_font, fill="#73839a")
     for i, screen in enumerate(screens):
         x = margin + (i % columns) * (tile_width + gap)
         y = top + (i // columns) * (cell_height + gap)

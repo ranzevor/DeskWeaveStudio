@@ -313,11 +313,11 @@
       "view": "authoring",
       "variant": "connection-draft-test",
       "parent": null,
-      "purpose": "测试与正式保存分离，结果只对应当前编辑内容。",
+      "purpose": "测试当前编辑的连接，查看服务和模型是否可用。",
       "primary": null,
-      "primaryLabel": "测试当前草稿",
+      "primaryLabel": "测试连接",
       "primaryKind": "local",
-      "primaryResult": "测试与正式保存分离，结果只对应当前编辑内容。",
+      "primaryResult": "显示当前配置的连接测试结果。",
       "requirements": [
         "DW-025"
       ],

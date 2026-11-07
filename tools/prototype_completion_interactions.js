@@ -114,6 +114,6 @@ async page=>{
  await assert('目录导航与浏览器返回恢复对应画板',()=>location.hash==='#expression-builder'&&document.querySelector('#stage .app-window').dataset.screen==='expression-builder');
  await field('expr-raw').fill('{"$expr":{"op":"equal","args":[1,1]}}');await click('expr-validate');
  await page.waitForFunction(()=>window.DW_READY==='expression-builder');
- await assert('浏览器返回后的局部刷新不被旧导航覆盖',()=>window.DW_READY==='expression-builder'&&location.hash==='#expression-builder'&&window.DW_DESIGN_STATE.completion.expression.message.includes('校验通过')&&document.querySelector('#stage .app-window').dataset.screen==='expression-builder');
+ await assert('浏览器返回后的局部刷新不被旧导航覆盖',()=>window.DW_READY==='expression-builder'&&location.hash==='#expression-builder'&&window.DW_DESIGN_STATE.completion.expression.message.includes('预览结果')&&document.querySelector('#stage .app-window').dataset.screen==='expression-builder');
  return {checks,contractOutputs};
 }

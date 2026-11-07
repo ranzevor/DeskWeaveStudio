@@ -27,7 +27,7 @@ function parameter(name,schema,action){
  if(name==="keys")return '<div class="field"><span class="field-label">组合按键</span><div class="row"><kbd>Ctrl 左</kbd><kbd>Shift 左</kbd><kbd>S</kbd></div>'+field('按键顺序','CtrlLeft, ShiftLeft, KeyS','1～8 个不重复的已登记按键；按当前顺序按下，逆序释放。')+'</div>';
  if(name==="roi")return '<div class="stack">'+field('图像范围','整个目标','',{select:['整个目标','目标内矩形']})+btn('配置矩形区域','match-config','small')+'</div>';
  if(name==="scales")return field(label,'0.8, 1.0, 1.25','0.1～4；最多 128 个互不重复的尺度。');
- if(name==="outputSchema")return field(label,'{"type":"object","properties":{"ready":{"type":"boolean"}},"required":["ready"]}','结构化 JSON 模式使用本地有界结构。',{area:true});
+ if(name==="outputSchema")return field(label,'{"type":"object","properties":{"ready":{"type":"boolean"}},"required":["ready"]}','选择输出字段与类型。',{area:true});
  if(name==="path")return field(label,'下载统计 / 数量','留空时替换整个变量；支持对象键和数组下标。');
  if(name==="expectedVersion")return field(label,'8','共享变量写入时填写读取版本。');
 

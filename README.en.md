@@ -3,24 +3,24 @@
 # DeskWeaveStudio
 
 [![Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-2563eb)](LICENSE)
-[![Engine foundation — Chinese only](https://img.shields.io/badge/Stage-Engine%20Foundation-8b5cf6)](ROADMAP.md)
-[![Windows, macOS and Linux targets — Chinese only](https://img.shields.io/badge/Targets-Windows%20%7C%20macOS%20%7C%20Linux-475569)](docs/architecture/platforms.md)
-[![MCP 2026-07-28 — Chinese only](https://img.shields.io/badge/MCP-2026--07--28-15803d)](docs/interfaces/mcp.md)
+[![Engine foundation](https://img.shields.io/badge/Stage-Engine%20Foundation-8b5cf6)](ROADMAP.md)
+[![Windows, macOS and Linux targets](https://img.shields.io/badge/Targets-Windows%20%7C%20macOS%20%7C%20Linux-475569)](docs/architecture/platforms.md)
+[![MCP 2026-07-28](https://img.shields.io/badge/MCP-2026--07--28-15803d)](docs/interfaces/mcp.md)
 
-[![Tauri 2.12 — Chinese only](https://img.shields.io/badge/Tauri-2.12-24c8db?logo=tauri&logoColor=white)](docs/architecture/system.md)
-[![React 19.3 — Chinese only](https://img.shields.io/badge/React-19.3-149eca?logo=react&logoColor=white)](docs/design/studio.md)
-[![TypeScript — Chinese only](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](docs/design/studio.md)
+[![Tauri 2.12](https://img.shields.io/badge/Tauri-2.12-24c8db?logo=tauri&logoColor=white)](docs/architecture/system.md)
+[![React 19.3](https://img.shields.io/badge/React-19.3-149eca?logo=react&logoColor=white)](docs/design/studio.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](docs/design/studio.md)
 [![Documentation and contract checks](https://img.shields.io/badge/Checks-Docs%20%26%20Contracts-475569?logo=githubactions&logoColor=white)](.github/workflows/docs.yml)
 
 **A visual workspace for desktop automation.**
 
-DeskWeaveStudio is designed to record desktop actions, compose workflows, locate screen targets and debug task execution. Workflows use a public JSON format shared by the desktop workspace, command line and MCP clients.
+DeskWeaveStudio focuses on recording across all displays, reproducing continuous pointer paths, locating screen targets and composing workflows. The desktop workspace, command line and MCP clients share the same workflows and assets.
 
-[中文](README.md) · [Documentation (Chinese only)](docs/README.md) · [Interface prototypes](#interface-prototypes) · [Roadmap (Chinese only)](ROADMAP.md) · [Contributing (Chinese only)](CONTRIBUTING.md)
+[中文](README.md) · [Documentation](docs/README.md) · [Interface prototypes](#interface-prototypes) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
 ## Project status
 
-The execution core is under development. The Python service library provides expression previews, workflow validation, workflow version storage, chunked content transfer, catalog and revision pagination, and saved-request lookup. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, standalone Engine process, Rust Agent, MCP Bridge and installers follow the [roadmap (Chinese only)](ROADMAP.md).
+The execution core is under development. The Python service library provides expression previews, workflow validation, workflow version storage, chunked content transfer, catalog and revision pagination, and saved-request lookup. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, standalone Engine process, Rust Agent, MCP Bridge and installers follow the [roadmap](ROADMAP.md).
 
 ## Execution core
 
@@ -31,7 +31,7 @@ uv sync --frozen
 uv run --frozen python examples/engine/workspace.py
 ```
 
-The example saves, reads and validates a workflow and previews an expression in a temporary workspace. Run `uv run --frozen python examples/engine/content_transfer.py` for the [large-workflow example](examples/engine/content_transfer.py), including chunked upload, resource reads and cleanup. See [Engine development (Chinese only)](docs/development/engine.md) for available methods and development commands.
+The example saves, reads and validates a workflow and previews an expression in a temporary workspace. Run `uv run --frozen python examples/engine/content_transfer.py` for the [large-workflow example](examples/engine/content_transfer.py), including chunked upload, resource reads and cleanup. See [Engine development](docs/development/engine.md) for available methods and development commands.
 
 ## Interface prototypes
 
@@ -45,9 +45,9 @@ With Python 3.12 or later, start the preview from the repository root:
 python tools/serve_prototypes.py
 ```
 
-Open the local address printed by the command in your browser. Press `Ctrl+C` to stop the server. On Linux/macOS, use `python3` if needed. You can also open the [prototype entry file (Chinese only)](docs/prototypes/index.html) directly in a local browser.
+Open the local address printed by the command in your browser. Press `Ctrl+C` to stop the server. On Linux/macOS, use `python3` if needed. You can also open the [prototype entry file](docs/prototypes/index.html) directly in a local browser.
 
-[High-resolution mockups (Chinese only)](docs/design/high-fidelity.md) · [Screen catalog (Chinese only)](docs/design/prototypes.md) · [Prototype guide (Chinese only)](docs/prototypes/README.md)
+[High-resolution mockups](docs/design/high-fidelity.md) · [Screen catalog](docs/design/prototypes.md) · [Prototype guide](docs/prototypes/README.md)
 
 ## Planned capabilities
 
@@ -59,7 +59,7 @@ Open the local address printed by the command in your browser. Press `Ctrl+C` to
 - **Assets and versions:** manage workflows, image templates, input trajectories, revision history and portable task packages; recover drafts and back up workspaces.
 - **MCP integration:** target 2026-07-28 with 2025-11-25 compatibility; expose tools, resources and prompts through stdio or explicitly enabled network transports, with filtered cursor queries and shared business logic, workspace state and desktop control.
 
-See [product requirements (Chinese only)](docs/product/requirements.md) for the full scope and usage scenarios, and the [feature map (Chinese only)](docs/design/feature-design-map.md) for design, prototype and acceptance references.
+See [product requirements](docs/product/requirements.md) for the full scope and usage scenarios, and the [feature map](docs/design/feature-design-map.md) for design, prototype and acceptance references.
 
 ## Architecture
 
@@ -73,15 +73,15 @@ Studio, MCP and the command line share one workspace Engine for business validat
 | MCP Bridge | Python | MCP protocol, client authorization binding and Engine method mapping |
 | CLI | Python | Command arguments, result output and Engine method mapping |
 
-The platform design covers Windows, macOS and Linux. Linux X11 and Wayland handle input, recording and system permissions separately. Display coverage, recording and input capabilities are detected for the active desktop backend; see the [cross-platform design (Chinese only)](docs/architecture/platforms.md) and [release matrix (Chinese only)](docs/operations/release.md).
+The platform design covers Windows, macOS and Linux. Linux X11 and Wayland handle input, recording and system permissions separately. Display coverage, recording and input capabilities are detected for the active desktop backend; see the [cross-platform design](docs/architecture/platforms.md) and [release matrix](docs/operations/release.md).
 
-See the [system architecture (Chinese only)](docs/architecture/system.md) and [shared application services (Chinese only)](docs/architecture/shared-services.md) for component relationships and request handling.
+See the [system architecture](docs/architecture/system.md) and [shared application services](docs/architecture/shared-services.md) for component relationships and request handling.
 
 ## Documentation
 
-The linked design documents and project guides are Chinese only. Public contracts use English identifiers and include examples for client implementers.
+Design documents and project guides are available in Chinese. Public contracts use English identifiers and include examples for client implementers.
 
-| Goal | Starting points (Chinese only) |
+| Goal | Starting points |
 |---|---|
 | Implement workflow editing and execution | [Workflow model](docs/design/workflow.md), [frontend structure](docs/design/studio.md), [execution control](docs/design/execution.md) |
 | Implement recording and continuous input | [Recording across all displays](docs/design/recording.md), [pointer motion and drawing](docs/design/pointer-motion.md) |
@@ -112,12 +112,12 @@ python3 -m venv .venv-docs
 .venv-docs/bin/python tools/check_prototypes.py
 ```
 
-These commands check documentation links, public contracts, examples, the prototype catalog and image files. The complete command list, including checks that require Node.js 22, is in the [engineering guide (Chinese only)](docs/development/engineering.md). See [prototype validation (Chinese only)](docs/quality/prototype-validation.md) for page and interaction checks.
+These commands check documentation links, public contracts, examples, the prototype catalog and image files. The complete command list, including checks that require Node.js 22, is in the [engineering guide](docs/development/engineering.md). See [prototype validation](docs/quality/prototype-validation.md) for page and interaction checks.
 
 ## Contributing
 
-Use the repository's Issue forms for bugs, feature requests and design discussions. Read the [contribution guide (Chinese only)](CONTRIBUTING.md) and [code of conduct (Chinese only)](CODE_OF_CONDUCT.md) before submitting changes. Report vulnerabilities and sensitive information through the [security process (Chinese only)](SECURITY.md).
+Use the repository's Issue forms for bugs, feature requests and design discussions. Read the [contribution guide](CONTRIBUTING.md) and [code of conduct](CODE_OF_CONDUCT.md) before submitting changes. Report vulnerabilities and sensitive information through the [security process](SECURITY.md).
 
 ## License
 
-Project-authored source code, documentation, contracts and original examples are licensed under the [Apache License 2.0](LICENSE) (`Apache-2.0`). Third-party dependencies and materials retain their respective licenses. See [licensing details (Chinese only)](LICENSING.md) for distribution requirements.
+Project-authored source code, documentation, contracts and original examples are licensed under the [Apache License 2.0](LICENSE) (`Apache-2.0`). Third-party dependencies and materials retain their respective licenses. See [licensing details](LICENSING.md) for distribution requirements.

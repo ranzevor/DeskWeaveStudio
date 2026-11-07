@@ -72,7 +72,7 @@ record.start 的 includePointerMotion=false 只省略未按住时的普通运动
 
 ## 验证入口
 
-[租约请求](../../examples/messages/agent-lease.json)、[输入段](../../examples/messages/agent-segment.json)为合法结构样例，[残留表达式](../../examples/invalid/agent-expression.json)应被结构校验拒绝。演示令牌只用于合成数据。
+[租约请求](../../examples/messages/agent-lease.json)、[输入段](../../examples/messages/agent-segment.json)为合法结构样例，[残留表达式](../../examples/invalid/agent-expression.json)应被结构校验拒绝。执行输入样例前，为测试目标获取有效令牌。
 
 原生验收覆盖同段重发、异参冲突、伪拥有者、旧 epoch、资源替换、逐块中断、租约到期、正在拖拽时急停和 Agent 中途退出。原生验收由目标应用检查收到的事件、输入释放与窗口状态。
 

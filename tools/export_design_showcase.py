@@ -91,7 +91,7 @@ def main():
         target=DEST/item["image"]
         target.write_bytes(original.read_bytes())
         board(screen,target,DEST/item["board"])
-    doc=["# 高保真界面效果图","","设计版本：0.1.0  ","更新日期：2026-10-29","",
+    doc=["# 高保真界面效果图","",f"设计版本：{catalog['designVersion']}  ",f"更新日期：{catalog['updatedAt']}","",
          "采用精致浅色外壳、浅色点阵画布与适中信息密度。完整界面采用同一视觉系统；以下核心页面另外提供 2× 高清图像及展示板。",
          "","[视觉系统](visual-system.md) · [完整界面目录](prototypes.md) · [打开交互画册](../prototypes/index.html)","",
          "## 核心界面","","| 页面 | 高清界面图 | 展示板 |","|---|---|---|"]

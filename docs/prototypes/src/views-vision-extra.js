@@ -117,7 +117,7 @@ function reviewView(s){
  const proposal=T.proposal||(!T.namingDirty?buildNames():{items:templateSelection().map(c=>({...c,name:T.overrides[c.index]??c.name,source:'manual',conflict:false}))}),valid=validNames();
  const body=table(['模板名称','尺寸','命名来源','结果'],proposal.items.map(c=>[esc(c.name),c.w+' × '+c.h+' px',{ocr:'OCR',rule:'规则',manual:'手工'}[c.source],pill(valid?'可提交':'需重新预览',valid?'green':'amber')]))+
  '<div class="ve-metrics">'+point('来源','报表中心截图 · 版本 3')+point('批次内容',proposal.items.length+' 个模板及清单')+point('名称冲突',proposal.items.filter(c=>c.conflict).length+' 项')+'</div>';
- return templateShell(s,(!valid?notice(templateExpired()?'候选已过期':'名称预览已失效','重新检查候选和命名后保存。','amber'):'')+'<div class="ve-layout">'+panel('确认保存内容',body)+'<aside class="stack">'+panel('保存到资产库','<div class="stack">'+field('工作空间','个人自动化')+pair('模板总数',proposal.items.length+' 个')+pair('候选与命名预览',valid?'有效':'不可提交')+pair('源图摘要','已核对')+btn('返回修改名称','templates-naming')+'</div>')+'</aside></div>',3,
+ return templateShell(s,(!valid?notice(templateExpired()?'候选已过期':'名称预览已失效','重新检查候选和命名后保存。','amber'):'')+'<div class="ve-layout">'+panel('确认保存内容',body)+'<aside class="stack">'+panel('保存到资产库','<div class="stack">'+field('工作空间','个人自动化')+pair('模板总数',proposal.items.length+' 个')+pair('候选与命名预览',valid?'有效':'不可提交')+btn('返回修改名称','templates-naming')+'</div>')+'</aside></div>',3,
  btn('返回命名','templates-naming')+'<button class="btn primary" type="button" data-ve-template-commit'+(!valid?' disabled':'')+'>'+icon('save',15)+'保存整个批次</button>');
 }
 function batchView(s){
@@ -129,7 +129,7 @@ function batchView(s){
 }
 function templateExport(s){
  const assets=templateAssets();
- return templateShell(s,'<div class="ve-layout">'+panel('导出文件预览',table(['文件','内容'],assets.map(c=>[esc(c.name)+'.png','模板原图']).concat([['manifest.json','来源、裁剪、评分、命名与摘要']]))+'<div class="ve-metrics">'+point('资产范围','已保存的 '+assets.length+' 个模板')+point('总计',(assets.length+1)+' 个文件')+'</div>')+
+ return templateShell(s,'<div class="ve-layout">'+panel('导出文件预览',table(['文件','内容'],assets.map(c=>[esc(c.name)+'.png','模板原图']).concat([['manifest.json','模板名称、来源和图像信息']]))+'<div class="ve-metrics">'+point('资产范围','已保存的 '+assets.length+' 个模板')+point('总计',(assets.length+1)+' 个文件')+'</div>')+
  '<aside class="stack">'+panel('导出选项','<div class="stack">'+field('输出位置','文档 / 模板批次 / 报表中心')+btn('选择文件夹','','','folder')+field('图像格式','PNG','',{select:['PNG']})+pair('导出内容','图像与批次清单')+pair('同名目录','创建新目录')+'</div>')+'</aside></div>',3,btn('返回批次','templates-batch')+btn('开始导出','templates-exporting','primary','download'));
 }
 function templateJob(s){
@@ -140,7 +140,7 @@ function templateJob(s){
  if(s.variant==='receipt-unknown'){
   if(!T.operation){if(!T.proposal)buildNames();beginTemplateCommit();}
   if(T.operation)T.operation.receiptKnown=false;
-  return templateShell(s,panel('正在确认保存结果',notice('尚未取得本次保存回执','保留原请求查询结果，确认前不重复创建批次。','amber')+pair('请求内容',(T.operation?.items.length||0)+' 个模板')+'<div class="ve-inline-actions"><button class="btn primary" type="button" data-ve-template-query>查询原请求结果</button></div>'),3,btn('返回资产','assets'));
+  return templateShell(s,panel('正在确认保存结果',notice('尚未收到保存结果','请查询这次保存是否完成，避免重复保存模板。','amber')+pair('保存内容',(T.operation?.items.length||0)+' 个模板')+'<div class="ve-inline-actions"><button class="btn primary" type="button" data-ve-template-query>查询保存结果</button></div>'),3,btn('返回资产','assets'));
  }
  return templateShell(s,panel('候选有效期已结束',notice('候选和名称预览已过期','保留来源与参数，重新提取后再保存。','amber')+'<div class="ve-inline-actions">'+btn('重新提取','templates-source','primary').replace('data-go=','data-ve-template-reset data-go=')+'</div>'),2,btn('返回资产','assets'));
 }
@@ -273,7 +273,7 @@ function recordDetails(s){
  failed?notice('模型请求超时','请求在 60 秒后结束。本次失败未更新变化检测基线。','red'):
  unsaved?notice('模型已返回，结果未能保存','工作空间存储不足。内存结果可保存到独立恢复文件。','red'):
  cancelled?notice('本次请求已取消','已结束请求收尾，取消记录保留“报表可用状态”会话关联。'):
- baseline?notice('变化检测使用的成功基线','本次成功结果及截图已保存。后续跳过与失败不会替换此基线。','green'):"";
+ baseline?notice('已保存为变化对比图像','后续检查将与这张图像比较。','green'):"";
  const result=skipped?'<div class="ve-result-empty">本次没有模型结果</div>':
  failed?'<div class="ve-result-empty">请求超时，未收到结果</div>':
  cancelled?'<div class="ve-result-empty">请求已取消</div>':

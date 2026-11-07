@@ -109,7 +109,7 @@ keyboard.down、keyboard.up 和 pointer.button 的显式按下/释放可跨同�
 
 输入操作先展开为有限、有序的原生事件单元，游标范围为 0 到 `eventCount`，等于末尾时表示本段原始事件均已发送。点击的移动、按下与释放分别是事件单元，等待单独计算；Unicode 文本以一个 Unicode 标量对应的完整原生输入批次作为最小边界，不能在代理项之间暂停。操作系统部分接受一个批次且不能精确判定完成位置时，标记 uncertain 并进入清理，不把游标前移或重发猜测的未完成部分。
 
-`cursor=null` 表示停在节点或输入段之间，没有在途原生事件。`heldInputs` 保存释放前的集合，其顺序按类型、键名或按钮名固定；它不代表暂停后仍实际按住。`targets` 按目标令牌固定排序。`inputTargetToken` 来自 Agent 租约中最后一次已确认原生输入的实际目标，有在途段时取该段目标；它独立于段游标保存，因此 keyboard.down 或 pointer.button.down 完成后、下一个节点前暂停仍保留唯一目标。尚未发送任何输入且无在途段时可为空；非空必须在 targets 中，不能用当前前台或集合第一项猜测。`heldInputsHash` 与 `targetStateHash` 分别为两数组的 RFC 8785 UTF-8 编码 SHA-256；`checkpointHash` 覆盖 pauseId、leaseId、agentEpoch、generation、cursor、heldInputsHash、pointer、targetStateHash、inputTargetToken。原生检查点只在当前 Agent 的内存中有效，持久化摘要用于核对和诊断，不能重建可继续游标。
+`cursor=null` 表示停在节点或输入段之间，没有在途原生事件。`heldInputs` 保存释放前的集合，其顺序按类型、键名或按钮名固定，用于继续运行时恢复按住状态。`targets` 按目标令牌固定排序。`inputTargetToken` 来自 Agent 租约中最后一次已确认原生输入的实际目标，有在途段时取该段目标；它独立于段游标保存，因此 keyboard.down 或 pointer.button.down 完成后、下一个节点前暂停仍保留唯一目标。尚未发送任何输入且无在途段时可为空；非空必须在 targets 中，不能用当前前台或集合第一项猜测。`heldInputsHash` 与 `targetStateHash` 分别为两数组的 RFC 8785 UTF-8 编码 SHA-256；`checkpointHash` 覆盖 pauseId、leaseId、agentEpoch、generation、cursor、heldInputsHash、pointer、targetStateHash、inputTargetToken。原生检查点只在当前 Agent 的内存中有效，持久化摘要用于核对和诊断，不能重建可继续游标。
 
 暂停期限默认 30 分钟，由原生单调时钟执行；展示用 `expiresAt` 不改变实际时限。取消、停止、租约撤销、Agent epoch 改变或检查点丢失立即使其失效。Agent 返回 uncertain、清理失败或仍在 pausing 时，Engine 不得显示“可继续”。`lease.status` 核对当前拥有者的实时状态；检查点内的租约、代次和 epoch 必须与外层一致。
 

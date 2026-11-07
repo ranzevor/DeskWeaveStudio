@@ -9,7 +9,7 @@
 | 文档 | 解决的问题 |
 |---|---|
 | [产品需求](product/requirements.md) | 为谁提供哪些能力，首期范围和完成条件 |
-| [术语与状态](product/glossary.md) | 产品用语、对象身份、状态和计时口径 |
+| [术语与状态](product/glossary.md) | 产品用语、保存与运行状态及对应操作 |
 | [组件生命周期](architecture/lifecycle.md) | 启动、所有者、后台工作、关闭和异常恢复 |
 | [命令行接口](interfaces/command-line.md) | 命令、授权、输出、退出与取消 |
 | [持久化事务](design/persistence-transactions.md) | 作业、名称占用、查询快照和凭据版本的一致性 |
@@ -35,6 +35,7 @@
 | [观察中心](design/observations.md) | 持续会话、变化检测、记录查询和导出 |
 | [模型连接](design/model-connections.md) | 模型参数、图像消息模板、输出结构和连接测试 |
 | [数据设计](design/storage.md) | 表结构、对象存储、事务、包交换与备份 |
+| [协议对象与状态](interfaces/objects-and-states.md) | 接口对象、状态编码、时间单位与身份字段 |
 | [本机协议](interfaces/local-protocol.md) | 帧格式、命令、事件、资源、兼容与重连 |
 | [原生 Agent 协议](interfaces/desktop-agent.md) | 租约、已求值输入、资源封存、录制与急停 |
 | [MCP 接口](interfaces/mcp.md) | 工具与资源、授权、取消和通知 |

@@ -1,7 +1,7 @@
 # 全界面原型设计
 
 设计版本：0.1.0  
-更新日期：2026-10-29
+更新日期：2026-11-07
 
 共 248 个界面，覆盖页面、属性面板、抽屉、弹窗、浮条、选区覆盖层、安装维护及关键异常状态。
 
@@ -88,8 +88,8 @@
 | E26 | [表达式类型错误](../prototypes/images/E26-expression-invalid.png) · [交互](../prototypes/index.html#expression-invalid) | 保留非法编辑与最后有效 AST，定位操作数类型错误。 | 校验并预览：修正后的表达式结果及字段类型可核对。 |
 | E27 | [流程历史版本](../prototypes/images/E27-revision-browser.png) · [交互](../prototypes/index.html#revision-browser) | 分页发现固定版本，选择历史版本且保留当前草稿。 | 重新查询：分页发现固定版本，选择历史版本且保留当前草稿。 |
 | E28 | [版本查询已过期](../prototypes/images/E28-revision-query-expired.png) · [交互](../prototypes/index.html#revision-query-expired) | 重新建立历史查询，保留所选版本。 | 重新查询：重新建立历史查询，保留所选版本。 |
-| E29 | [大流程分块保存](../prototypes/images/E29-content-save.png) · [交互](../prototypes/index.html#content-save) | 分块核验后封存内容，比较草稿与基准版本并保存。 | 开始传输：分块核验后封存内容，比较草稿与基准版本并保存。 |
-| E30 | [保存传输中断](../prototypes/images/E30-content-transfer-failed.png) · [交互](../prototypes/index.html#content-transfer-failed) | 保留草稿和编辑代次，重新上传完整内容。 | 重新传输：保留草稿和编辑代次，重新上传完整内容。 |
+| E29 | [保存流程](../prototypes/images/E29-content-save.png) · [交互](../prototypes/index.html#content-save) | 保存当前草稿，查看进度并在需要时取消。 | 保存流程：保存完成后显示流程版本。 |
+| E30 | [流程保存失败](../prototypes/images/E30-content-transfer-failed.png) · [交互](../prototypes/index.html#content-transfer-failed) | 查看保存失败原因，保留当前草稿并重试。 | 重新保存：重新保存当前草稿。 |
 
 ## 动作属性与专用输入
 
@@ -179,8 +179,8 @@
 | T15 | [模板导出进度](../prototypes/images/T15-templates-exporting.png) · [交互](../prototypes/index.html#templates-exporting) | 查看图像和清单写入阶段，取消只影响本次导出。 | 取消导出：模板批量导出；完成 → 模板导出完成 |
 | T16 | [模板导出失败](../prototypes/images/T16-templates-export-error.png) · [交互](../prototypes/index.html#templates-export-error) | 查看输出目录写入失败，重新选择位置后导出。 | 更换导出位置：模板批量导出 |
 | T17 | [模板导出完成](../prototypes/images/T17-templates-export-succeeded.png) · [交互](../prototypes/index.html#templates-export-succeeded) | 查看已完成的模板图像与清单范围，打开输出位置或返回批次。 | 打开输出位置：显示本次输出位置 |
-| T18 | [模板批次保存中](../prototypes/images/T18-templates-saving.png) · [交互](../prototypes/index.html#templates-saving) | 跟踪已接收保存作业，完成登记后显示资产批次。 | 查询保存结果：模板保存回执查询；完成 → 模板资产批次 |
-| T19 | [模板保存回执查询](../prototypes/images/T19-templates-receipt-unknown.png) · [交互](../prototypes/index.html#templates-receipt-unknown) | 使用原保存请求查询结果，避免重复创建批次。 | 查询原请求结果：校验通过 → 模板批次保存中 |
+| T18 | [模板批次保存中](../prototypes/images/T18-templates-saving.png) · [交互](../prototypes/index.html#templates-saving) | 跟踪已接收保存作业，完成登记后显示资产批次。 | 查询保存结果：查询模板保存结果；完成 → 模板资产批次 |
+| T19 | [查询模板保存结果](../prototypes/images/T19-templates-receipt-unknown.png) · [交互](../prototypes/index.html#templates-receipt-unknown) | 查询这次保存是否完成，避免重复保存模板。 | 查询保存结果：校验通过 → 模板批次保存中 |
 | T20 | [模板候选已过期](../prototypes/images/T20-templates-expired.png) · [交互](../prototypes/index.html#templates-expired) | 保留来源与提取条件，重新提取过期候选。 | 重新提取：批量提取设置 |
 
 ## 观察会话与记录
@@ -228,12 +228,12 @@
 | A08 | [导出任务包](../prototypes/images/A08-package-export.png) · [交互](../prototypes/index.html#package-export) | 选择固定版本和资源范围，确认保存目录。 | 导出任务包：流程画布 |
 | A09 | [删除资产确认](../prototypes/images/A09-asset-delete.png) · [交互](../prototypes/index.html#asset-delete) | 显示仍被引用的版本并阻止误删。 | 保留被引用资产：资产库 |
 | A10 | [任务包对象映射](../prototypes/images/A10-package-target-map.png) · [交互](../prototypes/index.html#package-target-map) | 核对独立流程副本、相同内容复用及来源到目标的固定版本映射。 | 确认导入：按有效计划原子导入，并显示真实映射清单。 |
-| A11 | [导入映射计划失效](../prototypes/images/A11-package-target-invalid.png) · [交互](../prototypes/index.html#package-target-invalid) | 保留预览，目录或计划改变后重新核对内容映射。 | 重新预览映射：取得当前目录下的新映射计划。 |
+| A11 | [导入预览已失效](../prototypes/images/A11-package-target-invalid.png) · [交互](../prototypes/index.html#package-target-invalid) | 保留文件选择，重新检查导入内容。 | 重新预览映射：取得当前目录下的新映射计划。 |
 | A12 | [删除资产与引用检查](../prototypes/images/A12-asset-delete-review.png) · [交互](../prototypes/index.html#asset-delete-review) | 重新读取全部引用总数，确认无依赖后删除整个资产及其版本。 | 删除整个资产：版本和引用检查通过后删除资产。 |
 | A13 | [资产删除检查失效](../prototypes/images/A13-asset-delete-stale.png) · [交互](../prototypes/index.html#asset-delete-stale) | 版本或引用变化时保留资产，重新检查可见与不可见引用数量。 | 重新检查引用：读取当前版本与完整引用数量，仍被引用时阻止删除。 |
-| A14 | [保存手工编辑资产](../prototypes/images/A14-asset-edit-save.png) · [交互](../prototypes/index.html#asset-edit-save) | 选择新资产或新版本，固定源内容后提交。 | 准备保存：选择新资产或新版本，固定源内容后提交。 |
-| A15 | [资产头版本冲突](../prototypes/images/A15-asset-edit-conflict.png) · [交互](../prototypes/index.html#asset-edit-conflict) | 保留编辑，读取最新头后由用户重新提交。 | 重新准备：保留编辑，读取最新头后由用户重新提交。 |
-| A16 | [资产编辑已取消](../prototypes/images/A16-asset-edit-cancelled.png) · [交互](../prototypes/index.html#asset-edit-cancelled) | 取消未提交计划不产生正式版本，编辑内容继续保留。 | 准备保存：取消未提交计划不产生正式版本，编辑内容继续保留。 |
+| A14 | [保存手工编辑资产](../prototypes/images/A14-asset-edit-save.png) · [交互](../prototypes/index.html#asset-edit-save) | 选择保存方式和名称，保存编辑后的图像或轨迹。 | 保存资产：保存完成后显示资产版本。 |
+| A15 | [资产版本冲突](../prototypes/images/A15-asset-edit-conflict.png) · [交互](../prototypes/index.html#asset-edit-conflict) | 核对更新后的资产版本，保留编辑内容并重新保存。 | 重新保存：以核对后的版本保存当前编辑。 |
+| A16 | [资产保存已取消](../prototypes/images/A16-asset-edit-cancelled.png) · [交互](../prototypes/index.html#asset-edit-cancelled) | 保留当前编辑内容，按需重新保存。 | 保存资产：保存当前编辑内容。 |
 
 ## 运行、调试与恢复
 
@@ -286,7 +286,7 @@
 | S11 | [设置范围与有效来源](../prototypes/images/S11-settings-overrides.png) · [交互](../prototypes/index.html#settings-overrides) | 编辑用户或工作空间覆盖，按批次保存并区分即时、下次运行与重启生效。 | 整批保存：CAS通过后提交整批set/reset并显示逐项生效时间。 |
 | S12 | [设置并发冲突](../prototypes/images/S12-settings-conflict.png) · [交互](../prototypes/index.html#settings-conflict) | 保留本批编辑，重新读取范围与继承版本后核对保存。 | 重新读取并保留编辑：新基准与本批待保存编辑分别保留。 |
 | S13 | [模型连接清单](../prototypes/images/S13-connection-browser.png) · [交互](../prototypes/index.html#connection-browser) | 读取连接元数据并打开配置，凭据保持受保护。 | 重新查询：读取连接元数据并打开配置，凭据保持受保护。 |
-| S14 | [测试未保存的连接](../prototypes/images/S14-connection-draft-test.png) · [交互](../prototypes/index.html#connection-draft-test) | 测试与正式保存分离，结果只对应当前编辑内容。 | 测试当前草稿：测试与正式保存分离，结果只对应当前编辑内容。 |
+| S14 | [测试未保存的连接](../prototypes/images/S14-connection-draft-test.png) · [交互](../prototypes/index.html#connection-draft-test) | 测试当前编辑的连接，查看服务和模型是否可用。 | 测试连接：显示当前配置的连接测试结果。 |
 | S15 | [连接测试结果已失效](../prototypes/images/S15-connection-test-stale.png) · [交互](../prototypes/index.html#connection-test-stale) | 修改配置使原测试失效，迟到结果不覆盖当前状态。 | 测试当前草稿：修改配置使原测试失效，迟到结果不覆盖当前状态。 |
 
 ## 模型高级配置与 MCP 管理
@@ -312,7 +312,7 @@
 | C15 | [MCP 工具目录](../prototypes/images/C15-mcp-tools.png) · [交互](../prototypes/index.html#mcp-tools) | 按能力查看工具组与授权要求。 | 查看预设任务：MCP 预设任务预览 |
 | C16 | [MCP 资源目录与预览](../prototypes/images/C16-mcp-resources.png) · [交互](../prototypes/index.html#mcp-resources) | 查看可读对象、媒体类型和分块预览。 | 预览观察记录：观察结果详情 |
 | C17 | [MCP 预设任务预览](../prototypes/images/C17-mcp-prompts.png) · [交互](../prototypes/index.html#mcp-prompts) | 填写参数并预览返回消息。 | 预览消息：更新本页预设任务消息预览 |
-| C18 | [保存配置与实际监听](../prototypes/images/C18-mcp-config-read.png) · [交互](../prototypes/index.html#mcp-config-read) | 分别读取已保存及实际生效的网络配置和脱敏TLS状态。 | 重新读取服务快照：保存版本、活动版本与需重启状态来自同次读取。 |
+| C18 | [连接设置与服务状态](../prototypes/images/C18-mcp-config-read.png) · [交互](../prototypes/index.html#mcp-config-read) | 分别读取已保存及实际生效的网络配置和脱敏TLS状态。 | 重新读取服务快照：保存版本、活动版本与需重启状态来自同次读取。 |
 | C19 | [令牌范围与使用记录](../prototypes/images/C19-mcp-token-query.png) · [交互](../prototypes/index.html#mcp-token-query) | 按状态筛选并分页读取名称、权限、目标、期限和最近使用记录。 | 下一页：读取同一查询中的后续令牌；清单不包含明文。 |
 | C20 | [集合分页查询](../prototypes/images/C20-mcp-query.png) · [交互](../prototypes/index.html#mcp-query) | 设置条件、排序和每页数量，逐页查询授权集合。 | 查询：返回当前条件下的第一页。 |
 | C21 | [集合查询已过期](../prototypes/images/C21-mcp-query-expired.png) · [交互](../prototypes/index.html#mcp-query-expired) | 保留条件，重新建立已过期的查询。 | 重新查询：创建新快照并从第一页读取。 |
@@ -326,7 +326,7 @@
 |---|---|---|---|
 | O01 | [创建工作空间备份](../prototypes/images/O01-backup-create.png) · [交互](../prototypes/index.html#backup-create) | 确认一致备份的目录与包含范围。 | 开始备份：备份与恢复进度 |
 | O02 | [恢复到新目录](../prototypes/images/O02-backup-restore.png) · [交互](../prototypes/index.html#backup-restore) | 选择备份与新目录，保留原工作空间。 | 校验并恢复：备份与恢复进度 |
-| O03 | [备份与恢复进度](../prototypes/images/O03-backup-progress.png) · [交互](../prototypes/index.html#backup-progress) | 分别显示快照、复制、摘要和完成确认。 | 打开恢复的工作空间：工作空间概览 |
+| O03 | [备份与恢复进度](../prototypes/images/O03-backup-progress.png) · [交互](../prototypes/index.html#backup-progress) | 显示工作空间文件的复制、检查和恢复进度。 | 打开恢复的工作空间：工作空间概览 |
 | O04 | [发现更新](../prototypes/images/O04-update-available.png) · [交互](../prototypes/index.html#update-available) | 查看版本、更新范围及活动运行影响。 | 准备更新：更新准备与安装 |
 | O05 | [更新准备与安装](../prototypes/images/O05-update-preparing.png) · [交互](../prototypes/index.html#update-preparing) | 等待草稿持久化、运行停止、备份与组件切换。 | 检查数据兼容性：数据格式升级 |
 | O06 | [更新失败](../prototypes/images/O06-update-failed.png) · [交互](../prototypes/index.html#update-failed) | 保留有效版本并给出具体恢复路径。 | 查看恢复方案：版本恢复方案 |
@@ -337,9 +337,9 @@
 | O11 | [卸载与保留数据](../prototypes/images/O11-uninstall.png) · [交互](../prototypes/index.html#uninstall) | 确认卸载程序，单独处理工作空间数据。 | 确认卸载程序：最近工作空间 |
 | O12 | [数据格式升级](../prototypes/images/O12-migration.png) · [交互](../prototypes/index.html#migration) | 显示备份、独占转换与完整性验证。 | 完成并打开：工作空间概览 |
 | O13 | [版本恢复方案](../prototypes/images/O13-rollback.png) · [交互](../prototypes/index.html#rollback) | 区分程序回退与数据恢复，保留新增编辑。 | 恢复到新目录：恢复到新目录 |
-| O14 | [更新来源与信任校验](../prototypes/images/O14-update-trust.png) · [交互](../prototypes/index.html#update-trust) | 选择通道，核对签名链、已验证密钥轮换和更新包后进入安装准备。 | 进入安装准备：验证通过后保存草稿、停止运行并检查备份。 |
+| O14 | [检查版本与安装包](../prototypes/images/O14-update-trust.png) · [交互](../prototypes/index.html#update-trust) | 选择更新通道，检查适用系统、发布者和安装包完整性。 | 进入安装准备：验证通过后保存草稿、停止运行并检查备份。 |
 | O15 | [更新校验失败](../prototypes/images/O15-update-verification-failed.png) · [交互](../prototypes/index.html#update-verification-failed) | 展示具体校验失败，重新选择有效更新包后再次验证。 | 校验更新：失败保持未安装；通过后开放安装准备。 |
-| O16 | [人工降级本地确认](../prototypes/images/O16-update-downgrade.png) · [交互](../prototypes/index.html#update-downgrade) | 在有效信任检查和备份基础上，本地确认固定版本的人工降级计划。 | 确认降级并准备：一次性确认绑定制品、信任版本、备份和有效期。 |
+| O16 | [确认降级版本](../prototypes/images/O16-update-downgrade.png) · [交互](../prototypes/index.html#update-downgrade) | 确认所选旧版本、工作空间备份及数据兼容性。 | 确认降级并准备：一次性确认绑定制品、信任版本、备份和有效期。 |
 
 ## 辅助入口与帮助
 

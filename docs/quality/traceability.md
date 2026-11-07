@@ -21,7 +21,7 @@
 | DW-017 | release | 签名清单、可信根、吊销与恢复 | Q17/Q40 | M5 |
 | DW-018 | configuration、storage | settings.*、设置目录、指标、容量 | Q18/Q34 | M1/M5 |
 | DW-019 | execution、local-protocol、lifecycle、persistence-transactions | epoch、effect_intent | Q19 | M1/M5 |
-| DW-020 | repository、engineering | 文档、CI、贡献入口 | Q20 | M0/M5 |
+| DW-020 | repository、engineering | 使用指南、接口文档、贡献与反馈入口 | Q20 | M0/M5 |
 | DW-021 | templates、perception、persistence-transactions | template.extract/candidates/commit | Q21 | M3 |
 | DW-022 | templates、persistence-transactions | template.names、NamingPolicy | Q22 | M3 |
 | DW-023 | observations、lifecycle、command-line | observation.start/stop/session | Q23 | M4 |

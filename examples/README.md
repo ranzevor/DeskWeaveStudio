@@ -26,7 +26,7 @@
 | [values.json](values.json) | 零、false、空串、保留键原文与表达式 |
 | [manifest.json](manifest.json) | parent、child、hello 与 shortcut 的实际长度和摘要 |
 
-演示令牌不具备真实授权。工作流样例的读取与验证不发送输入；轨迹和 input 请求仅在独立测试目标中执行。应用实现后还需验证目标窗口实际收到的输入。
+执行轨迹或 input 请求前，为独立测试目标获取 targetToken 并替换样例中的值；执行后检查目标窗口收到的事件。
 
 parent 使用资源逻辑键 child。导入时由包清单固定其对应文件；运行时固定为工作空间内的具体内容版本。
 
@@ -58,7 +58,7 @@ parent 使用资源逻辑键 child。导入时由包清单固定其对应文件�
 
 对应拒绝例覆盖全零算法、反向面积和宽高比、缺失来源摘要、过短观察周期、外域输出 Schema、未知图像占位符、消息覆盖、孤立循环信号、缺循环资源、非法共享版本、重复按键、缺启动计划和网络授权错误。
 
-循环样例的 body 资源由工作空间固定到 loop-body 的具体版本；它们独立于 manifest.json 的演示包。结构检查不执行模型请求或桌面输入，运行共享变量的实际冲突和按键释放按 Q26/Q29 验收。
+循环样例的 body 资源由工作空间固定到 loop-body 的具体版本，导入循环样例时一并提供该依赖。运行共享变量冲突和按键释放使用 Q26/Q29 的场景检查。
 
 ## 持久化边界样例
 
@@ -82,7 +82,7 @@ parent 使用资源逻辑键 child。导入时由包清单固定其对应文件�
 
 operation.get 与 operation.cancel 返回同一种快照。succeeded 的 result 必须属于其原 method，error 为 null；queued/running/cancelling 的 result 和 error 均为 null；failed/cancelled/uncertain 的 result 为 null，error 提供具体原因。uncertain 的 retry 为 afterQuery，查询原作业而非重新执行；cancelled 使用 CANCELLED 和 never。
 
-[record-finish-partial.json](operations/record-finish-partial.json)保存可修复录制草稿，不能作为正式轨迹回放。[input-submit-succeeded.json](operations/input-submit-succeeded.json)确认系统输入发送及清理收据，不能推定目标应用业务成功。[vision-match-not-found.json](operations/vision-match-not-found.json)表示匹配计算完成但未找到目标。
+[record-finish-partial.json](operations/record-finish-partial.json)保存可修复录制草稿，不能作为正式轨迹回放。[input-submit-succeeded.json](operations/input-submit-succeeded.json)记录系统输入发送与清理结果，目标应用结果由对应流程的后置检查确定。[vision-match-not-found.json](operations/vision-match-not-found.json)表示匹配计算完成但未找到目标。
 
 反例覆盖 method/result 不匹配、把接收回执当完成结果、成功缺结果、未知方法、未完成却带结果、失败缺原因、uncertain 自动重发、输入清理未完成和不完整录制伪装成正式资产。录制资源的长度和摘要对应仓库中实际的完整或未配对轨迹字节；其余资源身份为协议演示对象。
 

@@ -94,7 +94,7 @@ Agent 方法由 [Agent 契约](../../contracts/agent.schema.json)完整定义，
 
 请求摘要覆盖 method 与经过确定性契约默认值及归一化处理的 params，采用 RFC 8785 JSON Canonicalization Scheme 的 UTF-8 结果计算 SHA-256；相同请求 ID 改变方法或规范参数均为 REQUEST_CONFLICT。环境配置在首次准入时固定，查询原请求不按当前配置重算；跨语言共用编码与摘要样例。修改命令保存请求摘要与接收结果，保留至少 24 小时；活动运行的记录保留到运行和未决效果结束。容量不足时拒绝新修改，不提前删除未决去重记录。
 
-读取可有限重试。写入响应丢失时使用 request.status；不得创建新 ID 自动重做输入。Agent 的原生收据不等于目标应用的后置结果。
+读取可有限重试。写入响应丢失时使用 request.status；不得创建新 ID 自动重做输入。Agent 收据记录原生输入提交状态，目标应用的结果由配置的后置检查确定。
 
 ## 事件与恢复
 
@@ -146,7 +146,7 @@ resource.read 接受授权资源身份、偏移与块长度，返回完整资源
 
 source 保存本次源码原文；lastValidModel 保存其对应 source、definition 和 dependencies，首次尚无有效模型时可为 null，modelEditVersion 同时为 null。Engine 重新解析历史模型原文并核对定义与依赖闭包，不接受客户端自行声明 valid。modelEditVersion 不得大于 editVersion；当前原文有效时，模型代次与定义必须对应当前编辑代次；原文无效时仍原样保存，并保留最后有效模型。
 
-小内容使用 inline 的 text 或 value。大内容通过 Host 原生受限内容通道先暂存，使用 resourceId、实际 UTF-8 字节长度和 SHA-256 的 contentRef 引用，绑定窗口、工作空间、用途、接收实例和期限。控制帧预算不因草稿较大而放宽；同次草稿写入的内容合计不超过 32MiB，控制字段单独计入控制帧；Engine 核验实际字节而非只相信声明长度，禁止任意路径或外域 URL。
+小内容使用 inline 的 text 或 value。大内容通过 Host 原生受限内容通道先暂存，使用 resourceId、实际 UTF-8 字节长度和 SHA-256 的 contentRef 引用，绑定窗口、工作空间、用途、接收实例和期限。控制帧预算不因草稿较大而放宽；同次草稿写入的内容合计不超过 32MiB，控制字段单独计入控制帧；Engine 比较实际字节数和声明长度，禁止任意路径或外域 URL。
 
 源码和模型引用在一个 CAS 事务中提交。快照返回 sourceResource、lastValidModelResource、editVersion、baseRevision、modelEditVersion、由 Engine 计算的 validationState、前 100 条 diagnostics、总数 diagnosticCount、必要的 diagnosticsResource 与 savedAt；diagnosticCount 超过 100 时必须提供完整诊断的私有 diagnosticsResource；未超过时可为 null。draft.read 按实际控制帧字节预算分页，items 不超过 pageSize，尚未输出的分支通过 nextCursor 继续读取。这些资源只供已授权本地草稿恢复，不因 asset.read、资源 URI 或 CLI resource read 获得读取权。
 
@@ -174,7 +174,7 @@ asset.references 的 assetId 分支查询全部版本；assetVersion 分支保�
 
 asset.delete 以逻辑 assetId 为整个删除单位，删除全部资产版本，不接收单个 assetVersion 作为目标。expectedCurrentVersion 必须等于提交时当前版本；任一版本被使用则整笔返回 ASSET_REFERENCED，不级联删除引用者。引用表覆盖固定版本、草稿、运行/调用帧、模板暂存/提交、活动观察基线、查询快照、导出、备份/恢复、作业和有效资源句柄。判断基于逻辑版本关系，不以另一资产复用相同 blob 判定本资产仍被使用。可读取引用者分页返回名称和版本；不可读取引用只返回合计 hiddenReferences，不泄露其身份或内容。totalReferences 统计全部使用引用，空可见页不表示可删除。
 
-删除事务比较当前版本、复查引用与访问权、删除索引/版本关系/名称占用，并保存请求回执及逻辑删除墓碑；内容按全局强引用归零后的延迟回收处理。success 仅表示逻辑删除已提交，不承诺所有副本或备份字节已物理抹除。重复同请求返回原回执；新请求引用已删对象返回 ASSET_NOT_FOUND。提交前新增引用使删除拒绝，提交后的新引用注册必须拒绝已删版本。
+删除事务比较当前版本、复查引用与访问权、删除索引/版本关系/名称占用，并保存请求回执及逻辑删除墓碑；内容按全局强引用归零后的延迟回收处理。success 在删除索引、版本关系与名称占用的事务提交后返回；内容文件在全局强引用归零后回收，备份按备份保留规则管理。重复同请求返回原回执；新请求引用已删对象返回 ASSET_NOT_FOUND。提交前新增引用使删除拒绝，提交后的新引用注册必须拒绝已删版本。
 
 settings 使用[设置契约](../../contracts/settings.schema.json)及[配置规则](../operations/configuration.md)。整批 CAS 在外部资源准备后重新比较本层和合并基础版本；SETTINGS_CONFLICT 返回本层与基础实际版本，不返回秘密或静默改写客户端编辑。作用域不允许、重复键和跨键条件错误为 INVALID_ARGUMENT。所有字段错误指向具体键与对应业务名称。
 

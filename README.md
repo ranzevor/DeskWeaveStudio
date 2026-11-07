@@ -14,7 +14,7 @@
 
 **织序工作台 · 可视化桌面自动化**
 
-DeskWeaveStudio 用于录制桌面操作、编排流程、定位屏幕目标和调试任务。流程以公开的 JSON 格式保存，通过桌面工作台、命令行与 MCP 客户端使用。
+DeskWeaveStudio 聚焦全显示屏跨屏录制、连续轨迹还原、图像定位和流程编排，让桌面操作成为可编辑、可调试、可复用的流程。工作台、命令行与 MCP 客户端使用同一份流程与资产。
 
 [English](README.en.md) · [文档导航](docs/README.md) · [界面原型](#界面原型) · [路线图](ROADMAP.md) · [参与开发](CONTRIBUTING.md)
 
