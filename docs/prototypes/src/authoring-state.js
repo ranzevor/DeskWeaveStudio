@@ -7,7 +7,8 @@ const runtime={
  waitForResult:()=>new Promise(resolve=>setTimeout(resolve,1500)),
  readEditResult:async op=>({operationId:op.id,version:op.version,state:op.state,result:clone(op.result),error:op.error}),
  waitForContentCommit:()=>new Promise(resolve=>setTimeout(resolve,300)),
- readContentResult:async request=>({requestId:request.id,ok:!request.error,result:clone(request.result),error:request.error}),
+ readContentResult:async request=>contentReply(request),
+ replayContentSave:(c,submission)=>replayContentSave(c,submission),
  readContentStatus:async request=>({requestId:request.id,state:request.state,operationId:null,result:clone(request.result)})
 };
 function stamp(seconds=300){const n=now();return{snapshotId:'query-'+(++A.sequence),snapshotAt:utc(n),expiresAt:utc(n+seconds*1000)};}
@@ -116,7 +117,7 @@ const contentSaved=c=>!!c.result&&c.result.draftVersion===c.draftVersion;
 async function startContent(c=contentSession()){
  if(contentPending(c))throw Error('请先查询本次保存结果。');
  const sequence=c.sequence=(c.sequence||0)+1;
- c.offset=0;c.parts=[];c.ref=null;c.result=null;c.requestId=null;c.requestSettled=false;c.stage='uploading';c.error='';c.expiresAt=now()+60000;c.fixedDraftVersion=c.draftVersion;c.message='正在保存当前草稿。';
+ c.offset=0;c.parts=[];c.ref=null;c.result=null;c.requestId=null;c.requestSettled=false;c.recoverable=false;c.stage='uploading';c.error='';c.expiresAt=now()+60000;c.fixedDraftVersion=c.draftVersion;c.message='正在保存当前草稿。';
  const digest=await hash(c.raw);if(c.sequence!==sequence)throw Error('本次保存已取消。');c.digest=digest;
 }
 async function writeChunk({offset=contentSession().offset,chunk=null}={},c=contentSession()){const sequence=c.sequence;if(c.stage!=='uploading'||now()>=c.expiresAt)throw Error('内容传输已到期，请重新保存。');const data=chunk||c.raw.slice(offset,offset+196608);const old=c.parts.find(p=>p.offset===offset),digest=await hash(data);if(c.sequence!==sequence||c.stage!=='uploading')throw Error('本次保存已取消。');if(old){if(old.sha256!==digest)throw Error('已接收的内容发生变化，请重新保存。');return{uploadId:'workflow-upload',nextOffset:c.offset,replayed:true};}if(offset!==c.offset||data.length===0||data.length>196608||offset+data.length>c.raw.length)throw Error('保存数据的顺序或长度不正确。');c.parts.push({offset,sha256:digest,data:[...data]});c.offset+=data.length;c.message='内容传输 '+Math.round(c.offset/c.raw.length*100)+'%。';return{uploadId:'workflow-upload',nextOffset:c.offset,replayed:false};}
@@ -129,23 +130,34 @@ function checkContentVersion(c){
 async function executeContentSave(c,request){
  try{
   await runtime.waitForContentCommit(request);
-  if(c.service.headRevision!==request.params.baseRevision){request.error={code:'VERSION_CONFLICT',message:'流程版本已变化，请核对当前版本。'};request.state='notReceived';return;}
+  if(c.service.headRevision!==request.params.baseRevision){request.error={code:'REVISION_CONFLICT',message:'流程版本已变化，请核对当前版本。',retry:'afterQuery'};request.state='notReceived';return;}
   const revision=request.params.baseRevision===null?'1':String(Number(request.params.baseRevision)+1);
   request.result={workflowId:request.params.workflowId,revision,draftVersion:request.params.draftVersion,definitionHash:request.definitionHash};
   c.service.headRevision=revision;c.service.committed++;request.state='finished';
- }catch{request.error={code:'SAVE_FAILED',message:'流程版本保存失败，当前草稿已保留。'};request.state='notReceived';}
+ }catch{request.error={code:'STORAGE_UNAVAILABLE',message:'工作空间存储不可用，请检查目录访问和剩余空间。',retry:'afterQuery'};request.state='notReceived';}
+}
+function contentReply(request){return{requestId:request.id,ok:!request.error,result:clone(request.result),error:clone(request.error)};}
+async function replayContentSave(c,submission){
+ const request=c.service.requests[submission.requestId];
+ if(!request||canonical(submission.params)!==canonical(request.params))return{requestId:submission.requestId,ok:false,result:null,error:{code:'REQUEST_CONFLICT',message:'本次保存参数与原请求不一致，请查询原保存结果。',retry:'afterQuery'}};
+ if(request.state==='accepted')await request.done;
+ else if(request.state!=='finished'){
+  if(now()>=request.refExpiresAt){request.error={code:'RESOURCE_NOT_FOUND',message:'保存内容已过期，请重新保存当前草稿。',retry:'never'};}
+  else{request.state='accepted';request.error=null;request.attempts++;request.done=executeContentSave(c,request);await request.done;}
+ }
+ return contentReply(request);
 }
 function applyContentResult(c,request,result){
  if(!result||result.workflowId!==request.params.workflowId||result.draftVersion!==request.params.draftVersion||result.definitionHash!==request.definitionHash||typeof result.revision!=='string'||!result.revision)throw Error('保存结果与本次编辑不一致。');
- c.result=clone(result);c.requestSettled=true;c.saving=false;c.error='';c.currentRevision=result.revision;c.baseRevision=result.revision;
+ c.result=clone(result);c.requestSettled=true;c.recoverable=false;c.saving=false;c.error='';c.currentRevision=result.revision;c.baseRevision=result.revision;
  c.stage=contentSaved(c)?'saved':'draft';
  c.message='流程版本 '+result.revision+' 已保存。'+(contentSaved(c)?'':'当前草稿还有未保存的修改。');
 }
-async function readContentReceipt(c,request,query=false){
+async function readContentReceipt(c,request,query=false,readResult=runtime.readContentResult){
  const read=c.readSequence=(c.readSequence||0)+1;
  const current=()=>contentCurrent(c)&&c.requestId===request.id&&c.readSequence===read&&!c.requestSettled;
  try{
-  const value=await(query?runtime.readContentStatus(request):runtime.readContentResult(request));
+  const value=await(query?runtime.readContentStatus(request):readResult(request));
   if(!current())return null;
   if(value.requestId!==request.id)throw Error('保存结果不属于当前请求。');
   c.lastReceipt=clone(value);
@@ -153,15 +165,17 @@ async function readContentReceipt(c,request,query=false){
    if(value.state==='finished')applyContentResult(c,request,value.result);
    else{
     if(!['accepted','notReceived','uncertain'].includes(value.state))throw Error('保存结果状态无效。');
-    c.stage='uncertain';c.saving=false;c.error='';
-    c.message=value.state==='accepted'?'流程版本正在保存，请继续查询结果。':'尚未取得本次保存结果，请继续查询。';
+    c.stage='uncertain';c.saving=false;c.error='';c.recoverable=value.state==='notReceived';
+    c.message=c.recoverable?'尚未查到保存结果，可恢复本次保存。':value.state==='accepted'?'流程版本正在保存，请继续查询结果。':'尚未取得本次保存结果，请继续查询。';
    }
   }else if(value.ok)applyContentResult(c,request,value.result);
   else{
    if(!value.error)throw Error('保存结果缺少错误原因。');
-   c.requestSettled=true;c.saving=false;c.message='';c.error=value.error.message;
-   c.stage=value.error.code==='VERSION_CONFLICT'?'conflict':'failed';
-   if(c.stage==='conflict')c.currentRevision=c.service.headRevision;
+   c.saving=false;c.error=value.error.message;
+   if(['REVISION_CONFLICT','STORAGE_UNAVAILABLE','RESOURCE_NOT_FOUND'].includes(value.error.code)){
+    c.requestSettled=true;c.recoverable=false;c.message='';c.stage=value.error.code==='REVISION_CONFLICT'?'conflict':'failed';
+    if(c.stage==='conflict')c.currentRevision=c.service.headRevision;
+   }else{c.stage='uncertain';c.message='请查询本次保存结果。';}
   }
   return clone(value);
  }catch{
@@ -170,8 +184,18 @@ async function readContentReceipt(c,request,query=false){
  }
 }
 async function queryContent(c=contentSession()){
+ if(c.recovering)return c.recovery;
  const request=c.service?.requests[c.requestId];if(!request)throw Error('当前没有已提交的流程保存。');
  return readContentReceipt(c,request,true);
+}
+async function recoverContent(onProgress=()=>{},c=contentSession()){
+ if(c.recovering)return c.recovery;
+ if(!contentPending(c)||!c.recoverable)throw Error('请先查询本次保存结果。');
+ const request=c.service.requests[c.requestId],submission={requestId:c.requestId,params:clone(c.saveParams)};
+ c.recovering=true;c.saving=true;c.stage='recovering';c.error='';c.message='正在恢复本次保存结果。';onProgress();
+ c.recovery=readContentReceipt(c,request,false,()=>runtime.replayContentSave(c,submission));
+ try{return await c.recovery;}
+ finally{c.recovering=false;c.saving=false;onProgress();}
 }
 async function saveContent(c=contentSession(),onProgress=()=>{}){
  if(contentPending(c))return queryContent(c);
@@ -186,11 +210,11 @@ async function saveContent(c=contentSession(),onProgress=()=>{}){
  if(c.draftVersion!==c.fixedDraftVersion)throw Error('草稿已修改，请保存当前编辑内容。');
  c.saveParams={workflowId:c.model.definition.id,draftVersion:c.fixedDraftVersion,baseRevision:c.baseRevision,modelRef:clone(c.ref)};
  c.service??={headRevision:c.currentRevision,requests:{},committed:0};
- const request={id:'workflow-save-'+(++A.sequence),params:clone(c.saveParams),definitionHash,state:'accepted',result:null,error:null};
+ const request={id:'workflow-save-'+(++A.sequence),params:clone(c.saveParams),definitionHash,state:'accepted',result:null,error:null,attempts:1,refExpiresAt:c.refExpiresAt};
  c.service.requests[request.id]=request;c.requestId=request.id;c.requestSettled=false;c.stage='saving';c.saving=true;c.error='';c.message='正在保存流程版本。';
  request.done=executeContentSave(c,request);onProgress();
  await request.done;
- await readContentReceipt(c,request);
+ if(!c.recovering&&!c.requestSettled)await readContentReceipt(c,request);
  return clone(c.saveParams);
 }
 async function saveContentCopy(name,onProgress=()=>{}){
@@ -217,7 +241,7 @@ async function submitEdit(onProgress=()=>{}){
 }
 const previousReset=DS.resetForScreen;DS.resetForScreen=id=>{previousReset?.(id);seed(id);};
 async function cancelContent(onProgress=()=>{}){
- const c=contentSession();if(c.requestSettled&&c.result)return;
+ const c=contentSession();if(c.recovering)return c.recovery;if(c.requestSettled&&c.result)return;
  if(contentPending(c)){
   c.stage='uncertain';c.saving=false;c.message='正在查询本次保存结果。';onProgress();
   await queryContent(c);onProgress();return;
@@ -235,7 +259,7 @@ async function submitContent(onProgress=()=>{},c=contentSession()){
   if(!contentCurrent(c)||c.sequence!==sequence)return;
   await saveContent(c,onProgress);
  }catch(error){if(!contentCurrent(c)||c.sequence!==sequence)return;if(contentPending(c)){c.stage='uncertain';c.error='保存结果读取失败，请查询本次保存结果。';}else{if(c.stage!=='conflict')c.stage='failed';c.error=error.message;}c.message='';if(!c.isCopy)throw error;}
- finally{if(contentCurrent(c)&&c.sequence===sequence){c.saving=false;onProgress();}}
+ finally{if(contentCurrent(c)&&c.sequence===sequence){if(!c.recovering)c.saving=false;onProgress();}}
 }
-window.DW_AUTHORING={runtime,api:{seed,readVariables,variablesNext,readRevisions,readConnections,beginTest,finishTest,changeTest,testConnection,prepareEdit,commitEdit,finishEdit,cancelEdit,submitEdit,queryEdit,reviewEdit,resolveEdit,changeEditKind,startContent,writeChunk,sealContent,saveContent,saveContentCopy,contentSession,contentPending,queryContent,returnOriginalContent,openContentCopy,cancelContent,submitContent,readVariableResource,hash,canonical}};
+window.DW_AUTHORING={runtime,api:{seed,readVariables,variablesNext,readRevisions,readConnections,beginTest,finishTest,changeTest,testConnection,prepareEdit,commitEdit,finishEdit,cancelEdit,submitEdit,queryEdit,reviewEdit,resolveEdit,changeEditKind,startContent,writeChunk,sealContent,saveContent,saveContentCopy,contentSession,contentPending,queryContent,recoverContent,returnOriginalContent,openContentCopy,cancelContent,submitContent,readVariableResource,hash,canonical}};
 })();

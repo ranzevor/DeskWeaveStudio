@@ -60,6 +60,11 @@ def check_interaction_outputs(value, *, suite="all"):
         "service.schema.json#/$defs/workflow.save/properties/params", "service.schema.json#/$defs/workflow.save/properties/result",
         "service.schema.json#/$defs/request.status/properties/result",
     }
+    recovery_required = {
+        "service.schema.json#/$defs/workflow.save/properties/params",
+        "service.schema.json#/$defs/workflow.save/properties/result",
+        "service.schema.json#/$defs/request.status/properties/result", "message.schema.json",
+    }
     authoring_required = {
         "inspection.schema.json#/$defs/variablesPage", "inspection.schema.json#/$defs/revisionPage", "inspection.schema.json#/$defs/connectionPage",
         "authoring.schema.json#/$defs/draftTestResult", "authoring.schema.json#/$defs/editPlan", "authoring.schema.json#/$defs/editResult",
@@ -70,7 +75,7 @@ def check_interaction_outputs(value, *, suite="all"):
     query_required = {'query.schema.json#/$defs/readParams', 'query.schema.json#/$defs/page', 'query.schema.json#/$defs/closeParams', 'query.schema.json#/$defs/closeResult'}
     recording_required = {"recording.schema.json#/$defs/topology", "recording.schema.json#/$defs/source", "service.schema.json#/$defs/record.start/properties/params", "service.schema.json#/$defs/record.start/properties/result", "service.schema.json#/$defs/record.snapshot/properties/result", "trajectory.schema.json", "recording.schema.json#/$defs/displayMapping"}
     platform_required = {"platform.schema.json#/$defs/capabilities", "recording.schema.json#/$defs/displayMapping", "trajectory.schema.json"}
-    required = {"completion": completion_required, "content": content_required, "authoring": authoring_required, "recording": recording_required, "query": query_required, "platform": platform_required}.get(suite, completion_required | authoring_required | recording_required | query_required | platform_required)
+    required = {"completion": completion_required, "content": content_required, "content-recovery": recovery_required, "authoring": authoring_required, "recording": recording_required, "query": query_required, "platform": platform_required}.get(suite, completion_required | authoring_required | recovery_required | recording_required | query_required | platform_required)
     assert {row["schema"] for row in outputs} == required, "原型实际输出未覆盖要求的契约"
     assert outputs and len({row["name"] for row in outputs}) == len(outputs), "缺少独立契约输出或输出身份重复"
     for output in outputs:
@@ -127,7 +132,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--interactions-only", action="store_true")
     parser.add_argument("--check-only", action="store_true", help="检查全部页面和交互，不生成截图")
-    parser.add_argument("--interaction-suite", choices=("all", "baseline", "completion", "authoring", "content", "recording", "query", "platform"), default="all")
+    parser.add_argument("--interaction-suite", choices=("all", "baseline", "completion", "authoring", "content", "content-recovery", "recording", "query", "platform"), default="all")
     parser.add_argument("--group", help="只预览指定任务组")
     parser.add_argument("--ids", help="逗号分隔的界面 ID，可与 --group 一起筛选")
     parser.add_argument("--skip-interactions", action="store_true", help="截图后不运行交互检查")
@@ -208,7 +213,7 @@ def main():
             assert value["count"] == len(expected_ids)
             print(f"{group['name']}：{value['count']} 个界面", flush=True)
         if not skip_interactions:
-            suites = ["prototype_interactions.js", "prototype_completion_interactions.js", "prototype_authoring_interactions.js", "prototype_recording_interactions.js", "prototype_query_interactions.js", "prototype_platform_interactions.js"] if args.interaction_suite == "all" else [{"baseline":"prototype_interactions.js", "completion":"prototype_completion_interactions.js", "authoring":"prototype_authoring_interactions.js", "content":"prototype_authoring_interactions.js", "recording":"prototype_recording_interactions.js", "query":"prototype_query_interactions.js", "platform":"prototype_platform_interactions.js"}[args.interaction_suite]]
+            suites = ["prototype_interactions.js", "prototype_completion_interactions.js", "prototype_authoring_interactions.js", "prototype_content_recovery_interactions.js", "prototype_recording_interactions.js", "prototype_query_interactions.js", "prototype_platform_interactions.js"] if args.interaction_suite == "all" else [{"baseline":"prototype_interactions.js", "completion":"prototype_completion_interactions.js", "authoring":"prototype_authoring_interactions.js", "content":"prototype_authoring_interactions.js", "content-recovery":"prototype_content_recovery_interactions.js", "recording":"prototype_recording_interactions.js", "query":"prototype_query_interactions.js", "platform":"prototype_platform_interactions.js"}[args.interaction_suite]]
             if args.interaction_suite == "content":
                 command("eval", "window.DW_INTERACTION_OPTIONS={scope:'content'}")
             checks = []
@@ -217,7 +222,7 @@ def main():
                 value = json.loads(interaction["result"]) if isinstance(interaction["result"], str) else interaction["result"]
                 assert value["checks"] and all(row["result"] == "pass" and row["name"] for row in value["checks"])
                 if suite != "prototype_interactions.js":
-                    check_interaction_outputs(value, suite="content" if args.interaction_suite == "content" else "platform" if suite == "prototype_platform_interactions.js" else "query" if suite == "prototype_query_interactions.js" else "recording" if suite == "prototype_recording_interactions.js" else "authoring" if suite == "prototype_authoring_interactions.js" else "completion")
+                    check_interaction_outputs(value, suite="content-recovery" if suite == "prototype_content_recovery_interactions.js" else "content" if args.interaction_suite == "content" else "platform" if suite == "prototype_platform_interactions.js" else "query" if suite == "prototype_query_interactions.js" else "recording" if suite == "prototype_recording_interactions.js" else "authoring" if suite == "prototype_authoring_interactions.js" else "completion")
                 checks.extend(value["checks"])
             assert len({row["name"] for row in checks}) == len(checks), "交互检查名称重复"
             print(f"原型交互：{len(checks)} 项通过", flush=True)
