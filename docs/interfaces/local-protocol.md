@@ -28,6 +28,8 @@ Engine、Agent 与 Tauri Host 分别验证自己的调用边界。Engine 授予�
 
 控制帧为 4 字节小端无符号长度，再跟随该长度的 UTF-8 JSON，最大 1MiB。接收端在解析前限制长度，JSON 解析深度最多 64 层，拒绝重复键、非有限数和不合法 UTF-8，支持分片和多帧连续读取；中途 EOF 作为传输失败，不解析半份对象。
 
+请求参数、响应结果、错误详情、事件载荷及结果查询使用通用 JSON 定义；对象字段数、数组成员数和文本字符数由对应字段的 Schema 校验，字节预算按完整消息和方法参数、结果分别执行。流程 resources 最多 10,000 项；帧预算内的资源数量超限由 workflow.validate 返回 /resources 字段诊断。Value 数据的对象和数组限额适用于表达式、变量等值字段，其他结构使用各自契约。
+
 控制、事件和资源连接独立。二进制资源经受控句柄、范围和摘要读取，单块上限 4MiB；不把任意路径交给 WebView。单个请求最多 32MiB 输入，超出时使用分块作业。
 
 Engine 消息结构见 [message.schema.json](../../contracts/message.schema.json)，请求的方法与参数同时受 [service.schema.json](../../contracts/service.schema.json) 约束。成功响应按原请求方法的 result 校验；响应本身不携带可重新选择方法的字段。动作负载再按对应参数 Schema 校验。
@@ -47,7 +49,7 @@ Engine 消息结构见 [message.schema.json](../../contracts/message.schema.json
 }
 ```
 
-请求 deadlineMs 是接收端从准入开始计算的相对预算，不依赖客户端墙钟一致。返回响应分为 ok=true 的 result 和 ok=false 的 error；长作业先返回 operationId，运行先返回 runId 和 accepted 状态。
+请求 deadlineMs 是接收端从准入开始计算的相对预算，不依赖客户端墙钟一致；覆盖处理、结果校验和完整响应编码，超时返回 DEADLINE_EXCEEDED。完整响应超过 1MiB 时返回 LIMIT_EXCEEDED 错误信封。返回响应分为 ok=true 的 result 和 ok=false 的 error；长作业先返回 operationId，运行先返回 runId 和 accepted 状态。
 
 ## 应用命令
 
@@ -55,10 +57,10 @@ Engine 消息结构见 [message.schema.json](../../contracts/message.schema.json
 |---|---|---|
 | workspace.open | 原生选择器授予的目录能力 | 工作空间身份、格式和权限 |
 | workspace.catalog | kind、nameContains、states、order、cursor、pageSize | 固定查询中的授权对象与下一游标 |
-| query.read / query.close | 集合、类型、筛选、排序、游标、每页数量 / snapshotId | 类型化分页结果 / 查询快照释放 |
+| query.read / query.close | 集合、类型、筛选、排序、游标、每页数量 / snapshotId 或 collectionId | 类型化分页结果 / 快照或诊断集合释放 |
 | workspace.backup/restore | 导出位置或备份来源及新目录能力 | 可取消作业 |
 | workflow.read | workflowId、revision | 定义、依赖映射和摘要 |
-| workflow.validate | 定义或固定版本 | 字段/图/资源诊断 |
+| workflow.validate | 定义对象或固定版本；格式非法的定义进入诊断流程 | 字段/图/资源诊断 |
 | workflow.save | draftVersion、baseRevision、定义 | 已提交版本和确认代次 |
 | workflow.export | workflowId、revision、outputGrant | 导出作业和包清单 |
 | run.start | revision、参数、目标绑定、预算 | runId、接收状态 |
@@ -106,13 +108,13 @@ event.subscribe 返回订阅身份、epoch 和序号 S 的一致运行快照，�
 
 ## 错误与兼容
 
-错误包含 code、message、retry、details；retry 为 never、sameRequest 或 afterQuery。字段错误附 nodeId、fieldPath 与用户可读名称，堆栈只进入诊断。
+错误包含 code、message、retry、details；retry 为 never、sameRequest 或 afterQuery。字段位置 fieldPath 使用完整 RFC 6901 JSON Pointer，空字符串表示文档根，/ 表示名称为空的属性；对象键中的 ~ 和 / 分别编码为 ~0 和 ~1。消费端保留原路径并按 ~1、~0 的顺序解码，定位时根据实际容器区分对象键和数组下标。可可靠归属节点时附 nodeId；用户界面显示对应名称与处理入口，堆栈只进入诊断。
 
 核心错误码：INVALID_ARGUMENT、SCHEMA_UNSUPPORTED、REVISION_CONFLICT、REQUEST_CONFLICT、RESOURCE_DENIED、TARGET_LOST、DESKTOP_BUSY、LEASE_EXPIRED、INPUT_RELEASE_FAILED、INPUT_TIMING_OVERRUN、EFFECT_UNCERTAIN、LIMIT_EXCEEDED、STORAGE_UNAVAILABLE、NAME_CONFLICT、CURSOR_EXPIRED、PROCESS_INTERRUPTED、CREDENTIAL_UNAVAILABLE、CANCELLED。
 
 NAME_CONFLICT 指明当前名称占用；CURSOR_EXPIRED 要求以原筛选重新建立查询；PROCESS_INTERRUPTED 保留原作业与效果记录，不提示直接重放；CREDENTIAL_UNAVAILABLE 区分凭据已撤销或无法读取，不能以重输业务参数代替连接处理。
 
-普通分页查询快照默认有效 5 分钟，每个 Engine 最多保留 32 个快照，全部快照成员合计最多 100 万项；运行明细等更短期限及客户端限额见[分页查询](pagination.md)。游标绑定认证工作空间、查询条件与快照；到期或容量回收后返回 CURSOR_EXPIRED，不从游标猜测新分页位置。新查询取得新快照，结果更新时间不能被当成原快照的继续。
+普通分页查询快照默认有效 5 分钟，每个 Engine 最多保留 32 个快照，实际登记的游标位置合计最多 100 万条，关闭或过期后释放；运行明细等更短期限及客户端限额见[分页查询](pagination.md)。游标绑定认证工作空间、查询条件与快照；到期或容量回收后返回 CURSOR_EXPIRED，不从游标猜测新分页位置。新查询取得新快照，结果更新时间不能被当成原快照的继续。
 
 未知执行字段拒绝；extensions 中的命名空间内容可保留。新增非必需事件字段可忽略，未知事件类型触发能力协商或快照，不伪造成功状态。
 
@@ -194,8 +196,10 @@ workflow.revisions、connection.list、debug.variables.read 分别提供版本�
 
 expression.preview 属于可信本地编辑方法，沿用当前编辑会话的 workflow.read 权限。参数 value 使用公共 Value AST；context 只接收 inputs、vars、run、prev、calls、runtime 六个可选 JSON 根；expectedType 为 any、null、boolean、number、string、array 或 object，缺省 any。context 缺省空对象，缺少根或路径按同一求值器的缺失值规则处理，不补入真实运行变量。
 
-Engine 使用流程运行的领域求值器，单次仅计算所传合成数据，不创建运行、持有租约、读工作空间对象或调用外部连接。成功返回 value；缺失路径、除零或类型不匹配返回 INVALID_ARGUMENT，details 定位表达式位置和具体原因；超预算返回 LIMIT_EXCEEDED。布尔字段使用 expectedType=boolean，不将数字、字符串或 null 转换为布尔值。
+Engine 使用流程运行的领域求值器，单次仅计算所传合成数据，不创建运行、持有租约、读工作空间对象或调用外部连接。成功返回 value；缺失路径、除零或类型不匹配返回 INVALID_ARGUMENT。details.expressionPath 是相对 value 的字段路径段数组，字符串表示对象键、整数表示数组下标，空数组表示 value 根；details.reason 分别为 PATH_MISSING、DIVISION_BY_ZERO 或 TYPE_MISMATCH。数值范围、AST 深度及运算节点超限返回 LIMIT_EXCEEDED，reason 分别为 NUMERIC_RANGE、AST_DEPTH、AST_NODES，并携带同样的位置字段。请求时间耗尽返回 DEADLINE_EXCEEDED。布尔字段使用 expectedType=boolean，不将数字、字符串或 null 转换为布尔值。
 
-完整参数与成功结果各不超过 256KiB UTF-8，仍受 1MiB 控制信封限制；AST 使用共同的 256 运算节点、32 层嵌套上限，执行预算取 deadlineMs 与 1 秒的较小值。每客户端最多一个在途预览；新编辑取消旧等待，服务收拢原计算，前端按编辑代次丢弃迟到回复。超限直接返回具体错误，不裁剪值、抽样数组或返回部分运算结果。
+完整参数与成功结果各不超过 256KiB UTF-8，Schema 中以 x-maxUtf8Bytes 声明，由分发器统一执行。参数按补默认值前的 params、结果按包含 value 字段的完整 result 计数，均使用 RFC 8785 规范编码后的实际字节；超限返回 LIMIT_EXCEEDED。完整消息仍受 1MiB 控制信封限制；AST 使用共同的 256 运算节点、32 层嵌套上限，执行预算取 deadlineMs 与 1 秒的较小值。每客户端最多一个在途预览；新编辑取消旧等待，服务收拢原计算，前端按编辑代次丢弃迟到回复。超限直接返回具体错误，不裁剪值、抽样数组或返回部分运算结果。
+
+计算错误详情见 [expressionErrorDetails](../../contracts/values.schema.json)；请求结构错误使用 INVALID_ARGUMENT 和 details.fieldPath 定位参数。客户端按 reason 处理计算错误，按 expressionPath 定位字段，message 用于显示具体原因。coalesce 只处理内部的缺失路径，不吞掉除零、类型或预算错误。
 
 该方法与草稿共用本地编辑入口；MCP 的 workflow.validate、run.prepare 和 run.start 调用同一领域校验与执行逻辑。入口分工及处理器约束见[共享应用服务](../architecture/shared-services.md)。

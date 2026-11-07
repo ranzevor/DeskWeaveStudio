@@ -201,7 +201,8 @@
               "type": "object",
               "properties": {
                 "definition": {
-                  "$ref": "urn:deskweave:workflow:1"
+                  "type": "object",
+                  "maxProperties": 1000
                 }
               },
               "required": [
@@ -1978,7 +1979,7 @@
               ]
             },
             "result": {
-              "$ref": "urn:deskweave:values:1#/$defs/raw"
+              "$ref": "urn:deskweave:message:1#/$defs/jsonValue"
             }
           },
           "required": [
@@ -2804,7 +2805,8 @@
             "snapshotAt",
             "expiresAt"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [
@@ -4829,7 +4831,7 @@
               "pattern": "^[0-9]+$"
             },
             "snapshot": {
-              "$ref": "urn:deskweave:values:1#/$defs/raw"
+              "$ref": "urn:deskweave:message:1#/$defs/jsonValue"
             },
             "scope": {
               "enum": [
@@ -5697,7 +5699,8 @@
           "$ref": "urn:deskweave:inspection:1#/$defs/revisionParams"
         },
         "result": {
-          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage"
+          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage",
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [
@@ -6158,7 +6161,8 @@
           ]
         },
         "result": {
-          "$ref": "urn:deskweave:query:1#/$defs/page"
+          "$ref": "urn:deskweave:query:1#/$defs/page",
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [
@@ -6174,18 +6178,7 @@
           "const": "query.close"
         },
         "params": {
-          "type": "object",
-          "properties": {
-            "snapshotId": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "snapshotId"
-          ],
-          "additionalProperties": false
+          "$ref": "urn:deskweave:query:1#/$defs/closeParams"
         },
         "result": {
           "$ref": "urn:deskweave:query:1#/$defs/closeResult"
@@ -6250,7 +6243,8 @@
           "required": [
             "value"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         },
         "result": {
           "type": "object",
@@ -6262,7 +6256,8 @@
           "required": [
             "value"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         }
       },
       "required": [

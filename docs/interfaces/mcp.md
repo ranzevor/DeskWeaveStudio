@@ -88,7 +88,7 @@ deskweave_input 映射 input.submit，仅接收一个输入节点，target=main�
 
 ## 分页查询
 
-集合数据使用服务端筛选、稳定排序和游标续页。已有目录、候选、观察、引用、版本与变量查询默认每页 50 项，最多 100 项。运行调用、输入效果、诊断、命名、匹配候选、批次资产、导入对象与已安装语言通过 query.read 分页查询；query.close 释放查询快照。具体字段、来源权限、错误与容量见[分页查询](pagination.md)。
+集合数据使用服务端筛选、稳定排序和游标续页。已有目录、候选、观察、引用、版本与变量查询默认每页 50 项，最多 100 项。运行调用、输入效果、诊断、命名、匹配候选、批次资产、导入对象与已安装语言通过 query.read 分页查询；query.close 按 snapshotId 释放查询快照，或按 collectionId 释放诊断集合及其全部查询。具体字段、来源权限、错误与容量见[分页查询](pagination.md)。
 
 工具状态与作业回执只返回状态、数量和集合入口。operation.get、operation.cancel、request.status 及资源读取继续使用相同结构。tools/list、resources/list、resources/templates/list、prompts/list 每页 50 项，游标绑定授权与目录版本。
 

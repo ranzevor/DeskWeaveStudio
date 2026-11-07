@@ -1143,8 +1143,8 @@
     },
     {
       "name": "deskweave_query_close",
-      "title": "关闭查询快照",
-      "description": "释放当前客户端的只读查询快照；不删除来源对象。",
+      "title": "关闭查询",
+      "description": "按 snapshotId 释放当前客户端的查询快照，或按 collectionId 释放诊断集合及其查询；不删除流程和业务对象。",
       "method": "query.close",
       "permissions": [],
       "objectAuthorization": "检查集合来源的原方法权限、对象读取权、工作空间与实际客户端；集合身份不授予权限。",

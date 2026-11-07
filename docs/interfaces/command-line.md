@@ -137,4 +137,4 @@ mcp serve 使用本地已批准的 stdio 配置与一次性连接材料，标准
 
 ## 集合分页查询
 
-query read 使用 collectionId、kind、filter、order、cursor、pageSize 和 includeTotal，默认每页 50 项、最多 100 项。query close 使用 snapshotId 释放本客户端查询。目录、候选、观察、引用、版本与变量查询逐页返回，命令不会自动下载后续页面。完整参数与状态见[分页查询](pagination.md)。
+query read 使用 collectionId、kind、filter、order、cursor、pageSize 和 includeTotal，默认每页 50 项、最多 100 项。query close 使用 snapshotId 释放本客户端查询快照，或使用 collectionId 释放诊断集合及其全部查询；两个参数互斥。目录、候选、观察、引用、版本与变量查询逐页返回，命令不会自动下载后续页面。完整参数与状态见[分页查询](pagination.md)。

@@ -3542,5 +3542,107 @@
     "schema": "mcp.schema.json#/$defs/subscriptionAcknowledged",
     "semantic": "none",
     "expected": "schema-fail"
+  },
+  {
+    "file": "queries/close-collection.json",
+    "schema": "query.schema.json#/$defs/closeParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/close-both-targets.json",
+    "schema": "query.schema.json#/$defs/closeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/close-no-target.json",
+    "schema": "query.schema.json#/$defs/closeParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/validate-incomplete.json",
+    "schema": "service.schema.json#/$defs/workflow.validate/properties/params",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/validate-non-object.json",
+    "schema": "service.schema.json#/$defs/workflow.validate/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/validate-both-sources.json",
+    "schema": "service.schema.json#/$defs/workflow.validate/properties/params",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/expression-missing-path.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-division.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-type.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-key-path.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/expression-unknown-reason.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/expression-invalid-path.json",
+    "schema": "values.schema.json#/$defs/expressionErrorDetails",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "queries/node-structural-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/workflow-structural-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/long-field-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/root-field-diagnostic.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "queries/invalid-field-pointer.json",
+    "schema": "query.schema.json#/$defs/diagnosticsItem",
+    "semantic": "none",
+    "expected": "schema-fail"
   }
 ]

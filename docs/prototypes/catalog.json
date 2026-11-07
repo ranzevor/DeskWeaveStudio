@@ -9971,7 +9971,8 @@
             "snapshotAt",
             "expiresAt"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-maxUtf8Bytes": 262144
         }
       },
       {
@@ -10139,7 +10140,8 @@
               "type": "object",
               "properties": {
                 "definition": {
-                  "$ref": "urn:deskweave:workflow:1"
+                  "type": "object",
+                  "maxProperties": 1000
                 }
               },
               "required": [
@@ -13284,7 +13286,7 @@
               ]
             },
             "result": {
-              "$ref": "urn:deskweave:values:1#/$defs/raw"
+              "$ref": "urn:deskweave:message:1#/$defs/jsonValue"
             }
           },
           "required": [
@@ -13586,7 +13588,8 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage"
+          "$ref": "urn:deskweave:inspection:1#/$defs/revisionPage",
+          "x-maxUtf8Bytes": 262144
         }
       },
       {
@@ -14147,13 +14150,14 @@
           ]
         },
         "result": {
-          "$ref": "urn:deskweave:query:1#/$defs/page"
+          "$ref": "urn:deskweave:query:1#/$defs/page",
+          "x-maxUtf8Bytes": 262144
         }
       },
       {
         "name": "deskweave_query_close",
-        "title": "关闭查询快照",
-        "description": "释放当前客户端的只读查询快照；不删除来源对象。",
+        "title": "关闭查询",
+        "description": "按 snapshotId 释放当前客户端的查询快照，或按 collectionId 释放诊断集合及其查询；不删除流程和业务对象。",
         "method": "query.close",
         "permissions": [],
         "objectAuthorization": "检查集合来源的原方法权限、对象读取权、工作空间与实际客户端；集合身份不授予权限。",
@@ -14176,12 +14180,26 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 256
+            },
+            "collectionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
             }
           },
-          "required": [
-            "snapshotId"
-          ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "snapshotId"
+              ]
+            },
+            {
+              "required": [
+                "collectionId"
+              ]
+            }
+          ]
         },
         "result": {
           "$ref": "urn:deskweave:query:1#/$defs/closeResult"

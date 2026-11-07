@@ -2,7 +2,7 @@
 
 ## 当前工作入口
 
-当前仓库提供设计、契约、示例和文档检查。应用组件按[架构目录](../architecture/system.md)和[路线图](../../ROADMAP.md)逐步创建。
+当前已实现的 Python 服务库位于 `python/deskweave`，安装、方法范围和测试入口见[Engine 开发](engine.md)。组件按[架构目录](../architecture/system.md)和[路线图](../../ROADMAP.md)推进。
 
 文档检查使用 Python 3.12 或更高版本。在仓库根目录创建独立环境后安装固定依赖：
 

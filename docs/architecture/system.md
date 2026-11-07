@@ -50,7 +50,7 @@ Engine 单实例键包含用户、工作空间规范路径、实际目录对象�
 
 应用功能依赖领域服务，领域服务依赖存储、桌面和模型端口。Windows、macOS、X11/Wayland、SQLite、OpenCV 和模型 SDK 仅出现在适配器层。UI、测试替身和 MCP 使用同一命令服务。
 
-计划代码目录：
+组件代码目录：
 
 ```text
 apps/studio/                 React 与 Tauri 宿主
@@ -72,7 +72,7 @@ contracts/                  公共格式和动作目录
 tests/                      合同、集成和安装测试
 ```
 
-目录在组件开始实现时创建；当前可执行资料见[文档导航](../README.md)。
+目录在组件开始实现时创建；当前共享服务库及开发入口见[Engine 开发](../development/engine.md)。
 
 ## 核心不变量
 

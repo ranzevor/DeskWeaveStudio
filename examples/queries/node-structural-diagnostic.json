@@ -1,0 +1,6 @@
+{
+  "code": "WORKFLOW_SCHEMA",
+  "message": "字段不符合流程格式。",
+  "nodeId": "assign",
+  "fieldPath": "/nodes/0/params/durationMs"
+}

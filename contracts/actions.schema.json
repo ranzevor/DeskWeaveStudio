@@ -7,8 +7,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -100,8 +99,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -213,8 +211,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -316,8 +313,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -410,8 +406,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -496,8 +491,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -614,8 +608,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -720,8 +713,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -779,8 +771,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -867,8 +858,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -1058,8 +1048,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -1220,8 +1209,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -1512,8 +1500,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -1665,8 +1652,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -2005,8 +1991,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -2500,8 +2485,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -2625,8 +2609,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -2713,8 +2696,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -2790,8 +2772,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -2867,8 +2848,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -2990,8 +2970,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -3070,8 +3049,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -3193,8 +3171,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -3250,8 +3227,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",
@@ -3307,8 +3283,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          "$ref": "urn:deskweave:workflow:1#/$defs/nodeId"
         },
         "title": {
           "type": "string",

@@ -18,7 +18,7 @@
 | observation | id 主键、operation_id 唯一；(checked_at, id)、(session_id, checked_at, id)、(state, checked_at, id) 支持过滤和稳定排序 |
 | observation_session | id 主键；(state, deadline_at) 查待收尾会话；连接引用使用 (connection_id, connection_version) 外键 |
 | query_snapshot | id 主键；按 owner_client_id/expires_at 查找和释放；filter_hash、sort_order 创建后不变 |
-| query_snapshot_member | (snapshot_id, ordinal) 唯一，(snapshot_id, record_id) 唯一；固定完整记录摘要及所需附件引用 |
+| query_cursor | (snapshot_id, position) 唯一；position 为最后实际返回的排序键，查询引用固定来源索引版本 |
 | model_connection_version | (connection_id, version) 唯一且不可变；当前头通过外键引用已完成准备的版本 |
 | credential_binding | ref 唯一；保存工作空间绑定、generation、state 和配置意图，材料不进入数据库 |
 | connection_change | request_key 唯一；保存 expected_head、新版本、材料引用和 phase，供本地事务收尾 |
@@ -130,13 +130,13 @@ succeeded、failed、cancelled 是已核定终态。uncertain 表示实际效果
 
 ## 查询快照、删除与保留
 
-查询使用 checked_at 左闭右开的时间范围，排序为 (checked_at, id) 升序或降序。首次查询在一个有界数据库事务中确定筛选结果及次序，同时登记 query_snapshot、有序成员和对象引用，避免查询选中后、引用登记前被删除或回收。后续页面按 ordinal 读取，不跨请求保持 SQLite 读事务。
+查询使用 checked_at 左闭右开的时间范围，排序为 (checked_at, id) 升序或降序。首次查询在同一短事务中固定来源索引版本、筛选与排序，登记 query_snapshot 和版本根引用，并读取首屏。后续页面按最后返回的 checked_at、id 排序键继续读取，每页只取所需成员及一个后继项，不跨请求保持 SQLite 读事务。来源版本根保护该版本可见的记录和附件；筛选结果不逐项复制到各查询。
 
-快照绑定工作空间、认证客户端、筛选摘要、排序和创建时的成员集。游标只定位该快照内的位置，每次读取仍检查当前对象授权。默认 TTL 为 5 分钟，分页不续期；过期返回 CURSOR_EXPIRED，新查询创建新快照。每工作空间最多 32 个活动查询快照，全部快照成员合计最多 1,000,000 项，超限返回 LIMIT_EXCEEDED，不截断成看似完整的结果。
+快照绑定工作空间、认证客户端、筛选摘要、排序和创建时的成员集。游标只定位该快照内的位置，每次读取仍检查当前对象授权。默认 TTL 为 5 分钟，分页不续期；过期返回 CURSOR_EXPIRED，新查询创建新快照。每工作空间最多 32 个活动查询快照，实际游标位置合计最多 1,000,000 条，超限返回 LIMIT_EXCEEDED，不截断成看似完整的结果。
 
 快照、正在导出的固定记录集、备份和故障恢复分别使用 owner_kind/owner_id 的引用。成员在其快照有效期内保持原内容；新记录不插入旧分页。显式释放、到期、所有者会话结束或 Engine 重启后，释放查询引用。导出准入时单独固定其成员，不能依赖即将到期的浏览游标继续保留内容。
 
-逻辑删除先设置 deleted_at，使新查询不再选择该记录；旧快照和已准入导出继续读取其固定版本。物理删除等待所有强引用释放。截图清理只移除对应附件引用，保留实际采集事实和附件清理状态，不能把资源 URI 改为另一张图。
+逻辑删除在新索引版本设置 deleted_at，使新查询不再选择该记录；旧快照和已准入导出继续读取其固定版本，记录在该版本区间内的内容和附件关系保持。物理删除等待所有强引用释放。截图清理只移除对应附件引用，保留实际采集事实和附件清理状态，不能把资源 URI 改为另一张图。
 
 当前观察会话固定其最近成功基线特征及必要对象；历史记录中的 baselineRecordId 只保留来源关联，不无限延长全部历史截图寿命。记录 30 天与截图 2GiB 的用户确认策略分别计算；强引用导致暂时不能回收时显示实际占用，并在触及硬容量前停止新采集，不删除仍在使用的对象腾空。
 

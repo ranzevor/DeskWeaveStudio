@@ -3,7 +3,7 @@
 # DeskWeaveStudio
 
 [![Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-2563eb)](LICENSE)
-[![Design and prototype](https://img.shields.io/badge/Stage-Design%20%26%20Prototype-8b5cf6)](ROADMAP.md)
+[![Engine foundation](https://img.shields.io/badge/Stage-Engine%20Foundation-8b5cf6)](ROADMAP.md)
 [![Windows, macOS and Linux targets](https://img.shields.io/badge/Targets-Windows%20%7C%20macOS%20%7C%20Linux-475569)](docs/architecture/platforms.md)
 [![MCP 2026-07-28](https://img.shields.io/badge/MCP-2026--07--28-15803d)](docs/interfaces/mcp.md)
 
@@ -20,7 +20,18 @@ DeskWeaveStudio 用于录制桌面操作、编排流程、定位屏幕目标和�
 
 ## 当前状态
 
-项目处于系统设计与交互原型阶段。当前仓库提供产品需求、系统设计、可交互原型、高清效果图、JSON Schema、示例和检查工具。桌面应用、执行引擎、MCP 服务与安装包的实施安排见[路线图](ROADMAP.md)。
+项目进入执行核心开发阶段。Python 服务库已提供表达式预览、流程校验、内嵌流程版本保存与读取、目录及历史分页和原请求查询。系统设计、交互原型、高清效果图和公共契约随仓库提供。桌面应用、独立 Engine 进程、Rust Agent、MCP Bridge 与安装包按[路线图](ROADMAP.md)实施。
+
+## 执行核心
+
+使用 Python 3.12 和 uv 0.8.2：
+
+```bash
+uv sync --frozen
+uv run --frozen python examples/engine/workspace.py
+```
+
+示例在临时工作空间执行保存、读取、校验和表达式预览。方法范围和开发命令见[Engine 开发](docs/development/engine.md)。
 
 ## 界面原型
 

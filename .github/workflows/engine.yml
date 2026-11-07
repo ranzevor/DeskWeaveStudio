@@ -1,0 +1,57 @@
+name: Engine
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+  UV_DEFAULT_INDEX: https://pypi.org/simple
+
+jobs:
+  engine:
+    name: Engine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.8.2'
+          enable-cache: false
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Check Python code
+        run: uv run --locked ruff check python tests examples/engine
+      - name: Check Python formatting
+        run: uv run --locked ruff format --check python tests examples/engine
+      - name: Test Engine services
+        run: uv run --locked python -m unittest discover -s tests -q
+      - name: Run workspace example
+        run: uv run --locked python examples/engine/workspace.py
+      - name: Build Python packages
+        run: uv build
+      - name: Run installed wheel
+        run: >-
+          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'examples/engine/workspace.py'], check=True)"
+      - name: Test installed service contracts
+        run: >-
+          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', '-m', 'unittest', 'tests.engine.test_boundaries', '-q'], check=True)"

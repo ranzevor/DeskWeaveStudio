@@ -31,7 +31,7 @@
           "const": true
         },
         "result": {
-          "$ref": "urn:deskweave:values:1#/$defs/raw"
+          "$ref": "#/$defs/jsonValue"
         }
       },
       "required": [
@@ -83,7 +83,12 @@
             "details": {
               "type": "object",
               "additionalProperties": {
-                "$ref": "urn:deskweave:values:1#/$defs/raw"
+                "$ref": "#/$defs/jsonValue"
+              },
+              "properties": {
+                "fieldPath": {
+                  "$ref": "#/$defs/jsonPointer"
+                }
               }
             }
           },
@@ -140,7 +145,7 @@
         "payload": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "urn:deskweave:values:1#/$defs/raw"
+            "$ref": "#/$defs/jsonValue"
           }
         }
       },
@@ -212,7 +217,7 @@
         "params": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "urn:deskweave:values:1#/$defs/raw"
+            "$ref": "#/$defs/jsonValue"
           }
         }
       },
@@ -227,6 +232,29 @@
         "params"
       ],
       "additionalProperties": false
+    },
+    "jsonValue": {
+      "type": [
+        "null",
+        "boolean",
+        "number",
+        "string",
+        "array",
+        "object"
+      ],
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "items": {
+        "$ref": "#/$defs/jsonValue"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/jsonValue"
+      }
+    },
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^(?:/(?:[^~]|~[01])*)?(?![\\s\\S])",
+      "description": "RFC 6901 JSON Pointer；空字符串表示文档根。路径完整传递，长度受所在消息或查询页的字节预算约束。"
     }
   }
 }

@@ -21,7 +21,7 @@ workspace.json 保存格式版本、工作空间身份和创建信息，不保�
 | 表 | 主要字段及约束 |
 |---|---|
 | workflow | id、name、head_revision、archived_at |
-| revision | id、workflow_id、parent_id、definition_hash、dependency_manifest_hash、created_at |
+| revision | id、workflow_id、parent_id、definition_hash、dependency_manifest_hash、created_at、sequence、name_key、valid_until；目录版本有效区间与头版本同事务更新 |
 | draft | editor_id、workflow_id、owner_principal、base_revision、edit_version、source_hash、model_hash、model_edit_version、validation_state、diagnostics_hash、saved_at；editor_id+workflow_id 唯一 |
 | draft_tombstone | editor_id、workflow_id、discarded_version、request_key、discarded_at、retain_until；防止旧写入复活已放弃草稿 |
 | editor_layout | editor_id、workflow_id、layout_version、layout_hash、updated_at；包含节点位置、视口和折叠状态 |
@@ -43,8 +43,8 @@ workspace.json 保存格式版本、工作空间身份和创建信息，不保�
 | connection_change | request_key、connection_id、expected_head、new_version、credential_ref、phase；记录配置准备与收尾 |
 | observation_session | id、owner_client_id、owner_session_id、authorization_ref、detached、target_ref、target_generation、connection_id、connection_version、plan_hash、state、control_version、checked_count、active_operation_id、baseline_id、baseline_feature_hash、last_seq、started_at、deadline_at、stopped_at、reason |
 | observation | id、session_id、operation_id、run_id、connection_id、connection_version、checked_at、captured_at（可空）、completed_at、frame_id、frame_hash、state、skip_reason、difference（可空）、result_hash、duration_ms、usage_hash、baseline_id、deleted_at |
-| query_snapshot | id、owner_client_id、filter_hash、sort_order、created_at、expires_at；固定查询成员 |
-| query_snapshot_member | snapshot_id、ordinal、record_id、record_hash、frame_hash；snapshot_id+ordinal 唯一 |
+| query_snapshot | id、owner_client_id、authorization_version、source_version、filter_hash、sort_order、created_at、expires_at；固定索引版本与查询范围 |
+| query_cursor | token、snapshot_id、position；snapshot_id+position 唯一，position 为最后实际返回的排序键 |
 | template_candidate_set | id、source_ref_hash、source_hash、roi_hash、options_hash、candidate_manifest_hash、version、total、truncated_count、state、expires_at |
 | template_name_proposal | id、candidate_set_id、candidate_version、selection_hash、policy_hash、proposal_hash、items_hash、state、expires_at |
 | template_batch | id、proposal_id、manifest_hash、committed_at；proposal_id 唯一 |
@@ -125,7 +125,7 @@ asset.import.prepare 与 asset.import 的 image、trajectory、workflow 模式�
 
 候选集和命名预览是有期限的暂存对象，template_batch 与资产版本在同一事务登记。一个预览只能提交一次，重复请求读取原批次。资产名称在事务内按 NFC 归一化再次检查并占用唯一键；预览后的新增占用使原预览失效，不在提交时静默改名。过期或取消的暂存延迟回收，已登记资产不随候选集过期删除。
 
-观察记录以 checked_at、id 建立稳定查询次序，按 session_id/state 与相同排序键建立组合索引。captured_at 只记录实际采集，不能作为无采集检查的排序替代。分页使用有期限的物化成员快照，不跨请求持有 SQLite 读事务；截图与结果分别持有引用；持久化失败保留恢复对象并返回对应状态，不能创建没有实际内容的成功记录。
+观察记录以 checked_at、id 建立稳定查询次序，按 session_id/state 与相同排序键建立组合索引。captured_at 只记录实际采集，不能作为无采集检查的排序替代。分页固定有期限的记录索引版本，通过 checked_at、id 排序键继续读取；记录内容与删除状态使用版本区间，不为每个查询物化成员，不跨请求持有 SQLite 读事务；截图与结果分别持有引用；持久化失败保留恢复对象并返回对应状态，不能创建没有实际内容的成功记录。
 
 连接版本、运行共享状态及启动计划都使用内容摘要固定实际输入。新运行不读取另一运行的可变状态；令牌验证材料与模型凭据使用独立秘密存储，备份和导出按其实际权限处理。
 
@@ -144,11 +144,11 @@ pause_record 记录摘要和失效原因，原生事件游标只存在于存活 
 |---|---|
 | asset_usage | owner_kind、owner_id、asset_version、authorization_ref；前三项唯一，直接关联逻辑资产版本，创建/释放与所属对象同事务，不能仅以content_hash替代 |
 | asset_reference_snapshot | id、owner_client_id、asset_id、scope、asset_version、head_version、version_count、total_refs、hidden_refs、created_at、expires_at；固定一次查询范围与五分钟期限 |
-| asset_reference_snapshot_member | snapshot_id、ordinal、owner_kind、owner_id、asset_version、display_name；只保存允许读取的引用元数据，ordinal稳定分页，不新增资产内容使用pin |
+| asset_usage_version | owner_kind、owner_id、asset_version、display_name、valid_from、valid_until；共享引用元数据索引，各查询固定版本并按关系排序键续页，不新增资产内容使用 pin |
 | bridge_token_object | token_id、object_kind、object_id、state；前三项唯一，关联会话、订阅、直接许可和根运行；对外开放前登记，确认收拢后移除活动计数 |
 | bridge_token.impact_version | 对该令牌归属台账的注册、状态、删除及令牌状态变动递增；与对应变动同事务 |
 | token_impact_snapshot | id、owner_client_id、token_id、impact_version、token_state、counts、hidden_run_count、created_at、expires_at；固定最多60秒 |
-| token_impact_snapshot_member | snapshot_id、ordinal、run_id、display_name、state、control_version；固定允许读取的运行元数据，后续页重新检查读取权 |
+| token_impact_run_version | token_id、impact_version、run_id、display_name、state、control_version、valid_until；共享影响版本索引，按 run_id 续页，逐页检查读取权 |
 
 资产引用页按 (owner_kind, owner_id, asset_version) 排序和去重，total_refs 包含所有可见与不可见关系；version_count 是该逻辑资产当时全部版本数，单版本查询也返回同一资产的当前头。相同所有者引用两个版本是两条关系。全对象删除事务检查 asset_usage 全集合与当前头，不能把分页查询截断或不可见成员当成不存在。
 
@@ -156,8 +156,8 @@ pause_record 记录摘要和失效原因，原生事件游标只存在于存活 
 
 ## 制作与内容索引
 
-content_upload 保存创建者、用途、声明长度/摘要、连续偏移、块摘要、期限和封存状态；实际暂存容量有界。asset_edit 固定来源字节和目标头，asset_version 保存源摘要、派生元数据、实际图像尺寸或轨迹时长。variable_inspection 固定dataVersion、脱敏投影根及权限；revision_query与connection_query保存有期限元数据成员。阶段、资源及事务见[内容传输](../interfaces/content-transfer.md)、[制作事务](authoring-transactions.md)及[运行检查](runtime-inspection.md)。
+content_upload 保存创建者、用途、声明长度/摘要、连续偏移、块摘要、期限和封存状态；实际暂存容量有界。asset_edit 固定来源字节和目标头，asset_version 保存源摘要、派生元数据、实际图像尺寸或轨迹时长。variable_inspection 固定dataVersion、脱敏投影根及权限；revision_query 与 connection_query 固定版本上界、条件及期限，复用已有版本索引。阶段、资源及事务见[内容传输](../interfaces/content-transfer.md)、[制作事务](authoring-transactions.md)及[运行检查](runtime-inspection.md)。
 
 ## 查询索引
 
-result_collection 保存 collection_id、kind、来源对象、来源版本、版本根、所属客户端与期限；result_collection_row 使用 collection_id+ordinal 唯一，按类型记录状态、名称、对象类型、父调用或评分索引。query_snapshot 保存过滤条件、排序、读取者、授权版本和期限；query_cursor 绑定快照、页大小与最后序号。查询仅固定索引版本和必要引用，容量和并发限制见[分页查询](../interfaces/pagination.md)。导入正式对象和 objectsQuery 的来源索引在同一事务登记，entryWorkflow 必须属于该集合。
+result_collection 保存 collection_id、kind、来源对象、来源版本、版本根、所属客户端与期限；result_collection_row 使用 collection_id+ordinal 唯一，按类型记录状态、名称、对象类型、父调用或评分索引。query_snapshot 保存过滤条件、排序、读取者、授权版本和期限；query_cursor 绑定快照、页大小与最后返回的排序键；只有不可变结果来源保存一次稳定序号，各查询不复制来源行。查询仅固定索引版本和必要引用，容量和并发限制见[分页查询](../interfaces/pagination.md)。导入正式对象和 objectsQuery 的来源索引在同一事务登记，entryWorkflow 必须属于该集合。

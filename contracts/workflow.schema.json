@@ -18,8 +18,7 @@
       "maxLength": 120
     },
     "entry": {
-      "type": "string",
-      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+      "$ref": "#/$defs/nodeId"
     },
     "parameters": {
       "type": "object",
@@ -209,5 +208,11 @@
     "limits",
     "nodes"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "nodeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+    }
+  }
 }
