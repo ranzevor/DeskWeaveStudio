@@ -230,7 +230,11 @@ class Engine:
                         max_bytes=method.params_bytes,
                         checkpoint=self.workspace.check_deadline,
                     )
-                    validate(method_schema(request["method"], "params"), request["params"])
+                    validate(
+                        method_schema(request["method"], "params"),
+                        request["params"],
+                        checkpoint=self.workspace.check_deadline,
+                    )
                     self.workspace.check_deadline()
                     params = copy.deepcopy(method.defaults)
                     params.update(copy.deepcopy(request["params"]))
@@ -239,8 +243,14 @@ class Engine:
                     result = method.handler(session, params, request["id"])
                     self.workspace.check_deadline()
                     try:
-                        validate(method_schema(request["method"], "result"), result)
+                        validate(
+                            method_schema(request["method"], "result"),
+                            result,
+                            checkpoint=self.workspace.check_deadline,
+                        )
                     except DeskWeaveError as error:
+                        if error.code != "INVALID_ARGUMENT":
+                            raise
                         raise DeskWeaveError(
                             "INTERNAL_ERROR", "服务结果不符合接口要求。"
                         ) from error
@@ -297,7 +307,6 @@ class Engine:
             model = self.contents.resolve(item, params["modelRef"], "workflowModel")
             request_params = params
             params = {key: value for key, value in params.items() if key != "modelRef"} | model
-            dumps(params, max_bytes=MAX_CONTENT, checkpoint=self.workspace.check_deadline)
         if params["workflowId"] != params["definition"]["id"]:
             raise DeskWeaveError("INVALID_ARGUMENT", "流程定义与保存目标不一致。")
         diagnostics = validate_workflow(
@@ -369,7 +378,7 @@ class Engine:
                 else "urn:deskweave:trajectory:1"
             )
             try:
-                validate(reference, value)
+                validate(reference, value, checkpoint=self.workspace.check_deadline)
             except DeskWeaveError as error:
                 if error.code != "INVALID_ARGUMENT":
                     raise
@@ -410,7 +419,7 @@ class Engine:
                 self._authorize_workflow(session, identity)
                 workflow_id = identity
         diagnostics = validate_workflow(definition, checkpoint=self.workspace.check_deadline)
-        version = digest(definition)
+        version = digest(definition, checkpoint=self.workspace.check_deadline)
         self.workspace.check_deadline()
         now = self.clock()
         active = self.pages.active_collections()
@@ -616,5 +625,7 @@ class Engine:
             "requestId": params["requestId"],
             "state": "finished" if row else "notReceived",
             "operationId": None,
-            "result": loads(row["result"]) if row else None,
+            "result": loads(row["result"], checkpoint=self.workspace.check_deadline)
+            if row
+            else None,
         }

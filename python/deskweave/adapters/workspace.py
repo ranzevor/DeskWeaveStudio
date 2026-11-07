@@ -307,7 +307,7 @@ class Workspace:
 
     def _put_object(self, value: object) -> str:
         self.check_deadline()
-        data = dumps(value, max_bytes=33_554_432)
+        data = dumps(value, max_bytes=33_554_432, checkpoint=self.check_deadline)
         identity = hashlib.sha256(data).hexdigest()
         path = self.path / "objects/sha256" / identity
         if path.is_symlink() or not path.resolve().is_relative_to(self.path):
@@ -333,10 +333,12 @@ class Workspace:
             raise DeskWeaveError("STORAGE_CORRUPT", "流程引用的内容缺失。") from error
         if hashlib.sha256(data).hexdigest() != identity:
             raise DeskWeaveError("STORAGE_CORRUPT", "流程引用的内容损坏。")
-        return loads(data, max_bytes=33_554_432)
+        return loads(data, max_bytes=33_554_432, checkpoint=self.check_deadline)
 
     def save_receipt(self, client: str, request_id: str, params: dict) -> dict | None:
-        payload_hash = digest({"method": "workflow.save", "params": params})
+        payload_hash = digest(
+            {"method": "workflow.save", "params": params}, checkpoint=self.check_deadline
+        )
         with self.transaction() as connection:
             row = connection.execute(
                 "SELECT payload_hash,result FROM command_receipt "
@@ -347,7 +349,7 @@ class Workspace:
                 return None
             if row["payload_hash"] != payload_hash:
                 raise DeskWeaveError("REQUEST_CONFLICT", "请求标识已用于另一项修改。")
-            return loads(row["result"])
+            return loads(row["result"], checkpoint=self.check_deadline)
 
     def save(
         self, client: str, request_id: str, params: dict, *, request_params: dict | None = None
@@ -356,7 +358,8 @@ class Workspace:
             {
                 "method": "workflow.save",
                 "params": params if request_params is None else request_params,
-            }
+            },
+            checkpoint=self.check_deadline,
         )
         with self._mutex:
             with self.transaction() as connection:
@@ -367,7 +370,7 @@ class Workspace:
                 if receipt:
                     if receipt["payload_hash"] != payload_hash:
                         raise DeskWeaveError("REQUEST_CONFLICT", "请求标识已用于另一项修改。")
-                    return loads(receipt["result"])
+                    return loads(receipt["result"], checkpoint=self.check_deadline)
                 current = connection.execute(
                     "SELECT head_revision FROM workflow WHERE id=?", (params["workflowId"],)
                 ).fetchone()

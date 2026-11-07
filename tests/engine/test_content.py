@@ -11,7 +11,7 @@ from deskweave.json import digest, dumps, loads
 from tests.engine.test_service import EngineCase, workflow
 
 
-class ContentTests(EngineCase):
+class ContentCase(EngineCase):
     def setUp(self):
         super().setUp()
         self.engine.close_session(self.editor.id)
@@ -88,6 +88,8 @@ class ContentTests(EngineCase):
         self.assertEqual(hashlib.sha256(data).hexdigest(), descriptor["sha256"])
         return bytes(data)
 
+
+class ContentTests(ContentCase):
     def test_large_model_upload_save_resource_read(self):
         definition = workflow()
         definition["variables"]["payload"] = ["x" * 230000 for _ in range(6)]
@@ -470,8 +472,8 @@ class ContentTests(EngineCase):
 
         original = service.validate
 
-        def delayed(reference, value):
-            result = original(reference, value)
+        def delayed(reference, value, **kwargs):
+            result = original(reference, value, **kwargs)
             if reference.endswith("#/$defs/workflowModel"):
                 clock[0] = 30.0
             return result
@@ -670,3 +672,22 @@ class ContentTests(EngineCase):
         self.assertEqual(self.engine._collections, {})
         self.assertNotIn(self.editor.id, self.engine._sessions)
         self.assertNotIn(other.id, self.engine._sessions)
+
+    def test_exact_maximum_model_saves_and_reads_without_metadata_overhead(self):
+        self.engine.monotonic = lambda: 0.0
+        definition = workflow()
+        definition["variables"]["payload"] = ["x" * 262144] * 127 + [""]
+        model = {"definition": definition, "dependencies": {}}
+        definition["variables"]["payload"][-1] = "x" * (
+            MAX_CONTENT - len(dumps(model, max_bytes=MAX_CONTENT))
+        )
+        raw = dumps(model, max_bytes=MAX_CONTENT)
+        self.assertEqual(len(raw), MAX_CONTENT)
+        identity, reference = self.upload(data=raw)
+        saved = self.success("workflow.save", self.save_params(reference))
+        result = self.success(
+            "workflow.read", {"workflowId": "hello", "revision": saved["revision"]}
+        )
+        self.assertEqual(result["modelResource"]["length"], MAX_CONTENT)
+        self.assertEqual(self.read_all(result["modelResource"]), raw)
+        self.success("content.discard", {"uploadId": identity})

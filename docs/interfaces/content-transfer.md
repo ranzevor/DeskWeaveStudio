@@ -2,7 +2,7 @@
 
 ## 能力与容量
 
-控制帧继续保持 1MiB 上限，计入完整 JSON 信封的实际 UTF-8 字节。逻辑请求展开后的内容最多 32MiB；控制帧分片传输不能绕过该上限。握手能力 contentRefsV1 表示支持本文的内容引用与资源化结果；未协商的客户端只能使用能放入控制帧的原有内嵌格式，超限返回 LIMIT_EXCEEDED，不静默截断。
+控制帧继续保持 1MiB 上限，计入完整 JSON 信封的实际 UTF-8 字节。单个内容对象的原始字节与 RFC 8785 规范编码各不超过 32MiB。workflowModel 的容量对象是完整的 definition/dependencies 模型；workflowId、draftVersion、baseRevision 等保存命令字段计入控制帧，不能挤占模型额度。分块传输不能绕过内容上限。握手能力 contentRefsV1 表示支持本文的内容引用与资源化结果；未协商的客户端只能使用能放入控制帧的原有内嵌格式，超限返回 LIMIT_EXCEEDED，不静默截断。
 
 [内容契约](../../contracts/content.schema.json)定义短时上传和 contentRef。每工作空间最多 16 个暂存上传，包含已封存的上传，累计声明长度最多 64MiB；写入长度不能超过声明。资源化读取结果使用独立容量池，同样最多 16 项、64MiB，单项不超过 32MiB。达到任一容量上限返回 LIMIT_EXCEEDED，释放已有临时内容后可继续申请。只允许 workflowModel 与 trajectoryEdit 两种用途，分别检查 workflow.write 或 asset.write；每一步还核对创建者、工作空间、接收实例、用途和当前授权。
 
@@ -10,7 +10,7 @@
 
 1. content.begin 接收用途、媒体类型、总长度及 SHA-256，分配 uploadId、nextOffset=0、maxChunkBytes=196608 和最多 60 秒期限。按声明长度计入容量预留后才返回成功；临时文件按实际接收字节写入，磁盘不足通过 STORAGE_UNAVAILABLE 返回。
 2. content.write 接收 uploadId、offset、严格 Base64 的 chunk 和 chunkSha256。解码后最多 196608 字节，只接受当前 nextOffset；与原始块边界及字节完全相同的重传可幂等返回当前 nextOffset，不能拆分或合并已接收块，内容变化或跳过偏移返回 CONTENT_OFFSET_CONFLICT。超出声明长度立即拒绝。块写入失败或超时回退到该块开始前的长度和偏移；回退失败则释放上传。
-3. content.seal 重新计算实际长度与整段摘要，验证 UTF-8、严格 JSON 及用途对应的结构。workflowModel 必须是 definition 与 dependencies；trajectoryEdit 必须是完整 Trajectory。缺块、摘要不符或不合法内容不生成引用。格式结构错误返回 INVALID_CONTENT，details.contentPath 使用相对上传 JSON 根的 RFC 6901 JSON Pointer；请求字段错误使用 details.fieldPath，UTF-8 或严格 JSON 解析失败返回 INVALID_ARGUMENT。封存结果为不可变 contentRef 和期限，重复封存返回相同引用与期限。
+3. content.seal 重新计算实际长度与整段摘要，验证 UTF-8、严格 JSON 及用途对应的结构。workflowModel 必须是 definition 与 dependencies；trajectoryEdit 必须是完整 Trajectory。缺块、摘要不符或不合法内容不生成引用。解析 JSON 值、递归校验 Schema 及规范编码期间持续检查请求预算；超时返回 DEADLINE_EXCEEDED，不公布封存引用。格式结构错误返回 INVALID_CONTENT，details.contentPath 使用相对上传 JSON 根的 RFC 6901 JSON Pointer；请求字段错误使用 details.fieldPath，UTF-8 或严格 JSON 解析失败返回 INVALID_ARGUMENT。封存结果为不可变 contentRef 和期限，重复封存返回相同引用与期限。
 4. content.discard 接受互斥的 uploadId 或 resourceId：前者释放上传及对应的封存引用，后者释放封存引用或临时读取结果。仅操作当前会话的内容，并检查来源权限和已知流程范围；不存在、已释放或其他会话的身份均返回 discarded=true，其他会话内容保持。正式版本及已准入作业持有的内容不因暂存释放而丢失。
 
 contentRef 只含 kind=resource、resourceId、length 和 sha256，不提供通用路径。暂存期限不因分块读取、重查或重连延长；封存引用自首次封存起最多 60 秒。expiresAt 对齐 UTC 整秒，实际失效点与返回值一致；同时使用单调时钟限制剩余寿命，墙钟回退不能延长期限。到期内容立即失去访问资格，在后续资源准入或访问时回收；会话关闭、客户端撤销及 Engine 关闭释放所属临时内容。提交准入时固定必要引用到收尾，尚未准入且过期的内容不能继续使用。回复丢失先查询原请求或作业，不重新创建正式对象。

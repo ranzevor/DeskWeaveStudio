@@ -30,7 +30,7 @@ Engine、Agent 与 Tauri Host 分别验证自己的调用边界。Engine 授予�
 
 请求参数、响应结果、错误详情、事件载荷及结果查询使用通用 JSON 定义；对象字段数、数组成员数和文本字符数由对应字段的 Schema 校验，字节预算按完整消息和方法参数、结果分别执行。流程 resources 最多 10,000 项；帧预算内的资源数量超限由 workflow.validate 返回 /resources 字段诊断。Value 数据的对象和数组限额适用于表达式、变量等值字段，其他结构使用各自契约。
 
-控制、事件和资源连接独立。二进制资源经受控句柄、范围和摘要读取，单块上限 4MiB；不把任意路径交给 WebView。单个请求最多 32MiB 输入，超出时使用分块作业。
+控制、事件和资源连接独立。二进制资源经受控句柄、范围和摘要读取，单块上限 4MiB；不把任意路径交给 WebView。单个内容对象最多 32MiB，控制信封单独受 1MiB 限制；较大模型按[内容传输](content-transfer.md)分块，命令字段不占用模型额度。
 
 Engine 消息结构见 [message.schema.json](../../contracts/message.schema.json)，请求的方法与参数同时受 [service.schema.json](../../contracts/service.schema.json) 约束。成功响应按原请求方法的 result 校验；响应本身不携带可重新选择方法的字段。动作负载再按对应参数 Schema 校验。
 
@@ -146,7 +146,7 @@ resource.read 接受授权资源身份、偏移与块长度，返回完整资源
 
 source 保存本次源码原文；lastValidModel 保存其对应 source、definition 和 dependencies，首次尚无有效模型时可为 null，modelEditVersion 同时为 null。Engine 重新解析历史模型原文并核对定义与依赖闭包，不接受客户端自行声明 valid。modelEditVersion 不得大于 editVersion；当前原文有效时，模型代次与定义必须对应当前编辑代次；原文无效时仍原样保存，并保留最后有效模型。
 
-小内容使用 inline 的 text 或 value。大内容通过 Host 原生受限内容通道先暂存，使用 resourceId、实际 UTF-8 字节长度和 SHA-256 的 contentRef 引用，绑定窗口、工作空间、用途、接收实例和期限。控制帧预算不因草稿较大而放宽；总请求仍不超过 32MiB，Engine 核验实际字节而非只相信声明长度，禁止任意路径或外域 URL。
+小内容使用 inline 的 text 或 value。大内容通过 Host 原生受限内容通道先暂存，使用 resourceId、实际 UTF-8 字节长度和 SHA-256 的 contentRef 引用，绑定窗口、工作空间、用途、接收实例和期限。控制帧预算不因草稿较大而放宽；同次草稿写入的内容合计不超过 32MiB，控制字段单独计入控制帧；Engine 核验实际字节而非只相信声明长度，禁止任意路径或外域 URL。
 
 源码和模型引用在一个 CAS 事务中提交。快照返回 sourceResource、lastValidModelResource、editVersion、baseRevision、modelEditVersion、由 Engine 计算的 validationState、前 100 条 diagnostics、总数 diagnosticCount、必要的 diagnosticsResource 与 savedAt；diagnosticCount 超过 100 时必须提供完整诊断的私有 diagnosticsResource；未超过时可为 null。draft.read 按实际控制帧字节预算分页，items 不超过 pageSize，尚未输出的分支通过 nextCursor 继续读取。这些资源只供已授权本地草稿恢复，不因 asset.read、资源 URI 或 CLI resource read 获得读取权。
 

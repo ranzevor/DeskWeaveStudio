@@ -46,7 +46,9 @@
         "definition",
         "dependencies"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "x-maxUtf8Bytes": 33554432,
+      "description": "模型的原始 JSON 字节和 RFC 8785 规范编码各不超过 32MiB；保存命令字段单独计入控制帧容量。"
     },
     "beginParams": {
       "type": "object",

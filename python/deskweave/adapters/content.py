@@ -242,7 +242,7 @@ class ContentStore:
         if not item.sealed:
             if item.received != item.length:
                 raise DeskWeaveError("CONTENT_INCOMPLETE", "内容尚未完整接收。")
-            value = loads(self._bytes(item), max_bytes=MAX_CONTENT)
+            value = loads(self._bytes(item), max_bytes=MAX_CONTENT, checkpoint=self.checkpoint)
             self.checkpoint()
             workflow_id = validate_content(item.purpose, value)
             self.checkpoint()
@@ -255,7 +255,7 @@ class ContentStore:
     def resolve(self, item: Content, reference: dict, purpose: str) -> dict:
         if item.purpose != purpose or self.reference(item) != reference:
             raise DeskWeaveError("CONTENT_REFERENCE_INVALID", "内容引用的用途、长度或摘要不匹配。")
-        value = loads(self._bytes(item), max_bytes=MAX_CONTENT)
+        value = loads(self._bytes(item), max_bytes=MAX_CONTENT, checkpoint=self.checkpoint)
         self.checkpoint()
         return value
 
