@@ -1,0 +1,14 @@
+{
+  "protocolVersion": "1.0",
+  "kind": "response",
+  "replyTo": "seal-model",
+  "ok": false,
+  "error": {
+    "code": "INVALID_CONTENT",
+    "message": "上传内容不符合所选格式。",
+    "retry": "never",
+    "details": {
+      "contentPath": "/definition/nodes/0/action"
+    }
+  }
+}

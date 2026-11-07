@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import codecs
 import hashlib
+import io
 import json
 import math
 from collections.abc import Callable, Iterable
@@ -11,6 +13,7 @@ import rfc8785
 from deskweave.errors import DeskWeaveError
 
 MAX_FRAME = 1_048_576
+TEXT_CHUNK = 16_384
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 
@@ -50,7 +53,10 @@ def check_value(
             size += len(str(item)) if type(item) is int else 1
         elif type(item) is str:
             try:
-                length = len(item.encode("utf-8"))
+                length = 0
+                for offset in range(0, len(item), TEXT_CHUNK):
+                    checkpoint()
+                    length += len(item[offset : offset + TEXT_CHUNK].encode("utf-8"))
                 if max_text_bytes is not None and length > max_text_bytes:
                     raise DeskWeaveError("LIMIT_EXCEEDED", "JSON 文本超过大小限制。")
                 size += length + 2
@@ -60,8 +66,10 @@ def check_value(
             size += max(0, len(item) - 1) + 2
             stack.append((iter(item), depth + 1))
         elif type(item) is dict:
-            if any(type(key) is not str for key in item):
-                raise _invalid("JSON 对象的键必须是文本。")
+            for key in item:
+                checkpoint()
+                if type(key) is not str:
+                    raise _invalid("JSON 对象的键必须是文本。")
             size += len(item) + max(0, len(item) - 1) + 2
             stack.append((chain.from_iterable(item.items()), depth + 1))
         else:
@@ -78,30 +86,86 @@ def dumps(
     checkpoint: Callable[[], None] = lambda: None,
 ) -> bytes:
     check_value(value, max_bytes=max_bytes, max_text_bytes=max_text_bytes, checkpoint=checkpoint)
+    output = io.BytesIO()
+
+    def write(block):
+        checkpoint()
+        if output.tell() + len(block) > max_bytes:
+            raise DeskWeaveError("LIMIT_EXCEEDED", "JSON 内容超过大小限制。")
+        output.write(block)
+
+    def encode(item):
+        checkpoint()
+        if type(item) is str:
+            write(b'"')
+            for offset in range(0, len(item), TEXT_CHUNK):
+                checkpoint()
+                write(rfc8785.dumps(item[offset : offset + TEXT_CHUNK])[1:-1])
+            write(b'"')
+        elif type(item) is list:
+            write(b"[")
+            for index, child in enumerate(item):
+                if index:
+                    write(b",")
+                encode(child)
+            write(b"]")
+        elif type(item) is dict:
+
+            def key_order(key):
+                checkpoint()
+                return key.encode("utf-16be")
+
+            write(b"{")
+            for index, key in enumerate(sorted(item, key=key_order)):
+                if index:
+                    write(b",")
+                encode(key)
+                write(b":")
+                encode(item[key])
+            write(b"}")
+        else:
+            write(rfc8785.dumps(item))
+
     try:
-        encoded = rfc8785.dumps(value)
+        encode(value)
     except (ValueError, OverflowError, RecursionError) as error:
         raise _invalid("JSON 内容无法编码。") from error
     checkpoint()
-    if len(encoded) > max_bytes:
-        raise DeskWeaveError("LIMIT_EXCEEDED", "JSON 内容超过大小限制。")
-    return encoded
+    return output.getvalue()
 
 
-def loads(data: bytes | str, *, max_bytes: int = MAX_FRAME) -> object:
+def loads(
+    data: bytes | str,
+    *,
+    max_bytes: int = MAX_FRAME,
+    checkpoint: Callable[[], None] = lambda: None,
+) -> object:
+    checkpoint()
     if isinstance(data, str):
         try:
-            data = data.encode("utf-8")
+            parts = []
+            for offset in range(0, len(data), TEXT_CHUNK):
+                checkpoint()
+                parts.append(data[offset : offset + TEXT_CHUNK].encode("utf-8"))
+            data = b"".join(parts)
         except UnicodeEncodeError as error:
             raise _invalid("文本包含无效 Unicode 字符。") from error
     if len(data) > max_bytes:
         raise DeskWeaveError("LIMIT_EXCEEDED", "JSON 内容超过大小限制。")
     try:
-        text = data.decode("utf-8")
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        parts = []
+        for offset in range(0, len(data), TEXT_CHUNK):
+            checkpoint()
+            parts.append(decoder.decode(data[offset : offset + TEXT_CHUNK]))
+        parts.append(decoder.decode(b"", final=True))
+        text = "".join(parts)
     except UnicodeDecodeError as error:
         raise _invalid("消息不是有效 UTF-8。") from error
     depth, quoted, escaped = 0, False, False
-    for char in text:
+    for index, char in enumerate(text):
+        if index % TEXT_CHUNK == 0:
+            checkpoint()
         if quoted:
             if escaped:
                 escaped = False
@@ -121,6 +185,7 @@ def loads(data: bytes | str, *, max_bytes: int = MAX_FRAME) -> object:
     def pairs(items):
         result = {}
         for key, value in items:
+            checkpoint()
             if key in result:
                 raise _invalid("JSON 对象包含重复字段。")
             result[key] = value
@@ -129,13 +194,33 @@ def loads(data: bytes | str, *, max_bytes: int = MAX_FRAME) -> object:
     def constant(_value):
         raise _invalid("JSON 不接受非有限数。")
 
+    decoder = json.JSONDecoder(object_pairs_hook=pairs, parse_constant=constant)
+
+    def scan_checked(scan):
+        def checked(source, offset):
+            checkpoint()
+            return scan(source, offset)
+
+        return checked
+
+    def array(source, scan):
+        checkpoint()
+        return json.decoder.JSONArray(source, scan_checked(scan))
+
+    def object_(source, strict, scan, hook, pairs_hook, memo):
+        checkpoint()
+        return json.decoder.JSONObject(source, strict, scan_checked(scan), hook, pairs_hook, memo)
+
+    decoder.parse_array = array
+    decoder.parse_object = object_
+    decoder.scan_once = scan_checked(json.scanner.py_make_scanner(decoder))
     try:
-        value = json.loads(text, object_pairs_hook=pairs, parse_constant=constant)
+        value = decoder.decode(text)
     except (ValueError, RecursionError) as error:
         raise _invalid("JSON 语法无效。") from error
-    dumps(value, max_bytes=max_bytes)
+    dumps(value, max_bytes=max_bytes, checkpoint=checkpoint)
     return value
 
 
-def digest(value: object) -> str:
-    return hashlib.sha256(dumps(value, max_bytes=33_554_432)).hexdigest()
+def digest(value: object, *, checkpoint: Callable[[], None] = lambda: None) -> str:
+    return hashlib.sha256(dumps(value, max_bytes=33_554_432, checkpoint=checkpoint)).hexdigest()

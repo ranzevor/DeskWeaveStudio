@@ -88,6 +88,9 @@
               "properties": {
                 "fieldPath": {
                   "$ref": "#/$defs/jsonPointer"
+                },
+                "contentPath": {
+                  "$ref": "#/$defs/jsonPointer"
                 }
               }
             }

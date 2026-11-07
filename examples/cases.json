@@ -3644,5 +3644,41 @@
     "schema": "query.schema.json#/$defs/diagnosticsItem",
     "semantic": "none",
     "expected": "schema-fail"
+  },
+  {
+    "file": "authoring/content-discard-upload.json",
+    "schema": "content.schema.json#/$defs/discardParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "authoring/content-discard-resource.json",
+    "schema": "content.schema.json#/$defs/discardParams",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/content-discard-both.json",
+    "schema": "content.schema.json#/$defs/discardParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "invalid/content-discard-missing.json",
+    "schema": "content.schema.json#/$defs/discardParams",
+    "semantic": "none",
+    "expected": "schema-fail"
+  },
+  {
+    "file": "messages/content-invalid.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "pass"
+  },
+  {
+    "file": "invalid/content-error-path.json",
+    "schema": "message.schema.json",
+    "semantic": "none",
+    "expected": "schema-fail"
   }
 ]

@@ -3,14 +3,34 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, validators
 from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT202012
 
 from deskweave.errors import DeskWeaveError
 from deskweave.json import json_pointer
+
+_checkpoint = ContextVar("schema_checkpoint", default=lambda: None)
+
+
+def _budgeted(keyword):
+    def check(validator, rule, instance, schema):
+        checkpoint = _checkpoint.get()
+        checkpoint()
+        yield from keyword(validator, rule, instance, schema)
+        checkpoint()
+
+    return check
+
+
+BudgetValidator = validators.extend(
+    Draft202012Validator,
+    {name: _budgeted(keyword) for name, keyword in Draft202012Validator.VALIDATORS.items()},
+)
 
 
 @lru_cache(maxsize=1)
@@ -24,18 +44,37 @@ def contract_registry() -> tuple[dict, Registry]:
         schemas[schema["$id"]] = schema
     if "urn:deskweave:service:1" not in schemas:
         raise RuntimeError("缺少 Engine 公共契约。")
-    registry = Registry().with_resources(
-        (identifier, Resource.from_contents(schema)) for identifier, schema in schemas.items()
-    )
+    resources = []
+    for identifier, schema in schemas.items():
+        if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema":
+            raise RuntimeError("公共契约使用了不支持的 JSON Schema 版本。")
+        # 固定公共契约的方言，避免跨资源 evolve 切回不带预算的验证器。
+        contents = {key: value for key, value in schema.items() if key != "$schema"}
+        resources.append(
+            (identifier, Resource.from_contents(contents, default_specification=DRAFT202012))
+        )
+    registry = Registry().with_resources(resources)
     return schemas, registry
 
 
 @lru_cache(maxsize=128)
 def validator(reference: str) -> Draft202012Validator:
     _, registry = contract_registry()
-    return Draft202012Validator(
-        {"$ref": reference}, registry=registry, format_checker=FormatChecker()
-    )
+    return BudgetValidator({"$ref": reference}, registry=registry, format_checker=FormatChecker())
+
+
+def _errors(reference, value, checkpoint):
+    errors = validator(reference).iter_errors(value)
+    while True:
+        token = _checkpoint.set(checkpoint)
+        try:
+            checkpoint()
+            error = next(errors, None)
+        finally:
+            _checkpoint.reset(token)
+        if error is None:
+            return
+        yield error
 
 
 def schema_contents(reference: str) -> dict:
@@ -117,7 +156,7 @@ def schema_issues(reference: str, value: object, checkpoint: Callable[[], None] 
                 return
             selected = "urn:deskweave:actions:1#/$defs/" + action
             found = False
-            for child in validator(selected).iter_errors(error.instance):
+            for child in _errors(selected, error.instance, checkpoint):
                 found = True
                 yield from expand(child, path)
             if not found:
@@ -184,7 +223,7 @@ def schema_issues(reference: str, value: object, checkpoint: Callable[[], None] 
             yield path, error.validator
 
     seen = set()
-    for error in validator(reference).iter_errors(value):
+    for error in _errors(reference, value, checkpoint):
         for path, reason in expand(error):
             if path not in seen:
                 seen.add(path)
@@ -192,8 +231,10 @@ def schema_issues(reference: str, value: object, checkpoint: Callable[[], None] 
     checkpoint()
 
 
-def validate(reference: str, value: object) -> None:
-    issue = next(schema_issues(reference, value), None)
+def validate(
+    reference: str, value: object, *, checkpoint: Callable[[], None] = lambda: None
+) -> None:
+    issue = next(schema_issues(reference, value, checkpoint), None)
     if issue is not None:
         path = json_pointer(issue[0])
         raise DeskWeaveError(
