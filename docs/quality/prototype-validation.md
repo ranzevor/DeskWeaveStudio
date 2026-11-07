@@ -12,9 +12,9 @@ python tools/export_design_showcase.py --check
 python tools/render_prototypes.py --check-only
 ```
 
-静态检查覆盖目录、需求映射、动作参数、页面资源及图像文件。浏览器检查逐页检查路由、边界、字段名称和按钮裁切，并执行六组交互；交互产生的操作结果在运行时检查结构及关联约束。
+静态检查覆盖目录、需求映射、动作参数、页面资源及图像文件。浏览器检查逐页检查路由、边界、字段名称和按钮裁切，并执行七组交互；交互产生的操作结果在运行时检查结构及关联约束。
 
-只检查交互可运行 `python tools/render_prototypes.py --interactions-only`；`--interaction-suite baseline`、`completion`、`authoring`、`recording`、`query` 或 `platform` 可选择单组。生成设计图和定向预览的步骤见[原型画册](../prototypes/README.md)。
+只检查交互可运行 `python tools/render_prototypes.py --interactions-only`；`--interaction-suite baseline`、`completion`、`authoring`、`content`、`content-recovery`、`content-rejections`、`recording`、`query` 或 `platform` 可选择单组。生成设计图和定向预览的步骤见[原型画册](../prototypes/README.md)。
 
 ## 交互范围
 

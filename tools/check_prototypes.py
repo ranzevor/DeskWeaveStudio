@@ -97,6 +97,7 @@ def main():
         validator.validate(definition)
         assert not checker["workflow_errors"](definition), path.name
     assert (BASE / "fixtures/edit-source.png").read_bytes() == (ROOT / "examples/authoring/source.png").read_bytes(), "原型裁剪来源与契约像素样例不一致"
+    assert (BASE / "fixtures/edit-current.png").read_bytes() == (ROOT / "examples/authoring/cropped.png").read_bytes(), "资产当前版本与内容样例不一致"
     print(f"原型：{len(ids)} 个界面，{len(expected_images)} 张图，{len(requirements)} 项需求覆盖，{len(action_ids)} 类动作；错误 0")
     return 0
 

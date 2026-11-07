@@ -4,8 +4,6 @@
 
 命令程序名为 deskweave，复用本机 Engine 服务，不解释另一种工作流。命令与现有方法的机器映射见[CLI 目录](../../contracts/cli-catalog.json)，参数与结果结构由其引用的 service Schema 定义。
 
-以下为应用组件的实现契约；当前应用实现阶段与交付范围见[路线图](../../ROADMAP.md)。
-
 ```text
 deskweave <组> <命令> --workspace <定位信息> [--params-file <文件>|--params-stdin]
           [--target <槽=本地目标别名>] [--source <本地来源>]
@@ -80,7 +78,7 @@ foregroundPolicy 对客户端连接寿命作进一步约束：run.start 和 obse
 
 普通已接收的模板、导入、导出和计算作业由 Engine 持有到终态，取得回执后正常退出 CLI 不自动取消它们；主动中断等待仍使用下节的取消路径。目录 waitMethod 与 completionSchema 指定等待时的查询及最终结构，等待不增加服务方法。wait 或 foregroundPolicy 要求保持前台连接时，发送创建或控制命令前一并核对 waitPermissions；run.snapshot 需要 run.read，observation.session 需要 observation.read，监听查询使用本地 workspace.manage，作业查询继续核对原方法与所有者。缺少等待权限时先拒绝，不启动后再尝试扩大权限。
 
-无 wait 且不要求前台持有时，退出码 0 只表示表中对应结束条件成立。创建运行、作业或观察的接收回执不表示任务已经完成。持续观察启动后独立产生记录；其结束、记录持久化与退出码不混为一项结果。
+无 wait 且不要求前台持有时，退出码 0 对应表中的结束条件。运行、作业或观察通过各自状态接口查询处理结果；持续观察的记录按保存状态读取。
 
 run status、observation status、operation status 可使用 watch。单次快照来自对应既有服务；连续模式使用已有订阅与补拉规则，jsonl 只允许连续查询，每行输出一个完整状态或事件，断线后先恢复快照再继续。watch 不创建新的业务执行。
 
@@ -118,7 +116,7 @@ MCP stdio 模式的业务错误通过 MCP 结果返回，不把某个工具调�
 
 对于本客户端拥有且 detached=false 的运行，发送 run.stop；对于 detached=false 的观察会话，发送 observation.stop；当前作业使用 operation.cancel。控制版本冲突时先读取当前快照，再决定是否仍需同一停止动作。随后在有限关闭预算内等待清理与状态回执。
 
-run.start 或 observation.start 明确 detached=true 时，Ctrl+C 只结束本次等待、订阅与客户端连接，不停止已交由 Engine 的对象。只读 watch 不是对象所有权；退出查看不会停止另一客户端的任务。
+run.start 或 observation.start 明确 detached=true 时，Ctrl+C 只结束本次等待、订阅与客户端连接，不停止已交由 Engine 的对象。watch 的订阅在退出查看时关闭，对应任务继续按创建时的所有权运行。
 
 第二次 Ctrl+C 或关闭预算耗尽后可以结束 CLI，但不能把未确认清理写成已停止；保留恢复所需身份并返回 8。普通连接丢失不替代 emergency stop，需要立即停止输入时使用已有受信原生急停入口。
 

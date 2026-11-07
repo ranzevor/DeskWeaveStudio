@@ -1,4 +1,4 @@
-"""对制作契约执行字节、资源隔离与像素参考检查；不连接 Engine。"""
+"""对制作契约执行字节、资源隔离与像素参考检查。"""
 from __future__ import annotations
 import base64
 import copy
@@ -22,7 +22,7 @@ def sha(value):
     return hashlib.sha256(value).hexdigest()
 
 class ContentReferenceModel:
-    """契约检查的内存参考状态，所有样本均在本进程内生成。"""
+    """制作契约检查使用的内存状态。"""
     def __init__(self,data,purpose='workflowModel',owner='studio',workspace='sample'):
         if not 0<len(data)<=LIMIT:raise ValueError('length')
         self.length,self.sha,self.purpose=len(data),sha(data),purpose

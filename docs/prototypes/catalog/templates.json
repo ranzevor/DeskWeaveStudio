@@ -418,13 +418,13 @@
     {
       "code": "T19",
       "id": "templates-receipt-unknown",
-      "title": "模板保存回执查询",
+      "title": "查询模板保存结果",
       "view": "templates-extra",
       "variant": "receipt-unknown",
       "parent": "templates-saving",
-      "purpose": "使用原保存请求查询结果，避免重复创建批次。",
+      "purpose": "查询这次保存是否完成，避免重复保存模板。",
       "primary": "templates-saving",
-      "primaryLabel": "查询原请求结果",
+      "primaryLabel": "查询保存结果",
       "primaryKind": "validate",
       "requirements": [
         "DW-021",

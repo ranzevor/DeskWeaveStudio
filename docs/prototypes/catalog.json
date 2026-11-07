@@ -1,6 +1,6 @@
 {
   "designVersion": "0.1.0",
-  "updatedAt": "2026-10-29",
+  "updatedAt": "2026-11-07",
   "groups": [
     {
       "key": "workspace",
@@ -996,15 +996,15 @@
     {
       "code": "E29",
       "id": "content-save",
-      "title": "大流程分块保存",
+      "title": "保存流程",
       "view": "authoring",
       "variant": "content-save",
       "parent": null,
-      "purpose": "分块核验后封存内容，比较草稿与基准版本并保存。",
+      "purpose": "保存当前草稿，查看进度并在需要时取消。",
       "primary": null,
-      "primaryLabel": "开始传输",
+      "primaryLabel": "保存流程",
       "primaryKind": "local",
-      "primaryResult": "分块核验后封存内容，比较草稿与基准版本并保存。",
+      "primaryResult": "保存完成后显示流程版本。",
       "requirements": [
         "DW-003",
         "DW-013",
@@ -1021,15 +1021,15 @@
     {
       "code": "E30",
       "id": "content-transfer-failed",
-      "title": "保存传输中断",
+      "title": "流程保存失败",
       "view": "authoring",
       "variant": "content-transfer-failed",
       "parent": null,
-      "purpose": "保留草稿和编辑代次，重新上传完整内容。",
+      "purpose": "查看保存失败原因，保留当前草稿并重试。",
       "primary": null,
-      "primaryLabel": "重新传输",
+      "primaryLabel": "重新保存",
       "primaryKind": "local",
-      "primaryResult": "保留草稿和编辑代次，重新上传完整内容。",
+      "primaryResult": "重新保存当前草稿。",
       "requirements": [
         "DW-003",
         "DW-N05"
@@ -1041,6 +1041,54 @@
       "theme": "light",
       "group": "editor",
       "image": "E30-content-transfer-failed.png"
+    },
+    {
+      "code": "E31",
+      "id": "content-save-conflict",
+      "title": "流程冲突与另存",
+      "view": "authoring",
+      "variant": "content-save-conflict",
+      "parent": null,
+      "purpose": "核对当前版本与草稿基准，将当前内容另存为新流程。",
+      "primary": null,
+      "primaryLabel": "另存为新流程",
+      "primaryKind": "local",
+      "primaryResult": "副本成功后可打开新流程，或返回原草稿。",
+      "requirements": [
+        "DW-003",
+        "DW-013"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "group": "editor",
+      "image": "E31-content-save-conflict.png"
+    },
+    {
+      "code": "E32",
+      "id": "content-copy-failed",
+      "title": "副本失败与原草稿恢复",
+      "view": "authoring",
+      "variant": "content-copy-failed",
+      "parent": null,
+      "purpose": "处理副本保存失败，并返回身份与内容完整的原草稿。",
+      "primary": null,
+      "primaryLabel": "返回原草稿",
+      "primaryKind": "local",
+      "primaryResult": "恢复原流程、草稿基准及依赖绑定。",
+      "requirements": [
+        "DW-003",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "group": "editor",
+      "image": "E32-content-copy-failed.png"
     },
     {
       "code": "F01",
@@ -2284,6 +2332,52 @@
       "image": "R26-trajectory-displays-invalid.png"
     },
     {
+      "code": "R27",
+      "id": "trajectory-trim-preview",
+      "title": "轨迹裁剪预览结果",
+      "view": "completion",
+      "variant": "trajectory-trim-preview",
+      "parent": null,
+      "purpose": "核对裁剪后的事件时序、相对位移与来源单位。",
+      "primary": null,
+      "primaryLabel": "应用裁剪",
+      "primaryKind": "local",
+      "primaryResult": "应用预览中的轨迹与配对修复。",
+      "requirements": [
+        "DW-004"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "group": "recording",
+      "image": "R27-trajectory-trim-preview.png"
+    },
+    {
+      "code": "R28",
+      "id": "trajectory-repair-preview",
+      "title": "轨迹配对修复预览",
+      "view": "completion",
+      "variant": "trajectory-repair-preview",
+      "parent": null,
+      "purpose": "同时查看配对修复方案和完整事件预览。",
+      "primary": null,
+      "primaryLabel": "应用裁剪",
+      "primaryKind": "local",
+      "primaryResult": "保留原来源和逐点位移。",
+      "requirements": [
+        "DW-004"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "group": "recording",
+      "image": "R28-trajectory-repair-preview.png"
+    },
+    {
       "code": "T01",
       "id": "templates-source",
       "title": "批量提取设置",
@@ -2740,13 +2834,13 @@
     {
       "code": "T19",
       "id": "templates-receipt-unknown",
-      "title": "模板保存回执查询",
+      "title": "查询模板保存结果",
       "view": "templates-extra",
       "variant": "receipt-unknown",
       "parent": "templates-saving",
-      "purpose": "使用原保存请求查询结果，避免重复创建批次。",
+      "purpose": "查询这次保存是否完成，避免重复保存模板。",
       "primary": "templates-saving",
-      "primaryLabel": "查询原请求结果",
+      "primaryLabel": "查询保存结果",
       "primaryKind": "validate",
       "requirements": [
         "DW-021",
@@ -3574,11 +3668,11 @@
     {
       "code": "A11",
       "id": "package-target-invalid",
-      "title": "导入映射计划失效",
+      "title": "导入预览已失效",
       "view": "completion",
       "variant": "package-target-invalid",
       "parent": null,
-      "purpose": "保留预览，目录或计划改变后重新核对内容映射。",
+      "purpose": "保留文件选择，重新检查导入内容。",
       "primary": null,
       "primaryLabel": "重新预览映射",
       "primaryKind": "local",
@@ -3647,11 +3741,11 @@
       "view": "authoring",
       "variant": "asset-edit-save",
       "parent": null,
-      "purpose": "选择新资产或新版本，固定源内容后提交。",
+      "purpose": "选择保存方式和名称，保存编辑后的图像或轨迹。",
       "primary": null,
-      "primaryLabel": "准备保存",
+      "primaryLabel": "保存资产",
       "primaryKind": "local",
-      "primaryResult": "选择新资产或新版本，固定源内容后提交。",
+      "primaryResult": "保存完成后显示资产版本。",
       "requirements": [
         "DW-004",
         "DW-005",
@@ -3668,15 +3762,15 @@
     {
       "code": "A15",
       "id": "asset-edit-conflict",
-      "title": "资产头版本冲突",
+      "title": "资产版本冲突",
       "view": "authoring",
       "variant": "asset-edit-conflict",
       "parent": null,
-      "purpose": "保留编辑，读取最新头后由用户重新提交。",
+      "purpose": "保留草稿，查看当前版本内容后选择追加版本或独立另存。",
       "primary": null,
-      "primaryLabel": "重新准备",
+      "primaryLabel": "查看当前版本",
       "primaryKind": "local",
-      "primaryResult": "保留编辑，读取最新头后由用户重新提交。",
+      "primaryResult": "展示来源与当前版本内容，并提供明确的保存选择。",
       "requirements": [
         "DW-008",
         "DW-012"
@@ -3692,15 +3786,15 @@
     {
       "code": "A16",
       "id": "asset-edit-cancelled",
-      "title": "资产编辑已取消",
+      "title": "资产保存已取消",
       "view": "authoring",
       "variant": "asset-edit-cancelled",
       "parent": null,
-      "purpose": "取消未提交计划不产生正式版本，编辑内容继续保留。",
+      "purpose": "保留当前编辑内容，按需重新保存。",
       "primary": null,
-      "primaryLabel": "准备保存",
+      "primaryLabel": "保存资产",
       "primaryKind": "local",
-      "primaryResult": "取消未提交计划不产生正式版本，编辑内容继续保留。",
+      "primaryResult": "保存当前编辑内容。",
       "requirements": [
         "DW-012"
       ],
@@ -3711,6 +3805,54 @@
       "theme": "light",
       "group": "assets",
       "image": "A16-asset-edit-cancelled.png"
+    },
+    {
+      "code": "A17",
+      "id": "asset-edit-review",
+      "title": "资产版本内容比较",
+      "view": "authoring",
+      "variant": "asset-edit-review",
+      "parent": null,
+      "purpose": "查看草稿来源和当前版本，选择追加版本或独立另存。",
+      "primary": null,
+      "primaryLabel": "选择保存方式",
+      "primaryKind": "local",
+      "primaryResult": "按明确选择提交固定内容。",
+      "requirements": [
+        "DW-008",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "group": "assets",
+      "image": "A17-asset-edit-review.png"
+    },
+    {
+      "code": "A18",
+      "id": "asset-edit-uncertain",
+      "title": "资产保存结果查询",
+      "view": "authoring",
+      "variant": "asset-edit-uncertain",
+      "parent": null,
+      "purpose": "沿用原保存操作查询实际结果。",
+      "primary": null,
+      "primaryLabel": "查询保存结果",
+      "primaryKind": "local",
+      "primaryResult": "显示原操作的终态与已保存版本。",
+      "requirements": [
+        "DW-012",
+        "DW-N05"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "group": "assets",
+      "image": "A18-asset-edit-uncertain.png"
     },
     {
       "code": "U01",
@@ -4675,11 +4817,11 @@
       "view": "authoring",
       "variant": "connection-draft-test",
       "parent": null,
-      "purpose": "测试与正式保存分离，结果只对应当前编辑内容。",
+      "purpose": "测试当前编辑的连接，查看服务和模型是否可用。",
       "primary": null,
-      "primaryLabel": "测试当前草稿",
+      "primaryLabel": "测试连接",
       "primaryKind": "local",
-      "primaryResult": "测试与正式保存分离，结果只对应当前编辑内容。",
+      "primaryResult": "显示当前配置的连接测试结果。",
       "requirements": [
         "DW-025"
       ],
@@ -5094,7 +5236,7 @@
     {
       "code": "C18",
       "id": "mcp-config-read",
-      "title": "保存配置与实际监听",
+      "title": "连接设置与服务状态",
       "view": "completion",
       "variant": "mcp-config-read",
       "parent": null,
@@ -5270,7 +5412,7 @@
       "view": "maintenance",
       "variant": "backup",
       "parent": null,
-      "purpose": "分别显示快照、复制、摘要和完成确认。",
+      "purpose": "显示工作空间文件的复制、检查和恢复进度。",
       "primary": "workspace",
       "primaryLabel": "打开恢复的工作空间",
       "requirements": [
@@ -5563,11 +5705,11 @@
     {
       "code": "O14",
       "id": "update-trust",
-      "title": "更新来源与信任校验",
+      "title": "检查版本与安装包",
       "view": "completion",
       "variant": "update-trust",
       "parent": null,
-      "purpose": "选择通道，核对签名链、已验证密钥轮换和更新包后进入安装准备。",
+      "purpose": "选择更新通道，检查适用系统、发布者和安装包完整性。",
       "primary": null,
       "primaryLabel": "进入安装准备",
       "primaryKind": "local",
@@ -5609,11 +5751,11 @@
     {
       "code": "O16",
       "id": "update-downgrade",
-      "title": "人工降级本地确认",
+      "title": "确认降级版本",
       "view": "completion",
       "variant": "update-downgrade",
       "parent": null,
-      "purpose": "在有效信任检查和备份基础上，本地确认固定版本的人工降级计划。",
+      "purpose": "确认所选旧版本、工作空间备份及数据兼容性。",
       "primary": null,
       "primaryLabel": "确认降级并准备",
       "primaryKind": "local",
@@ -6634,6 +6776,327 @@
       },
       "dependencies": {}
     },
+    "workflow-model-dependencies": {
+      "definition": {
+        "formatVersion": "1.0",
+        "id": "monthly-report",
+        "name": "月度报表下载",
+        "entry": "wait",
+        "parameters": {
+          "month": {
+            "type": "string",
+            "required": true,
+            "sensitive": false,
+            "default": "2026-10"
+          }
+        },
+        "variables": {
+          "matchResult": null,
+          "checkResult": null,
+          "downloadComplete": false
+        },
+        "targets": {
+          "main": {
+            "kind": "window",
+            "required": true
+          }
+        },
+        "resources": {
+          "downloadTemplate": {
+            "kind": "image"
+          },
+          "checkDownload": {
+            "kind": "workflow"
+          }
+        },
+        "limits": {
+          "activeMs": 600000,
+          "steps": 10000,
+          "callDepth": 8,
+          "parallelCalls": 8,
+          "inputEvents": 100000
+        },
+        "nodes": [
+          {
+            "id": "wait",
+            "title": "等待报表加载",
+            "action": "time.wait",
+            "params": {
+              "durationMs": 500
+            },
+            "on": {
+              "next": "locate"
+            }
+          },
+          {
+            "id": "locate",
+            "title": "定位下载按钮",
+            "action": "vision.match",
+            "params": {
+              "target": "main",
+              "image": "downloadTemplate",
+              "threshold": 0.92,
+              "timeoutMs": 5000,
+              "intervalMs": 200,
+              "selection": "unique"
+            },
+            "on": {
+              "next": "click",
+              "error": "notReady"
+            },
+            "store": "matchResult"
+          },
+          {
+            "id": "click",
+            "title": "点击下载",
+            "action": "pointer.click",
+            "params": {
+              "target": "main",
+              "position": {
+                "$expr": {
+                  "op": "path",
+                  "path": [
+                    "vars",
+                    "matchResult",
+                    "selected",
+                    "position"
+                  ]
+                }
+              },
+              "button": "left",
+              "clicks": 1,
+              "intervalMs": 0
+            },
+            "on": {
+              "next": "verify"
+            }
+          },
+          {
+            "id": "verify",
+            "title": "校验下载结果",
+            "action": "flow.call",
+            "params": {
+              "workflow": "checkDownload",
+              "inputs": {
+                "month": {
+                  "$expr": {
+                    "op": "path",
+                    "path": [
+                      "inputs",
+                      "month"
+                    ]
+                  }
+                }
+              },
+              "mode": "wait"
+            },
+            "on": {
+              "next": "assert"
+            },
+            "store": "checkResult"
+          },
+          {
+            "id": "assert",
+            "title": "检查是否完成",
+            "action": "logic.assert",
+            "params": {
+              "condition": {
+                "$expr": {
+                  "op": "path",
+                  "path": [
+                    "vars",
+                    "checkResult",
+                    "ready"
+                  ]
+                }
+              },
+              "message": "未发现下载完成提示"
+            },
+            "on": {
+              "next": "return",
+              "error": "notReady"
+            }
+          },
+          {
+            "id": "return",
+            "title": "返回下载结果",
+            "action": "flow.return",
+            "params": {
+              "values": {
+                "month": {
+                  "$expr": {
+                    "op": "path",
+                    "path": [
+                      "inputs",
+                      "month"
+                    ]
+                  }
+                },
+                "completed": true
+              }
+            },
+            "on": {}
+          },
+          {
+            "id": "notReady",
+            "title": "返回未就绪",
+            "action": "flow.return",
+            "params": {
+              "values": {
+                "month": {
+                  "$expr": {
+                    "op": "path",
+                    "path": [
+                      "inputs",
+                      "month"
+                    ]
+                  }
+                },
+                "completed": false
+              }
+            },
+            "on": {}
+          }
+        ],
+        "extensions": {
+          "studio.parameter-labels": {
+            "month": "月份"
+          },
+          "studio.variable-labels": {
+            "matchResult": "定位结果",
+            "checkResult": "校验结果",
+            "downloadComplete": "下载已完成"
+          }
+        }
+      },
+      "dependencies": {
+        "downloadTemplate": {
+          "kind": "image",
+          "assetId": "button-template",
+          "assetVersion": "3",
+          "sha256": "f19a16bcfae9039149a059239b55ae2da1eb1231c44c82437eadcace7d7ad823"
+        },
+        "checkDownload": {
+          "kind": "workflow",
+          "workflowId": "check-download",
+          "revision": "7",
+          "definition": {
+            "formatVersion": "1.0",
+            "id": "check-download",
+            "name": "校验下载结果",
+            "entry": "locate",
+            "parameters": {
+              "month": {
+                "type": "string",
+                "required": true,
+                "sensitive": false,
+                "default": "2026-10"
+              }
+            },
+            "variables": {
+              "matchResult": null,
+              "checkResult": null,
+              "downloadComplete": false
+            },
+            "targets": {
+              "main": {
+                "kind": "window",
+                "required": true
+              }
+            },
+            "resources": {
+              "successTemplate": {
+                "kind": "image"
+              }
+            },
+            "limits": {
+              "activeMs": 600000,
+              "steps": 10000,
+              "callDepth": 8,
+              "parallelCalls": 8,
+              "inputEvents": 100000
+            },
+            "nodes": [
+              {
+                "id": "locate",
+                "title": "定位完成提示",
+                "action": "vision.match",
+                "params": {
+                  "target": "main",
+                  "image": "successTemplate",
+                  "threshold": 0.92,
+                  "timeoutMs": 5000,
+                  "intervalMs": 200,
+                  "selection": "unique"
+                },
+                "on": {
+                  "next": "return",
+                  "error": "notReady"
+                },
+                "store": "matchResult"
+              },
+              {
+                "id": "return",
+                "title": "返回校验结果",
+                "action": "flow.return",
+                "params": {
+                  "values": {
+                    "ready": {
+                      "$expr": {
+                        "op": "notEqual",
+                        "args": [
+                          {
+                            "$expr": {
+                              "op": "path",
+                              "path": [
+                                "vars",
+                                "matchResult",
+                                "selected"
+                              ]
+                            }
+                          },
+                          null
+                        ]
+                      }
+                    }
+                  }
+                },
+                "on": {}
+              },
+              {
+                "id": "notReady",
+                "title": "返回未就绪",
+                "action": "flow.return",
+                "params": {
+                  "values": {
+                    "ready": false
+                  }
+                },
+                "on": {}
+              }
+            ],
+            "extensions": {
+              "studio.parameter-labels": {
+                "month": "月份"
+              },
+              "studio.variable-labels": {
+                "matchResult": "定位结果",
+                "checkResult": "校验结果",
+                "downloadComplete": "下载已完成"
+              }
+            }
+          },
+          "dependencies": {
+            "successTemplate": {
+              "kind": "image",
+              "assetId": "success-template",
+              "assetVersion": "2",
+              "sha256": "ce9ca028b2e175662cfcc4d9321946ab3814fa99ada926bda6bdfe8f354f1dc2"
+            }
+          }
+        }
+      }
+    },
     "edited-trajectory": {
       "formatVersion": "1.0",
       "coordinateMode": "event",
@@ -7470,7 +7933,33 @@
         "sha256": "0b6e02292d7a114855fe8b66b7fb61f5d62bb91d52f164d4ea26416043a6ef1b"
       }
     },
-    "trajectorySourceHash": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8"
+    "trajectorySourceHash": "81c79ff97052363909d481d75428fd58d7700c464c1c184846ab42834685bbd8",
+    "trajectorySource": {
+      "formatVersion": "1.0",
+      "coordinateMode": "event",
+      "events": [
+        {
+          "kind": "key.down",
+          "atUs": 0,
+          "key": "ctrl_l"
+        },
+        {
+          "kind": "key.down",
+          "atUs": 10000,
+          "key": "s"
+        },
+        {
+          "kind": "key.up",
+          "atUs": 20000,
+          "key": "s"
+        },
+        {
+          "kind": "key.up",
+          "atUs": 30000,
+          "key": "ctrl_l"
+        }
+      ]
+    }
   },
   "recordingFixtures": {
     "topology": {

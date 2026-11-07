@@ -91,7 +91,7 @@ draft.read 按工作空间、流程及授权的 editorId 读取草稿；editorId
 
 包内清单 key 是全局身份；每份流程 resources 中的 key 是该流程本地逻辑键。流程条目可声明 bindings，将本地逻辑键映射到包的全局 key；存在 bindings 时必须准确覆盖全部声明依赖且类型一致，省略时沿用同名全局 key 解析。多个流程可把相同本地键绑定到不同全局资源。节点、表达式和字符串中的本地资源键保持不变；只改写流程顶层 id 和正式依赖绑定，禁止全文件字符串替换。
 
-sourceId、sourceVersion 表达来源身份而不是本地写入位置；声明的 workflow sourceId 必须与原始定义 id 相同。同一来源对象不同版本可在不同全局 key 下同时出现，映射以 sourceKey 区分。Engine 先为有限依赖闭包预分配目标 id/version，再写入带新身份的目标定义，重新计算 targetSha256；sourceSha256 始终保留原始字节摘要。目标版本依赖清单中的流程项使用 workflowId/revision，图像与轨迹项使用 assetVersion，均引用本次预分配或复用的目标身份与版本，不能意外指向同名现有流程。
+sourceId、sourceVersion 表达来源身份；声明的 workflow sourceId 必须与原始定义 id 相同。同一来源对象不同版本可在不同全局 key 下同时出现，映射以 sourceKey 区分。Engine 先为有限依赖闭包预分配目标 id/version，再写入带新身份的目标定义，重新计算 targetSha256；sourceSha256 始终保留原始字节摘要。目标版本依赖清单中的流程项使用 workflowId/revision，图像与轨迹项使用 assetVersion，均引用本次预分配或复用的目标身份与版本，不能意外指向同名现有流程。
 
 本地 asset.import.prepare 冻结已验证源字节，返回限时计划、目录代次和完整映射资源；mappingResource 封存完整 importMapping 数组，mappingSha256 对应其实际字节；previewMappings 只提供最多 100 行，mappingCount 表示完整数量。正式导入使用同一计划与 staged 字节，不能重新读取可变路径替换已审阅内容。改选来源、目录代次变化、命名占用冲突或计划过期时重新预览，不静默调整映射。外部 asset.import 未指定计划时在同一作业内执行相同规则，并在完成清单返回实际映射。
 
@@ -119,7 +119,7 @@ asset.import.prepare 与 asset.import 的 image、trajectory、workflow 模式�
 
 删除前使用 asset.references 的 assetId 分支，在一致事务中固定全部资产版本、当时 currentVersion 和引用成员；单版本分支仅供查看指定 assetVersion 的使用者。引用查询快照固定五分钟，游标绑定查询范围与当前管理客户端，头版本或引用后来改变时仍保留原快照供分页，但删除提交必须比较 currentVersion 并重查当前全部引用。元数据引用清单不为被查询资产创建新的内容使用 pin，不因查询自身造成永久不可删除。
 
-相同内容摘要被另一个资产复用不等于当前逻辑资产仍被引用；没有逻辑引用时删除索引、全部版本关系和名称占用，在同一事务保存删除墓碑与请求收据。物理 blob 仅在全局强引用归零后回收。界面发起删除前释放自身预览句柄，其他使用方的句柄保持有效且继续阻止删除，不强行关闭。删除不附加回收区或恢复承诺。
+逻辑资产引用和内容 blob 引用分别计数。当前逻辑资产没有引用时删除索引、全部版本关系和名称占用，在同一事务保存删除墓碑与请求收据。物理 blob 仅在全局强引用归零后回收。界面发起删除前释放自身预览句柄，其他使用方的句柄保持有效且继续阻止删除，不强行关闭。
 
 ## 模板与观察索引
 

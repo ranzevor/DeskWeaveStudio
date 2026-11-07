@@ -1,9 +1,9 @@
 # 全界面原型设计
 
 设计版本：0.1.0  
-更新日期：2026-10-29
+更新日期：2026-11-07
 
-共 248 个界面，覆盖页面、属性面板、抽屉、弹窗、浮条、选区覆盖层、安装维护及关键异常状态。
+共 254 个界面，覆盖页面、属性面板、抽屉、弹窗、浮条、选区覆盖层、安装维护及关键异常状态。
 
 [打开可点击原型](../prototypes/index.html) · [原型使用说明](../prototypes/README.md) · [界面数据清单](../prototypes/catalog.json)
 
@@ -88,8 +88,10 @@
 | E26 | [表达式类型错误](../prototypes/images/E26-expression-invalid.png) · [交互](../prototypes/index.html#expression-invalid) | 保留非法编辑与最后有效 AST，定位操作数类型错误。 | 校验并预览：修正后的表达式结果及字段类型可核对。 |
 | E27 | [流程历史版本](../prototypes/images/E27-revision-browser.png) · [交互](../prototypes/index.html#revision-browser) | 分页发现固定版本，选择历史版本且保留当前草稿。 | 重新查询：分页发现固定版本，选择历史版本且保留当前草稿。 |
 | E28 | [版本查询已过期](../prototypes/images/E28-revision-query-expired.png) · [交互](../prototypes/index.html#revision-query-expired) | 重新建立历史查询，保留所选版本。 | 重新查询：重新建立历史查询，保留所选版本。 |
-| E29 | [大流程分块保存](../prototypes/images/E29-content-save.png) · [交互](../prototypes/index.html#content-save) | 分块核验后封存内容，比较草稿与基准版本并保存。 | 开始传输：分块核验后封存内容，比较草稿与基准版本并保存。 |
-| E30 | [保存传输中断](../prototypes/images/E30-content-transfer-failed.png) · [交互](../prototypes/index.html#content-transfer-failed) | 保留草稿和编辑代次，重新上传完整内容。 | 重新传输：保留草稿和编辑代次，重新上传完整内容。 |
+| E29 | [保存流程](../prototypes/images/E29-content-save.png) · [交互](../prototypes/index.html#content-save) | 保存当前草稿，查看进度并在需要时取消。 | 保存流程：保存完成后显示流程版本。 |
+| E30 | [流程保存失败](../prototypes/images/E30-content-transfer-failed.png) · [交互](../prototypes/index.html#content-transfer-failed) | 查看保存失败原因，保留当前草稿并重试。 | 重新保存：重新保存当前草稿。 |
+| E31 | [流程冲突与另存](../prototypes/images/E31-content-save-conflict.png) · [交互](../prototypes/index.html#content-save-conflict) | 核对当前版本与草稿基准，将当前内容另存为新流程。 | 另存为新流程：副本成功后可打开新流程，或返回原草稿。 |
+| E32 | [副本失败与原草稿恢复](../prototypes/images/E32-content-copy-failed.png) · [交互](../prototypes/index.html#content-copy-failed) | 处理副本保存失败，并返回身份与内容完整的原草稿。 | 返回原草稿：恢复原流程、草稿基准及依赖绑定。 |
 
 ## 动作属性与专用输入
 
@@ -155,6 +157,8 @@
 | R24 | [录制显示屏不可用](../prototypes/images/R24-record-unavailable.png) · [交互](../prototypes/index.html#record-unavailable) | 刷新不可用的显示列表，恢复后选择录制范围。 | 刷新显示屏：录制准备 |
 | R25 | [轨迹回放显示屏映射](../prototypes/images/R25-trajectory-displays.png) · [交互](../prototypes/index.html#trajectory-displays) | 核对来源与当前屏幕，使用原布局或逐屏平移映射。 | 应用显示屏映射：完整有效的显示屏映射写入轨迹动作。 |
 | R26 | [轨迹显示屏映射不完整](../prototypes/images/R26-trajectory-displays-invalid.png) · [交互](../prototypes/index.html#trajectory-displays-invalid) | 补齐缺失屏幕映射；未匹配或越界时禁止应用。 | 应用显示屏映射：完整有效的显示屏映射写入轨迹动作。 |
+| R27 | [轨迹裁剪预览结果](../prototypes/images/R27-trajectory-trim-preview.png) · [交互](../prototypes/index.html#trajectory-trim-preview) | 核对裁剪后的事件时序、相对位移与来源单位。 | 应用裁剪：应用预览中的轨迹与配对修复。 |
+| R28 | [轨迹配对修复预览](../prototypes/images/R28-trajectory-repair-preview.png) · [交互](../prototypes/index.html#trajectory-repair-preview) | 同时查看配对修复方案和完整事件预览。 | 应用裁剪：保留原来源和逐点位移。 |
 
 ## 模板生产与批次
 
@@ -179,8 +183,8 @@
 | T15 | [模板导出进度](../prototypes/images/T15-templates-exporting.png) · [交互](../prototypes/index.html#templates-exporting) | 查看图像和清单写入阶段，取消只影响本次导出。 | 取消导出：模板批量导出；完成 → 模板导出完成 |
 | T16 | [模板导出失败](../prototypes/images/T16-templates-export-error.png) · [交互](../prototypes/index.html#templates-export-error) | 查看输出目录写入失败，重新选择位置后导出。 | 更换导出位置：模板批量导出 |
 | T17 | [模板导出完成](../prototypes/images/T17-templates-export-succeeded.png) · [交互](../prototypes/index.html#templates-export-succeeded) | 查看已完成的模板图像与清单范围，打开输出位置或返回批次。 | 打开输出位置：显示本次输出位置 |
-| T18 | [模板批次保存中](../prototypes/images/T18-templates-saving.png) · [交互](../prototypes/index.html#templates-saving) | 跟踪已接收保存作业，完成登记后显示资产批次。 | 查询保存结果：模板保存回执查询；完成 → 模板资产批次 |
-| T19 | [模板保存回执查询](../prototypes/images/T19-templates-receipt-unknown.png) · [交互](../prototypes/index.html#templates-receipt-unknown) | 使用原保存请求查询结果，避免重复创建批次。 | 查询原请求结果：校验通过 → 模板批次保存中 |
+| T18 | [模板批次保存中](../prototypes/images/T18-templates-saving.png) · [交互](../prototypes/index.html#templates-saving) | 跟踪已接收保存作业，完成登记后显示资产批次。 | 查询保存结果：查询模板保存结果；完成 → 模板资产批次 |
+| T19 | [查询模板保存结果](../prototypes/images/T19-templates-receipt-unknown.png) · [交互](../prototypes/index.html#templates-receipt-unknown) | 查询这次保存是否完成，避免重复保存模板。 | 查询保存结果：校验通过 → 模板批次保存中 |
 | T20 | [模板候选已过期](../prototypes/images/T20-templates-expired.png) · [交互](../prototypes/index.html#templates-expired) | 保留来源与提取条件，重新提取过期候选。 | 重新提取：批量提取设置 |
 
 ## 观察会话与记录
@@ -228,12 +232,14 @@
 | A08 | [导出任务包](../prototypes/images/A08-package-export.png) · [交互](../prototypes/index.html#package-export) | 选择固定版本和资源范围，确认保存目录。 | 导出任务包：流程画布 |
 | A09 | [删除资产确认](../prototypes/images/A09-asset-delete.png) · [交互](../prototypes/index.html#asset-delete) | 显示仍被引用的版本并阻止误删。 | 保留被引用资产：资产库 |
 | A10 | [任务包对象映射](../prototypes/images/A10-package-target-map.png) · [交互](../prototypes/index.html#package-target-map) | 核对独立流程副本、相同内容复用及来源到目标的固定版本映射。 | 确认导入：按有效计划原子导入，并显示真实映射清单。 |
-| A11 | [导入映射计划失效](../prototypes/images/A11-package-target-invalid.png) · [交互](../prototypes/index.html#package-target-invalid) | 保留预览，目录或计划改变后重新核对内容映射。 | 重新预览映射：取得当前目录下的新映射计划。 |
+| A11 | [导入预览已失效](../prototypes/images/A11-package-target-invalid.png) · [交互](../prototypes/index.html#package-target-invalid) | 保留文件选择，重新检查导入内容。 | 重新预览映射：取得当前目录下的新映射计划。 |
 | A12 | [删除资产与引用检查](../prototypes/images/A12-asset-delete-review.png) · [交互](../prototypes/index.html#asset-delete-review) | 重新读取全部引用总数，确认无依赖后删除整个资产及其版本。 | 删除整个资产：版本和引用检查通过后删除资产。 |
 | A13 | [资产删除检查失效](../prototypes/images/A13-asset-delete-stale.png) · [交互](../prototypes/index.html#asset-delete-stale) | 版本或引用变化时保留资产，重新检查可见与不可见引用数量。 | 重新检查引用：读取当前版本与完整引用数量，仍被引用时阻止删除。 |
-| A14 | [保存手工编辑资产](../prototypes/images/A14-asset-edit-save.png) · [交互](../prototypes/index.html#asset-edit-save) | 选择新资产或新版本，固定源内容后提交。 | 准备保存：选择新资产或新版本，固定源内容后提交。 |
-| A15 | [资产头版本冲突](../prototypes/images/A15-asset-edit-conflict.png) · [交互](../prototypes/index.html#asset-edit-conflict) | 保留编辑，读取最新头后由用户重新提交。 | 重新准备：保留编辑，读取最新头后由用户重新提交。 |
-| A16 | [资产编辑已取消](../prototypes/images/A16-asset-edit-cancelled.png) · [交互](../prototypes/index.html#asset-edit-cancelled) | 取消未提交计划不产生正式版本，编辑内容继续保留。 | 准备保存：取消未提交计划不产生正式版本，编辑内容继续保留。 |
+| A14 | [保存手工编辑资产](../prototypes/images/A14-asset-edit-save.png) · [交互](../prototypes/index.html#asset-edit-save) | 选择保存方式和名称，保存编辑后的图像或轨迹。 | 保存资产：保存完成后显示资产版本。 |
+| A15 | [资产版本冲突](../prototypes/images/A15-asset-edit-conflict.png) · [交互](../prototypes/index.html#asset-edit-conflict) | 保留草稿，查看当前版本内容后选择追加版本或独立另存。 | 查看当前版本：展示来源与当前版本内容，并提供明确的保存选择。 |
+| A16 | [资产保存已取消](../prototypes/images/A16-asset-edit-cancelled.png) · [交互](../prototypes/index.html#asset-edit-cancelled) | 保留当前编辑内容，按需重新保存。 | 保存资产：保存当前编辑内容。 |
+| A17 | [资产版本内容比较](../prototypes/images/A17-asset-edit-review.png) · [交互](../prototypes/index.html#asset-edit-review) | 查看草稿来源和当前版本，选择追加版本或独立另存。 | 选择保存方式：按明确选择提交固定内容。 |
+| A18 | [资产保存结果查询](../prototypes/images/A18-asset-edit-uncertain.png) · [交互](../prototypes/index.html#asset-edit-uncertain) | 沿用原保存操作查询实际结果。 | 查询保存结果：显示原操作的终态与已保存版本。 |
 
 ## 运行、调试与恢复
 
@@ -286,7 +292,7 @@
 | S11 | [设置范围与有效来源](../prototypes/images/S11-settings-overrides.png) · [交互](../prototypes/index.html#settings-overrides) | 编辑用户或工作空间覆盖，按批次保存并区分即时、下次运行与重启生效。 | 整批保存：CAS通过后提交整批set/reset并显示逐项生效时间。 |
 | S12 | [设置并发冲突](../prototypes/images/S12-settings-conflict.png) · [交互](../prototypes/index.html#settings-conflict) | 保留本批编辑，重新读取范围与继承版本后核对保存。 | 重新读取并保留编辑：新基准与本批待保存编辑分别保留。 |
 | S13 | [模型连接清单](../prototypes/images/S13-connection-browser.png) · [交互](../prototypes/index.html#connection-browser) | 读取连接元数据并打开配置，凭据保持受保护。 | 重新查询：读取连接元数据并打开配置，凭据保持受保护。 |
-| S14 | [测试未保存的连接](../prototypes/images/S14-connection-draft-test.png) · [交互](../prototypes/index.html#connection-draft-test) | 测试与正式保存分离，结果只对应当前编辑内容。 | 测试当前草稿：测试与正式保存分离，结果只对应当前编辑内容。 |
+| S14 | [测试未保存的连接](../prototypes/images/S14-connection-draft-test.png) · [交互](../prototypes/index.html#connection-draft-test) | 测试当前编辑的连接，查看服务和模型是否可用。 | 测试连接：显示当前配置的连接测试结果。 |
 | S15 | [连接测试结果已失效](../prototypes/images/S15-connection-test-stale.png) · [交互](../prototypes/index.html#connection-test-stale) | 修改配置使原测试失效，迟到结果不覆盖当前状态。 | 测试当前草稿：修改配置使原测试失效，迟到结果不覆盖当前状态。 |
 
 ## 模型高级配置与 MCP 管理
@@ -312,7 +318,7 @@
 | C15 | [MCP 工具目录](../prototypes/images/C15-mcp-tools.png) · [交互](../prototypes/index.html#mcp-tools) | 按能力查看工具组与授权要求。 | 查看预设任务：MCP 预设任务预览 |
 | C16 | [MCP 资源目录与预览](../prototypes/images/C16-mcp-resources.png) · [交互](../prototypes/index.html#mcp-resources) | 查看可读对象、媒体类型和分块预览。 | 预览观察记录：观察结果详情 |
 | C17 | [MCP 预设任务预览](../prototypes/images/C17-mcp-prompts.png) · [交互](../prototypes/index.html#mcp-prompts) | 填写参数并预览返回消息。 | 预览消息：更新本页预设任务消息预览 |
-| C18 | [保存配置与实际监听](../prototypes/images/C18-mcp-config-read.png) · [交互](../prototypes/index.html#mcp-config-read) | 分别读取已保存及实际生效的网络配置和脱敏TLS状态。 | 重新读取服务快照：保存版本、活动版本与需重启状态来自同次读取。 |
+| C18 | [连接设置与服务状态](../prototypes/images/C18-mcp-config-read.png) · [交互](../prototypes/index.html#mcp-config-read) | 分别读取已保存及实际生效的网络配置和脱敏TLS状态。 | 重新读取服务快照：保存版本、活动版本与需重启状态来自同次读取。 |
 | C19 | [令牌范围与使用记录](../prototypes/images/C19-mcp-token-query.png) · [交互](../prototypes/index.html#mcp-token-query) | 按状态筛选并分页读取名称、权限、目标、期限和最近使用记录。 | 下一页：读取同一查询中的后续令牌；清单不包含明文。 |
 | C20 | [集合分页查询](../prototypes/images/C20-mcp-query.png) · [交互](../prototypes/index.html#mcp-query) | 设置条件、排序和每页数量，逐页查询授权集合。 | 查询：返回当前条件下的第一页。 |
 | C21 | [集合查询已过期](../prototypes/images/C21-mcp-query-expired.png) · [交互](../prototypes/index.html#mcp-query-expired) | 保留条件，重新建立已过期的查询。 | 重新查询：创建新快照并从第一页读取。 |
@@ -326,7 +332,7 @@
 |---|---|---|---|
 | O01 | [创建工作空间备份](../prototypes/images/O01-backup-create.png) · [交互](../prototypes/index.html#backup-create) | 确认一致备份的目录与包含范围。 | 开始备份：备份与恢复进度 |
 | O02 | [恢复到新目录](../prototypes/images/O02-backup-restore.png) · [交互](../prototypes/index.html#backup-restore) | 选择备份与新目录，保留原工作空间。 | 校验并恢复：备份与恢复进度 |
-| O03 | [备份与恢复进度](../prototypes/images/O03-backup-progress.png) · [交互](../prototypes/index.html#backup-progress) | 分别显示快照、复制、摘要和完成确认。 | 打开恢复的工作空间：工作空间概览 |
+| O03 | [备份与恢复进度](../prototypes/images/O03-backup-progress.png) · [交互](../prototypes/index.html#backup-progress) | 显示工作空间文件的复制、检查和恢复进度。 | 打开恢复的工作空间：工作空间概览 |
 | O04 | [发现更新](../prototypes/images/O04-update-available.png) · [交互](../prototypes/index.html#update-available) | 查看版本、更新范围及活动运行影响。 | 准备更新：更新准备与安装 |
 | O05 | [更新准备与安装](../prototypes/images/O05-update-preparing.png) · [交互](../prototypes/index.html#update-preparing) | 等待草稿持久化、运行停止、备份与组件切换。 | 检查数据兼容性：数据格式升级 |
 | O06 | [更新失败](../prototypes/images/O06-update-failed.png) · [交互](../prototypes/index.html#update-failed) | 保留有效版本并给出具体恢复路径。 | 查看恢复方案：版本恢复方案 |
@@ -337,9 +343,9 @@
 | O11 | [卸载与保留数据](../prototypes/images/O11-uninstall.png) · [交互](../prototypes/index.html#uninstall) | 确认卸载程序，单独处理工作空间数据。 | 确认卸载程序：最近工作空间 |
 | O12 | [数据格式升级](../prototypes/images/O12-migration.png) · [交互](../prototypes/index.html#migration) | 显示备份、独占转换与完整性验证。 | 完成并打开：工作空间概览 |
 | O13 | [版本恢复方案](../prototypes/images/O13-rollback.png) · [交互](../prototypes/index.html#rollback) | 区分程序回退与数据恢复，保留新增编辑。 | 恢复到新目录：恢复到新目录 |
-| O14 | [更新来源与信任校验](../prototypes/images/O14-update-trust.png) · [交互](../prototypes/index.html#update-trust) | 选择通道，核对签名链、已验证密钥轮换和更新包后进入安装准备。 | 进入安装准备：验证通过后保存草稿、停止运行并检查备份。 |
+| O14 | [检查版本与安装包](../prototypes/images/O14-update-trust.png) · [交互](../prototypes/index.html#update-trust) | 选择更新通道，检查适用系统、发布者和安装包完整性。 | 进入安装准备：验证通过后保存草稿、停止运行并检查备份。 |
 | O15 | [更新校验失败](../prototypes/images/O15-update-verification-failed.png) · [交互](../prototypes/index.html#update-verification-failed) | 展示具体校验失败，重新选择有效更新包后再次验证。 | 校验更新：失败保持未安装；通过后开放安装准备。 |
-| O16 | [人工降级本地确认](../prototypes/images/O16-update-downgrade.png) · [交互](../prototypes/index.html#update-downgrade) | 在有效信任检查和备份基础上，本地确认固定版本的人工降级计划。 | 确认降级并准备：一次性确认绑定制品、信任版本、备份和有效期。 |
+| O16 | [确认降级版本](../prototypes/images/O16-update-downgrade.png) · [交互](../prototypes/index.html#update-downgrade) | 确认所选旧版本、工作空间备份及数据兼容性。 | 确认降级并准备：一次性确认绑定制品、信任版本、备份和有效期。 |
 
 ## 辅助入口与帮助
 
@@ -389,17 +395,17 @@
 |---|---|
 | DW-001 | W01、W02、W03、W04、W05、W06、W07、W08、W09、W10、O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13 |
 | DW-002 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E23、E24、F01、F02、F03、F04、F05、F06、F07、F08、F09、F10、F11、F12、F13、F14、F15、F16、F17、F18、F19、F20、F21 |
-| DW-003 | W01、W02、W03、W04、W05、W06、W07、W08、W09、E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E17、E27、E28、E29、E30 |
-| DW-004 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R15、R16、R17、R18、R19、R22、R23、R24、R25、R26、A14、P01、P02、P03、P04、P05 |
+| DW-003 | W01、W02、W03、W04、W05、W06、W07、W08、W09、E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E17、E27、E28、E29、E30、E31、E32 |
+| DW-004 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R15、R16、R17、R18、R19、R22、R23、R24、R25、R26、R27、R28、A14、P01、P02、P03、P04、P05 |
 | DW-005 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R13、R14、R15、R16、R17、R20、R21、T01、T02、T03、T04、T05、T06、T07、T08、T09、T10、T11、T12、T13、T14、T15、T16、T17、T18、T19、T20、A01、A02、A03、A04、A05、A06、A07、A08、A09、A14 |
 | DW-006 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E25、E26、F01、F02、F03、F04、F05、F06、F07、F08、F09、F10、F11、F12、F13、F14、F15、F16、F17、F18、F19、F20、F21 |
 | DW-007 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、F01、F02、F03、F04、F05、F06、F07、F08、F09、F10、F11、F12、F13、F14、F15、F16、F17、F18、F19、F20、F21 |
-| DW-008 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E27、A15、U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U21、U22 |
+| DW-008 | E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14、E15、E27、A15、A17、U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U21、U22 |
 | DW-009 | U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U19、U20 |
 | DW-010 | U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15 |
 | DW-011 | U01、U02、U03、U04、U05、U06、U07、U08、U09、U10、U11、U12、U13、U14、U15、U21、U22、U23、U24、U25 |
-| DW-012 | T01、T02、T03、T04、T05、T06、T07、T08、T09、T10、T11、T12、T13、T14、T15、T16、T17、T18、T19、T20、A01、A02、A03、A04、A05、A06、A07、A08、A09、A10、A11、A12、A13、A14、A15、A16 |
-| DW-013 | E29、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、C15、C16、C20、C21、C22 |
+| DW-012 | T01、T02、T03、T04、T05、T06、T07、T08、T09、T10、T11、T12、T13、T14、T15、T16、T17、T18、T19、T20、A01、A02、A03、A04、A05、A06、A07、A08、A09、A10、A11、A12、A13、A14、A15、A16、A17、A18 |
+| DW-013 | E29、E31、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、C15、C16、C20、C21、C22 |
 | DW-014 | R01、R02、R03、R04、R05、R06、R07、R08、R09、R10、R11、R12、R15、R16、R17、B01、B02、B03、B04、B05、B06、B07、B08、B09、B10、B11、B12、B13、B14、B15、B16、B17、B18、B19、B20、B21、B22、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10 |
 | DW-015 | O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13、P01、P02、P03、P04、P05 |
 | DW-016 | E23、E24、E25、E26、R18、R19、R20、R21、R22、R23、R24、R25、R26、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、S11、S12、H01、H02、H03、H04、H05、H06、H07、V01、V02、V03、V04、V05、V06、V07、V08、V09、P01、P02、P03、P04、P05 |
@@ -421,7 +427,7 @@
 | DW-N02 | B01、B02、B03、B04、B05、B06、B07、B08、B09、B10、B11、B12、B13、B14、B15、B16、B17、B18、B19、B20、B21、B22、U23、U25、S01、S02、S03、S04、S05、S06、S07、S08、S09、S10、S13 |
 | DW-N03 | V01、V02、V03、V04、V05、V06、V07、V08、V09 |
 | DW-N04 | O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13 |
-| DW-N05 | W10、E29、E30、O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13、P01、P02、P03、P04、P05 |
+| DW-N05 | W10、E29、E30、E32、A18、O01、O02、O03、O04、O05、O06、O07、O08、O09、O10、O11、O12、O13、P01、P02、P03、P04、P05 |
 | DW-N06 | V01、V02、V03、V04、V05、V06、V07、V08、V09 |
 
 ## 使用与验收

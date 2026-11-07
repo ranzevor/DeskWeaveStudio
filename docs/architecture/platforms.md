@@ -29,7 +29,7 @@ Rust 的 platform-api 定义 DesktopSession、CapabilitySnapshot、DisplayTopolo
 
 能力字段是固定的十二项：显示屏/窗口采集，物理位置/相对量/键盘/全部显示屏录制，绝对/相对/键盘/Unicode 输入，全局控制快捷键和目标激活。每项具有 state、reason、nextAction。state 区分 available、permissionRequired、denied、unsupported、unimplemented、sessionUnavailable；原因和操作对应具体能力。读取能力不自动触发系统授权弹窗。
 
-录制开始、运行准备、实际发送和恢复分别核对当前代次。权限撤销、Portal 关闭、合成器重启、桌面切换、输入设备消失或拓扑变化使相关能力失效，停止接收或发送并进入既有中断/释放流程。能力可用不等于已取得某个窗口或显示屏的目标令牌。
+录制开始、运行准备、实际发送和恢复分别核对当前代次。权限撤销、Portal 关闭、合成器重启、桌面切换、输入设备消失或拓扑变化使相关能力失效，停止接收或发送并进入既有中断/释放流程。访问具体窗口或显示屏还需验证对应目标令牌。
 
 record.allDisplays 只有在全部活动显示区域已明确覆盖、物理位置和键盘录制均可用时才可返回 available。topologyCoverage=selected 或 unknown 不满足该条件。用户在系统选择器中只选了部分屏幕时，界面显示实际选择的屏幕数，不能将它改名为“全部显示屏”。
 
@@ -69,7 +69,7 @@ pixelToNative 为 `[a,b,c,d,tx,ty]`，定义 `nativeX=a*x+c*y+tx`、`nativeY=b*x
 
 普通位置和按钮录制使用 [RECORD 的 device events](https://www.x.org/releases/current/doc/recordproto/record.html)及事件携带的根窗口位置；相对输入通过 XInput2 的原始 valuator 路径处理。设备事件与已分发到多个窗口的事件不能同时作为同一次操作录入，XQueryPointer 的当前结果不能回填历史位置。
 
-发送使用 [XTEST](https://www.x.org/releases/current/doc/xextproto/xtest.html) 的运动、按钮和键盘事件。按原生期限发送并及时 flush，不能将整段运动留在 Xlib 输出缓冲中等到末尾才提交。XSync 只提供服务器请求处理边界，不代表目标应用已经绘图。避免为每个采样点执行阻塞往返；连接错误进入清理及未决效果处理。
+发送使用 [XTEST](https://www.x.org/releases/current/doc/xextproto/xtest.html) 的运动、按钮和键盘事件。按原生期限发送并及时 flush，不能将整段运动留在 Xlib 输出缓冲中等到末尾才提交。XSync 确认服务器已处理请求；目标绘图结果通过画布内容检查。避免为每个采样点执行阻塞往返；连接错误进入清理及未决效果处理。
 
 XTEST 自带的 delay 会阻塞同一连接的后续请求，不能替代独立的可撤销调度。输入连接与急停控制连接分开；发送前校验屏幕和协议坐标范围，不依赖服务器自动夹取越界位置。RandR 变换、X11 根窗口像素与图像像素分别建模；Xft.dpi 不是指针变换依据。
 
@@ -83,7 +83,7 @@ PipeWire 帧的像素尺寸、Portal 的布局尺寸和 EI region 的输入坐�
 
 [InputCapture Portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.InputCapture.html)的捕获由合成器激活，捕获时事件交给接收方，普通桌面指针不再按这些事件更新。因此它不能直接用作用户在普通画图窗口中操作的被动全局录制器，也不能以捕获后重新注入的方式悄悄替换用户输入链路。
 
-普通桌面全显示屏录制由 linux-wayland-compositor 后端实现，要求合成器提供已授权的完整区域集合、每事件绝对位置、按钮/键盘事件和明确的事件顺序；组件单独锁定兼容版本。缺少该接口的组合以 NO_PASSIVE_CAPTURE 返回 unsupported；专用后端尚未实现时返回 unimplemented。全屏录制仍是该后端的交付与验收要求，Portal 输入控制或视频采集通过不能代替它。
+普通桌面全显示屏录制由 linux-wayland-compositor 后端实现，要求合成器提供已授权的完整区域集合、每事件绝对位置、按钮/键盘事件和明确的事件顺序；组件单独锁定兼容版本。缺少该接口的组合以 NO_PASSIVE_CAPTURE 返回 unsupported；专用后端尚未实现时返回 unimplemented。该后端按完整事件流和逐步绘图场景验收全显示屏录制。
 
 不能自动读取 /dev/input、创建 uinput 设备、提升为 root 或改用 XWayland 以扩大权限。若采用需要系统安装的专用集成，安装目标、权限和桌面会话范围通过独立原生组件提供；其卸载、撤权、崩溃和升级同样使绑定失效。合成器拥有最终焦点与会话控制；不能取得焦点或无法核对目标时保持暂停。
 

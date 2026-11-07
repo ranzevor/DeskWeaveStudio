@@ -1,0 +1,321 @@
+{
+  "definition": {
+    "formatVersion": "1.0",
+    "id": "monthly-report",
+    "name": "月度报表下载",
+    "entry": "wait",
+    "parameters": {
+      "month": {
+        "type": "string",
+        "required": true,
+        "sensitive": false,
+        "default": "2026-10"
+      }
+    },
+    "variables": {
+      "matchResult": null,
+      "checkResult": null,
+      "downloadComplete": false
+    },
+    "targets": {
+      "main": {
+        "kind": "window",
+        "required": true
+      }
+    },
+    "resources": {
+      "downloadTemplate": {
+        "kind": "image"
+      },
+      "checkDownload": {
+        "kind": "workflow"
+      }
+    },
+    "limits": {
+      "activeMs": 600000,
+      "steps": 10000,
+      "callDepth": 8,
+      "parallelCalls": 8,
+      "inputEvents": 100000
+    },
+    "nodes": [
+      {
+        "id": "wait",
+        "title": "等待报表加载",
+        "action": "time.wait",
+        "params": {
+          "durationMs": 500
+        },
+        "on": {
+          "next": "locate"
+        }
+      },
+      {
+        "id": "locate",
+        "title": "定位下载按钮",
+        "action": "vision.match",
+        "params": {
+          "target": "main",
+          "image": "downloadTemplate",
+          "threshold": 0.92,
+          "timeoutMs": 5000,
+          "intervalMs": 200,
+          "selection": "unique"
+        },
+        "on": {
+          "next": "click",
+          "error": "notReady"
+        },
+        "store": "matchResult"
+      },
+      {
+        "id": "click",
+        "title": "点击下载",
+        "action": "pointer.click",
+        "params": {
+          "target": "main",
+          "position": {
+            "$expr": {
+              "op": "path",
+              "path": [
+                "vars",
+                "matchResult",
+                "selected",
+                "position"
+              ]
+            }
+          },
+          "button": "left",
+          "clicks": 1,
+          "intervalMs": 0
+        },
+        "on": {
+          "next": "verify"
+        }
+      },
+      {
+        "id": "verify",
+        "title": "校验下载结果",
+        "action": "flow.call",
+        "params": {
+          "workflow": "checkDownload",
+          "inputs": {
+            "month": {
+              "$expr": {
+                "op": "path",
+                "path": [
+                  "inputs",
+                  "month"
+                ]
+              }
+            }
+          },
+          "mode": "wait"
+        },
+        "on": {
+          "next": "assert"
+        },
+        "store": "checkResult"
+      },
+      {
+        "id": "assert",
+        "title": "检查是否完成",
+        "action": "logic.assert",
+        "params": {
+          "condition": {
+            "$expr": {
+              "op": "path",
+              "path": [
+                "vars",
+                "checkResult",
+                "ready"
+              ]
+            }
+          },
+          "message": "未发现下载完成提示"
+        },
+        "on": {
+          "next": "return",
+          "error": "notReady"
+        }
+      },
+      {
+        "id": "return",
+        "title": "返回下载结果",
+        "action": "flow.return",
+        "params": {
+          "values": {
+            "month": {
+              "$expr": {
+                "op": "path",
+                "path": [
+                  "inputs",
+                  "month"
+                ]
+              }
+            },
+            "completed": true
+          }
+        },
+        "on": {}
+      },
+      {
+        "id": "notReady",
+        "title": "返回未就绪",
+        "action": "flow.return",
+        "params": {
+          "values": {
+            "month": {
+              "$expr": {
+                "op": "path",
+                "path": [
+                  "inputs",
+                  "month"
+                ]
+              }
+            },
+            "completed": false
+          }
+        },
+        "on": {}
+      }
+    ],
+    "extensions": {
+      "studio.parameter-labels": {
+        "month": "月份"
+      },
+      "studio.variable-labels": {
+        "matchResult": "定位结果",
+        "checkResult": "校验结果",
+        "downloadComplete": "下载已完成"
+      }
+    }
+  },
+  "dependencies": {
+    "downloadTemplate": {
+      "kind": "image",
+      "assetId": "button-template",
+      "assetVersion": "3",
+      "sha256": "f19a16bcfae9039149a059239b55ae2da1eb1231c44c82437eadcace7d7ad823"
+    },
+    "checkDownload": {
+      "kind": "workflow",
+      "workflowId": "check-download",
+      "revision": "7",
+      "definition": {
+        "formatVersion": "1.0",
+        "id": "check-download",
+        "name": "校验下载结果",
+        "entry": "locate",
+        "parameters": {
+          "month": {
+            "type": "string",
+            "required": true,
+            "sensitive": false,
+            "default": "2026-10"
+          }
+        },
+        "variables": {
+          "matchResult": null,
+          "checkResult": null,
+          "downloadComplete": false
+        },
+        "targets": {
+          "main": {
+            "kind": "window",
+            "required": true
+          }
+        },
+        "resources": {
+          "successTemplate": {
+            "kind": "image"
+          }
+        },
+        "limits": {
+          "activeMs": 600000,
+          "steps": 10000,
+          "callDepth": 8,
+          "parallelCalls": 8,
+          "inputEvents": 100000
+        },
+        "nodes": [
+          {
+            "id": "locate",
+            "title": "定位完成提示",
+            "action": "vision.match",
+            "params": {
+              "target": "main",
+              "image": "successTemplate",
+              "threshold": 0.92,
+              "timeoutMs": 5000,
+              "intervalMs": 200,
+              "selection": "unique"
+            },
+            "on": {
+              "next": "return",
+              "error": "notReady"
+            },
+            "store": "matchResult"
+          },
+          {
+            "id": "return",
+            "title": "返回校验结果",
+            "action": "flow.return",
+            "params": {
+              "values": {
+                "ready": {
+                  "$expr": {
+                    "op": "notEqual",
+                    "args": [
+                      {
+                        "$expr": {
+                          "op": "path",
+                          "path": [
+                            "vars",
+                            "matchResult",
+                            "selected"
+                          ]
+                        }
+                      },
+                      null
+                    ]
+                  }
+                }
+              }
+            },
+            "on": {}
+          },
+          {
+            "id": "notReady",
+            "title": "返回未就绪",
+            "action": "flow.return",
+            "params": {
+              "values": {
+                "ready": false
+              }
+            },
+            "on": {}
+          }
+        ],
+        "extensions": {
+          "studio.parameter-labels": {
+            "month": "月份"
+          },
+          "studio.variable-labels": {
+            "matchResult": "定位结果",
+            "checkResult": "校验结果",
+            "downloadComplete": "下载已完成"
+          }
+        }
+      },
+      "dependencies": {
+        "successTemplate": {
+          "kind": "image",
+          "assetId": "success-template",
+          "assetVersion": "2",
+          "sha256": "ce9ca028b2e175662cfcc4d9321946ab3814fa99ada926bda6bdfe8f354f1dc2"
+        }
+      }
+    }
+  }
+}

@@ -108,17 +108,18 @@ def outputs():
             assert screen["completion"] in ids and screen["completion"] != screen["id"], screen["id"]
     main, child = fixtures()
     catalog = {
-        "designVersion": "0.1.0", "updatedAt": "2026-10-29",
+        "designVersion": "0.1.0", "updatedAt": "2026-11-07",
         "groups": [{k: g[k] for k in ("key", "name", "order")} for g in groups],
         "screens": screens, "fixture": {"workflow": main, "child": child},
     }
     catalog["authoringFixtures"] = {name: json.loads((ROOT / ("examples/authoring/" + name + ".json")).read_text(encoding="utf-8"))
-        for name in ("asset-image-plan", "asset-image-commit", "asset-image-result", "connection-test-draft", "workflow-model", "edited-trajectory")}
+        for name in ("asset-image-plan", "asset-image-commit", "asset-image-result", "connection-test-draft", "workflow-model", "workflow-model-dependencies", "edited-trajectory")}
     catalog["recordingFixtures"] = {key: json.loads((ROOT / ("examples/recording/" + name + ".json")).read_text(encoding="utf-8")) for key, name in {"topology":"topology", "source":"source", "trajectory":"cross-screen-drag"}.items()}
     variable_value = [{"month": "2026-10", "amount": i} for i in range(200)]
     variable_bytes = json.dumps(variable_value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     catalog["authoringFixtures"]["largeVariable"] = {"value": variable_value, "reference": {"mediaType": "application/json", "resourceId": "variable-rows", "length": len(variable_bytes), "sha256": hashlib.sha256(variable_bytes).hexdigest()}}
     catalog["authoringFixtures"]["trajectorySourceHash"] = hashlib.sha256((ROOT / "examples/trajectories/shortcut.json").read_bytes()).hexdigest()
+    catalog["authoringFixtures"]["trajectorySource"] = json.loads((ROOT / "examples/trajectories/shortcut.json").read_text(encoding="utf-8"))
     action_schema = json.loads((ROOT / "contracts/actions.schema.json").read_text(encoding="utf-8"))
     action_catalog = json.loads((ROOT / "contracts/action-catalog.json").read_text(encoding="utf-8"))["actions"]
     groups_zh = {"time": "时间", "data": "数据", "logic": "逻辑", "flow": "流程", "vision": "定位与观察", "input": "输入"}
@@ -144,7 +145,7 @@ def outputs():
     catalog["platformFixtures"] = {name: json.loads((ROOT / "examples/platform" / (name + ".json")).read_text(encoding="utf-8")) for name in ("macos-capabilities", "macos-permissions", "wayland-capabilities", "macos-cross-display", "context-cross-backend")}
     doc = [
         "# 全界面原型设计", "",
-        "设计版本：0.1.0  ", "更新日期：2026-10-29", "",
+        "设计版本：0.1.0  ", "更新日期：2026-11-07", "",
         f"共 {len(screens)} 个界面，覆盖页面、属性面板、抽屉、弹窗、浮条、选区覆盖层、安装维护及关键异常状态。",
         "", "[打开可点击原型](../prototypes/index.html) · [原型使用说明](../prototypes/README.md) · [界面数据清单](../prototypes/catalog.json)",
         "", "## 主要界面", "", "![主要界面概览](../prototypes/overview/key-screens.png)", "",
@@ -226,7 +227,7 @@ def outputs():
         "```", "",
         "重新生成设计图需要 Node.js/npm、Chrome，以及 requirements-prototypes.txt 中的 Pillow。安装工具后运行 python tools/render_prototypes.py，随后运行 python tools/compose_prototypes.py。渲染器使用固定版本 Playwright CLI，创建独立本机预览与浏览器会话，结束时关闭；合成工具生成图册总览。",
         "",
-        "运行 python tools/render_prototypes.py --check-only 检查全部页面与交互，或使用 --interactions-only 仅检查交互。--interaction-suite baseline、completion、authoring、recording、query 或 platform 可选择单组；交互结果在运行时校验。", "",
+        "运行 python tools/render_prototypes.py --check-only 检查全部页面与交互，或使用 --interactions-only 仅检查交互。--interaction-suite baseline、completion、authoring、content、content-recovery、content-rejections、recording、query 或 platform 可选择单组；交互结果在运行时校验。", "",
     ]
     return {
         PROTOTYPES / "catalog.json": encode(catalog),

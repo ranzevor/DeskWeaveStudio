@@ -80,7 +80,7 @@ services 使用 packages/service-client 中从服务契约生成的方法和类�
 
 Monaco 按需加载，每份文档复用一个模型，退出时释放；未打开源码的工作空间不创建编辑器实例。图像先显示缩略图，原图分块读取，及时回收位图、对象 URL 与旧帧。
 
-事件处理先检查 epoch 和序号，再批量更新投影；普通进度可合并，终态和错误不丢弃。React 的渲染完成不作为保存或运行完成的判断。
+事件处理先检查 epoch 和序号，再批量更新投影；普通进度可合并，终态和错误不丢弃。保存和运行状态取自 Engine 返回的业务结果。
 
 ## 组件与视觉变量
 
@@ -96,7 +96,7 @@ Monaco 按需加载，每份文档复用一个模型，退出时释放；未打�
 
 命令携带窗口、文档、工作空间和连接代次；回复绑定原接收者。主窗口关闭前分别处理草稿持久化、所属运行、独立观察、作业与监听服务。run 与 observation 的 detached 由创建时固定；查看窗口不成为对象拥有者。恢复打开的文档和布局时不自动恢复桌面输入。
 
-Host 监听 WebView 失效和窗口销毁，撤销原窗口能力并把实际客户端丢失传递到 Engine；Host 管道仍存在不能代表原 UI 仍活动。窗口、后台和进程收尾顺序见[组件生命周期](../architecture/lifecycle.md)。
+Host 监听 WebView 失效和窗口销毁，撤销原窗口能力并把实际客户端丢失传递到 Engine；UI 活动状态由对应窗口的存活状态与连接代次确定。窗口、后台和进程收尾顺序见[组件生命周期](../architecture/lifecycle.md)。
 
 检查路径由[交互设计](experience.md)、[无障碍要求](../../ACCESSIBILITY.md)和 Q02/Q03/Q11/Q16 组成。实现阶段以真实 WebView2 执行原生对话框、输入法和辅助技术任务。
 
@@ -118,13 +118,17 @@ TopologySession 保存基准 editVersion、候选入口与出口差异、不可�
 
 ExpressionSession 保存原字段、非法原文、最后有效 Value AST、当前结构树路径及合成求值快照。递归节点依照 values.schema.json 构造；预览调用 expression.preview，由 Engine 的运行求值器计算结果并检查类型和限额。计算失败按 details.expressionPath 选择对应操作数，按 details.reason 区分缺失路径、除零、类型与容量错误，message 显示具体原因；请求结构错误按 details.fieldPath 定位参数。异步请求绑定文档与表达式编辑代次；修改值或上下文、取消或切换字段后旧结果失效。
 
-TrajectoryEditSession 保存固定源版本、左闭右开的选段、问题及逐项修复方案、预览输出与撤销补丁。修改选段或任一方案使旧预览失效；应用时再次核对源版本和预览摘要。输出为完整 Trajectory，预览不发送桌面输入。
+TrajectoryEditSession 保存固定源版本、左闭右开的选段、问题及逐项修复方案、预览输出与撤销补丁。修改选段或任一方案使旧预览失效；应用时再次核对源版本和预览摘要。输出为完整 Trajectory，预览按事件显示时间、动作、位置或按键；相对移动与滚动显示带符号的水平、垂直分量，保持来源数值及单位语义。预览不发送桌面输入。
 
 CaptureSelectionSession 保存捕获帧身份、目标与拓扑代次、targetPixels 矩形、当前手柄及数值草稿。键盘、数值输入与指针共享同一矩形；错误数值保留原文，不能覆盖最后有效矩形。确认时核对帧和目标仍有效；失效后重新采集，保留上一选区供比较，不直接使用旧坐标。
 
 ## 版本、变量与提交会话
 
-RevisionQuerySession 和 ConnectionQuerySession 保存服务返回的固定分页；VariableInspectionSession 保存快照、范围、调用帧和dataVersion，过期重查而不拼接新旧值。ConnectionTestSession 固定编辑代次与原作业，修改后取消并丢弃过期投影。AssetEditSession 保存源、目标头、编辑计划、未提交内容和原作业；成功回执匹配当前文档后才绑定新版本。完整事务见[制作设计](authoring-transactions.md)，变量和查询见[运行检查](runtime-inspection.md)。
+RevisionQuerySession 和 ConnectionQuerySession 保存服务返回的固定分页；VariableInspectionSession 保存快照、范围、调用帧和dataVersion，过期重查而不拼接新旧值。ConnectionTestSession 固定编辑代次与原作业，修改后取消并丢弃过期投影。AssetEditSession 保存源、目标头、编辑计划、未提交内容和原作业；成功回执匹配当前文档后才绑定新版本。资产操作的执行状态与界面等待状态分开保存，结果查询沿用原 operationId 和 editId，取消意图不替代作业终态。完整事务见[制作设计](authoring-transactions.md)，变量和查询见[运行检查](runtime-inspection.md)。
+
+异步进度与最终刷新同时核对实际活动路由、会话对象和操作代次。离开页面后不改变当前导航；返回同一编辑会话时继续显示原操作的最新状态，重新建立会话后丢弃旧回调。取消、重新测试和编辑代次变化使旧操作回调失效；视图刷新不发起导航或新增历史记录。浏览器后退、前进恢复现有会话；原型目录选取画板及显式初始化建立对应初始状态。
+
+流程保存先检查当前头与草稿基准，提交时再次核对。版本冲突与传输错误使用不同恢复路径：冲突状态停止重复上传，另存使用独立候选会话创建新的流程身份与初始版本，并重新编码完整流程及依赖；原会话的模型、草稿身份和版本基准保持原值，失败或取消时提供返回入口；传输错误保留当前目标供重试。
 
 ## 三个平台的宿主行为
 

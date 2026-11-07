@@ -1,7 +1,7 @@
 # 高保真界面效果图
 
 设计版本：0.1.0  
-更新日期：2026-10-29
+更新日期：2026-11-07
 
 采用精致浅色外壳、浅色点阵画布与适中信息密度。完整界面采用同一视觉系统；以下核心页面另外提供 2× 高清图像及展示板。
 
@@ -27,6 +27,8 @@
 | 表达式类型错误 | [2880 × 1800](../prototypes/high-fidelity/E26-expression-invalid@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E26-expression-invalid-board.png) |
 | 精确轨迹裁剪 | [2880 × 1800](../prototypes/high-fidelity/R18-trajectory-trim@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R18-trajectory-trim-board.png) |
 | 多个配对问题修复 | [2880 × 1800](../prototypes/high-fidelity/R19-trajectory-repair-many@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R19-trajectory-repair-many-board.png) |
+| 轨迹裁剪预览结果 | [2880 × 1800](../prototypes/high-fidelity/R27-trajectory-trim-preview@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R27-trajectory-trim-preview-board.png) |
+| 轨迹配对修复预览 | [2880 × 1800](../prototypes/high-fidelity/R28-trajectory-repair-preview@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R28-trajectory-repair-preview-board.png) |
 | 键盘与数值截图选区 | [2880 × 1800](../prototypes/high-fidelity/R20-capture-keyboard@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R20-capture-keyboard-board.png) |
 | 截图选区越界 | [2880 × 1800](../prototypes/high-fidelity/R21-capture-boundary@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R21-capture-boundary-board.png) |
 | 继续前核对输入 | [2880 × 1800](../prototypes/high-fidelity/U19-resume-review@2x.png) | [3200 × 2200](../prototypes/high-fidelity/U19-resume-review-board.png) |
@@ -34,16 +36,16 @@
 | 固定版本断点配置 | [2880 × 1800](../prototypes/high-fidelity/U21-breakpoints-edit@2x.png) | [3200 × 2200](../prototypes/high-fidelity/U21-breakpoints-edit-board.png) |
 | 断点配置版本冲突 | [2880 × 1800](../prototypes/high-fidelity/U22-breakpoints-conflict@2x.png) | [3200 × 2200](../prototypes/high-fidelity/U22-breakpoints-conflict-board.png) |
 | 任务包对象映射 | [2880 × 1800](../prototypes/high-fidelity/A10-package-target-map@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A10-package-target-map-board.png) |
-| 导入映射计划失效 | [2880 × 1800](../prototypes/high-fidelity/A11-package-target-invalid@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A11-package-target-invalid-board.png) |
+| 导入预览已失效 | [2880 × 1800](../prototypes/high-fidelity/A11-package-target-invalid@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A11-package-target-invalid-board.png) |
 | 删除资产与引用检查 | [2880 × 1800](../prototypes/high-fidelity/A12-asset-delete-review@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A12-asset-delete-review-board.png) |
 | 资产删除检查失效 | [2880 × 1800](../prototypes/high-fidelity/A13-asset-delete-stale@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A13-asset-delete-stale-board.png) |
 | 设置范围与有效来源 | [2880 × 1800](../prototypes/high-fidelity/S11-settings-overrides@2x.png) | [3200 × 2200](../prototypes/high-fidelity/S11-settings-overrides-board.png) |
 | 设置并发冲突 | [2880 × 1800](../prototypes/high-fidelity/S12-settings-conflict@2x.png) | [3200 × 2200](../prototypes/high-fidelity/S12-settings-conflict-board.png) |
-| 保存配置与实际监听 | [2880 × 1800](../prototypes/high-fidelity/C18-mcp-config-read@2x.png) | [3200 × 2200](../prototypes/high-fidelity/C18-mcp-config-read-board.png) |
+| 连接设置与服务状态 | [2880 × 1800](../prototypes/high-fidelity/C18-mcp-config-read@2x.png) | [3200 × 2200](../prototypes/high-fidelity/C18-mcp-config-read-board.png) |
 | 令牌范围与使用记录 | [2880 × 1800](../prototypes/high-fidelity/C19-mcp-token-query@2x.png) | [3200 × 2200](../prototypes/high-fidelity/C19-mcp-token-query-board.png) |
-| 更新来源与信任校验 | [2880 × 1800](../prototypes/high-fidelity/O14-update-trust@2x.png) | [3200 × 2200](../prototypes/high-fidelity/O14-update-trust-board.png) |
+| 检查版本与安装包 | [2880 × 1800](../prototypes/high-fidelity/O14-update-trust@2x.png) | [3200 × 2200](../prototypes/high-fidelity/O14-update-trust-board.png) |
 | 更新校验失败 | [2880 × 1800](../prototypes/high-fidelity/O15-update-verification-failed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/O15-update-verification-failed-board.png) |
-| 人工降级本地确认 | [2880 × 1800](../prototypes/high-fidelity/O16-update-downgrade@2x.png) | [3200 × 2200](../prototypes/high-fidelity/O16-update-downgrade-board.png) |
+| 确认降级版本 | [2880 × 1800](../prototypes/high-fidelity/O16-update-downgrade@2x.png) | [3200 × 2200](../prototypes/high-fidelity/O16-update-downgrade-board.png) |
 | 撤销令牌与运行处置 | [2880 × 1800](../prototypes/high-fidelity/C14-mcp-token-revoke@2x.png) | [3200 × 2200](../prototypes/high-fidelity/C14-mcp-token-revoke-board.png) |
 | 运行变量检查 | [2880 × 1800](../prototypes/high-fidelity/U23-variables-inspect@2x.png) | [3200 × 2200](../prototypes/high-fidelity/U23-variables-inspect-board.png) |
 | 变量快照已过期 | [2880 × 1800](../prototypes/high-fidelity/U24-variables-expired@2x.png) | [3200 × 2200](../prototypes/high-fidelity/U24-variables-expired-board.png) |
@@ -54,10 +56,14 @@
 | 测试未保存的连接 | [2880 × 1800](../prototypes/high-fidelity/S14-connection-draft-test@2x.png) | [3200 × 2200](../prototypes/high-fidelity/S14-connection-draft-test-board.png) |
 | 连接测试结果已失效 | [2880 × 1800](../prototypes/high-fidelity/S15-connection-test-stale@2x.png) | [3200 × 2200](../prototypes/high-fidelity/S15-connection-test-stale-board.png) |
 | 保存手工编辑资产 | [2880 × 1800](../prototypes/high-fidelity/A14-asset-edit-save@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A14-asset-edit-save-board.png) |
-| 资产头版本冲突 | [2880 × 1800](../prototypes/high-fidelity/A15-asset-edit-conflict@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A15-asset-edit-conflict-board.png) |
-| 资产编辑已取消 | [2880 × 1800](../prototypes/high-fidelity/A16-asset-edit-cancelled@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A16-asset-edit-cancelled-board.png) |
-| 大流程分块保存 | [2880 × 1800](../prototypes/high-fidelity/E29-content-save@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E29-content-save-board.png) |
-| 保存传输中断 | [2880 × 1800](../prototypes/high-fidelity/E30-content-transfer-failed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E30-content-transfer-failed-board.png) |
+| 资产版本冲突 | [2880 × 1800](../prototypes/high-fidelity/A15-asset-edit-conflict@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A15-asset-edit-conflict-board.png) |
+| 资产保存已取消 | [2880 × 1800](../prototypes/high-fidelity/A16-asset-edit-cancelled@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A16-asset-edit-cancelled-board.png) |
+| 资产版本内容比较 | [2880 × 1800](../prototypes/high-fidelity/A17-asset-edit-review@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A17-asset-edit-review-board.png) |
+| 资产保存结果查询 | [2880 × 1800](../prototypes/high-fidelity/A18-asset-edit-uncertain@2x.png) | [3200 × 2200](../prototypes/high-fidelity/A18-asset-edit-uncertain-board.png) |
+| 保存流程 | [2880 × 1800](../prototypes/high-fidelity/E29-content-save@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E29-content-save-board.png) |
+| 流程保存失败 | [2880 × 1800](../prototypes/high-fidelity/E30-content-transfer-failed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E30-content-transfer-failed-board.png) |
+| 流程冲突与另存 | [2880 × 1800](../prototypes/high-fidelity/E31-content-save-conflict@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E31-content-save-conflict-board.png) |
+| 副本失败与原草稿恢复 | [2880 × 1800](../prototypes/high-fidelity/E32-content-copy-failed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/E32-content-copy-failed-board.png) |
 | 录制准备 | [2880 × 1800](../prototypes/high-fidelity/R01-record-config@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R01-record-config-board.png) |
 | 录制显示屏布局 | [2880 × 1800](../prototypes/high-fidelity/R22-record-displays@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R22-record-displays-board.png) |
 | 录制显示布局已变化 | [2880 × 1800](../prototypes/high-fidelity/R23-record-topology-changed@2x.png) | [3200 × 2200](../prototypes/high-fidelity/R23-record-topology-changed-board.png) |
@@ -167,6 +173,18 @@
 
 [查看高清原图](../prototypes/high-fidelity/R19-trajectory-repair-many@2x.png) · [打开此界面](../prototypes/index.html#trajectory-repair-many)
 
+## 轨迹裁剪预览结果
+
+![轨迹裁剪预览结果高保真效果图](../prototypes/high-fidelity/R27-trajectory-trim-preview-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/R27-trajectory-trim-preview@2x.png) · [打开此界面](../prototypes/index.html#trajectory-trim-preview)
+
+## 轨迹配对修复预览
+
+![轨迹配对修复预览高保真效果图](../prototypes/high-fidelity/R28-trajectory-repair-preview-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/R28-trajectory-repair-preview@2x.png) · [打开此界面](../prototypes/index.html#trajectory-repair-preview)
+
 ## 键盘与数值截图选区
 
 ![键盘与数值截图选区高保真效果图](../prototypes/high-fidelity/R20-capture-keyboard-board.png)
@@ -209,9 +227,9 @@
 
 [查看高清原图](../prototypes/high-fidelity/A10-package-target-map@2x.png) · [打开此界面](../prototypes/index.html#package-target-map)
 
-## 导入映射计划失效
+## 导入预览已失效
 
-![导入映射计划失效高保真效果图](../prototypes/high-fidelity/A11-package-target-invalid-board.png)
+![导入预览已失效高保真效果图](../prototypes/high-fidelity/A11-package-target-invalid-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/A11-package-target-invalid@2x.png) · [打开此界面](../prototypes/index.html#package-target-invalid)
 
@@ -239,9 +257,9 @@
 
 [查看高清原图](../prototypes/high-fidelity/S12-settings-conflict@2x.png) · [打开此界面](../prototypes/index.html#settings-conflict)
 
-## 保存配置与实际监听
+## 连接设置与服务状态
 
-![保存配置与实际监听高保真效果图](../prototypes/high-fidelity/C18-mcp-config-read-board.png)
+![连接设置与服务状态高保真效果图](../prototypes/high-fidelity/C18-mcp-config-read-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/C18-mcp-config-read@2x.png) · [打开此界面](../prototypes/index.html#mcp-config-read)
 
@@ -251,9 +269,9 @@
 
 [查看高清原图](../prototypes/high-fidelity/C19-mcp-token-query@2x.png) · [打开此界面](../prototypes/index.html#mcp-token-query)
 
-## 更新来源与信任校验
+## 检查版本与安装包
 
-![更新来源与信任校验高保真效果图](../prototypes/high-fidelity/O14-update-trust-board.png)
+![检查版本与安装包高保真效果图](../prototypes/high-fidelity/O14-update-trust-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/O14-update-trust@2x.png) · [打开此界面](../prototypes/index.html#update-trust)
 
@@ -263,9 +281,9 @@
 
 [查看高清原图](../prototypes/high-fidelity/O15-update-verification-failed@2x.png) · [打开此界面](../prototypes/index.html#update-verification-failed)
 
-## 人工降级本地确认
+## 确认降级版本
 
-![人工降级本地确认高保真效果图](../prototypes/high-fidelity/O16-update-downgrade-board.png)
+![确认降级版本高保真效果图](../prototypes/high-fidelity/O16-update-downgrade-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/O16-update-downgrade@2x.png) · [打开此界面](../prototypes/index.html#update-downgrade)
 
@@ -329,29 +347,53 @@
 
 [查看高清原图](../prototypes/high-fidelity/A14-asset-edit-save@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-save)
 
-## 资产头版本冲突
+## 资产版本冲突
 
-![资产头版本冲突高保真效果图](../prototypes/high-fidelity/A15-asset-edit-conflict-board.png)
+![资产版本冲突高保真效果图](../prototypes/high-fidelity/A15-asset-edit-conflict-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/A15-asset-edit-conflict@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-conflict)
 
-## 资产编辑已取消
+## 资产保存已取消
 
-![资产编辑已取消高保真效果图](../prototypes/high-fidelity/A16-asset-edit-cancelled-board.png)
+![资产保存已取消高保真效果图](../prototypes/high-fidelity/A16-asset-edit-cancelled-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/A16-asset-edit-cancelled@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-cancelled)
 
-## 大流程分块保存
+## 资产版本内容比较
 
-![大流程分块保存高保真效果图](../prototypes/high-fidelity/E29-content-save-board.png)
+![资产版本内容比较高保真效果图](../prototypes/high-fidelity/A17-asset-edit-review-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/A17-asset-edit-review@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-review)
+
+## 资产保存结果查询
+
+![资产保存结果查询高保真效果图](../prototypes/high-fidelity/A18-asset-edit-uncertain-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/A18-asset-edit-uncertain@2x.png) · [打开此界面](../prototypes/index.html#asset-edit-uncertain)
+
+## 保存流程
+
+![保存流程高保真效果图](../prototypes/high-fidelity/E29-content-save-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/E29-content-save@2x.png) · [打开此界面](../prototypes/index.html#content-save)
 
-## 保存传输中断
+## 流程保存失败
 
-![保存传输中断高保真效果图](../prototypes/high-fidelity/E30-content-transfer-failed-board.png)
+![流程保存失败高保真效果图](../prototypes/high-fidelity/E30-content-transfer-failed-board.png)
 
 [查看高清原图](../prototypes/high-fidelity/E30-content-transfer-failed@2x.png) · [打开此界面](../prototypes/index.html#content-transfer-failed)
+
+## 流程冲突与另存
+
+![流程冲突与另存高保真效果图](../prototypes/high-fidelity/E31-content-save-conflict-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/E31-content-save-conflict@2x.png) · [打开此界面](../prototypes/index.html#content-save-conflict)
+
+## 副本失败与原草稿恢复
+
+![副本失败与原草稿恢复高保真效果图](../prototypes/high-fidelity/E32-content-copy-failed-board.png)
+
+[查看高清原图](../prototypes/high-fidelity/E32-content-copy-failed@2x.png) · [打开此界面](../prototypes/index.html#content-copy-failed)
 
 ## 录制准备
 

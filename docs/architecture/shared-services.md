@@ -20,7 +20,7 @@ flowchart TB
     AGENT --> PLATFORM[Windows / macOS / X11 / Wayland]
 ```
 
-工作台使用 Tauri WebView 加载 React 静态资源；Vite 开发服务器只提供前端资源。独立浏览器访问的原型位于 docs/prototypes，其内存数据和模拟交互用于页面设计。正式工作台通过 Host 连接 Engine，原型脚本不作为生产执行器或 MCP 服务导入。
+工作台使用 Tauri WebView 加载 React 静态资源；Vite 开发服务器只提供前端资源。docs/prototypes 提供浏览器页面设计与内存交互。工作台通过 Host 连接 Engine，MCP Bridge 通过 Engine 客户端调用共享服务。
 
 Engine 可由工作台或命令启动器启动；MCP 不依赖工作台窗口保持打开。启动器按[生命周期](lifecycle.md)连接或启动该工作空间的唯一实例。Bridge 重启只恢复协议连接，不能另外创建工作空间数据库、解释器或运行状态。
 

@@ -346,7 +346,7 @@
     {
       "code": "C18",
       "id": "mcp-config-read",
-      "title": "保存配置与实际监听",
+      "title": "连接设置与服务状态",
       "view": "completion",
       "variant": "mcp-config-read",
       "parent": null,

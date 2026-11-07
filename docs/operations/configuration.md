@@ -21,7 +21,7 @@
 | 观察记录与截图 | 用户/工作空间 | 自动清理默认关闭；确认后采用 30 天、2048MiB；天数 null 表示手动管理 | immediate，只影响后续清理 |
 | 预览刷新 | 用户 | 5Hz，1..30Hz | restartAgent |
 | 使用统计 | 用户 | 关闭 | immediate |
-| 更新 | 用户 | stable 通道，自动检查开启 | immediate，检查不等于安装 |
+| 更新 | 用户 | stable 通道，自动检查开启 | immediate；安装由用户确认 |
 
 storage.runRetentionEnabled 与 storage.observationRetentionEnabled 初始均为 false；启用时由本地界面明确确认对应保留范围，不能因读取默认天数或保存其他设置而触发清理。关闭自动清理不删除历史内容，减小容量也不越过已有强引用。
 
@@ -29,7 +29,7 @@ storage.runRetentionEnabled 与 storage.observationRetentionEnabled 初始均为
 
 主键允许 A..Z、0..9、F1..F24，以及 Pause、PrintScreen、ScrollLock、Insert、Delete、Home、End、PageUp、PageDown、Left、Right、Up、Down、Space、Tab、Escape、Enter、Backspace。Windows 固定保留组合为 Ctrl+Alt+Delete、Win+L、Win+U、Win+D、Win+Tab、Win+R、Win+E、Alt+Tab、Alt+Escape、Alt+F4、Ctrl+Escape、Ctrl+Shift+Escape；按规范化后的完整组合比较。未知主键或固定保留组合拒绝；macOS/Linux 分别按 reservedByPlatform 检查，其他系统保留及占用由当前后端的原生注册结果裁决。
 
-三个全局功能对合并后的完整有效映射做规范化冲突检查，不能只检查本次修改项。改变组合时先注册全部新键，成功后再注销旧键；不变组合的功能映射原子切换。失败释放本次新注册并保留原配置及原热键。系统支持和占用的原生验收独立于文档语法检查。
+三个全局功能对合并后的完整有效映射做规范化冲突检查，不能只检查本次修改项。改变组合时先注册全部新键，成功后再注销旧键；不变组合的功能映射原子切换。失败释放本次新注册并保留原配置及原热键。系统支持和占用冲突在对应平台执行原生测试。
 
 
 ## 读取、重置与整批提交

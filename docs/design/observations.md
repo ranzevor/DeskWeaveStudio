@@ -28,7 +28,7 @@
 
 所有者由认证上下文中的稳定客户端身份、连接会话和授权记录确定，不能通过请求参数冒认。创建时固定 owner、detached、目标代次和连接版本；重连不改变原所有者，读取和控制仍重新核对对象授权。
 
-普通网络请求完成或资源订阅断开不等于客户端退出。新版 HTTP 的所有者是经认证的 Engine 委托上下文，按[组件生命周期](../architecture/lifecycle.md)由 Bridge 服务与原授权期限管理，不建立 MCP 协议会话。默认观察在工作台窗口关闭、stdio EOF、网络协议会话明确结束或授权会话到期后进入 stopping；detached=true 只豁免对应客户端退出。撤销模型凭据、目标或客户端授权仍会停止后台观察。停止先禁止新触发，再完成当前请求的取消与持久化收尾。
+普通网络请求完成或资源订阅断开时，观察所有权仍由其所属客户端上下文管理。新版 HTTP 的所有者是经认证的 Engine 委托上下文，按[组件生命周期](../architecture/lifecycle.md)由 Bridge 服务与原授权期限管理，不建立 MCP 协议会话。默认观察在工作台窗口关闭、stdio EOF、网络协议会话明确结束或授权会话到期后进入 stopping；detached=true 只豁免对应客户端退出。撤销模型凭据、目标或客户端授权仍会停止后台观察。停止先禁止新触发，再完成当前请求的取消与持久化收尾。
 
 Engine 重启不恢复周期计时或自动重发模型请求。启动核定将遗留 running/stopping 会话标为 failed，reason 为 PROCESS_INTERRUPTED，保留 checkedCount、原配置和已保存记录；在途 operation 按[持久化事务](persistence-transactions.md)核定。重新观察需要用户选择有效目标与连接后创建新会话。
 

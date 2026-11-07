@@ -353,6 +353,104 @@ class ContentTests(ContentCase):
             "METHOD_UNAVAILABLE",
         )
 
+    def test_reference_business_rejections_leave_no_version_on_replay(self):
+        original = self.save()
+        for code in (
+            "INVALID_WORKFLOW",
+            "METHOD_UNAVAILABLE",
+            "CONTENT_REFERENCE_INVALID",
+            "CONTENT_HASH_MISMATCH",
+            "CONTENT_INCOMPLETE",
+        ):
+            with self.subTest(code=code):
+                definition = workflow()
+                if code == "INVALID_WORKFLOW":
+                    definition["entry"] = "missing"
+                if code == "METHOD_UNAVAILABLE":
+                    definition["resources"] = {"image": {"kind": "image"}}
+                _, reference = self.upload(definition)
+                params = self.save_params(reference, base=original["revision"])
+                if code == "CONTENT_REFERENCE_INVALID":
+                    params["modelRef"] = {**reference, "sha256": "0" * 64}
+                if code in {"CONTENT_HASH_MISMATCH", "CONTENT_INCOMPLETE"}:
+                    item = self.engine.contents.resources[reference["resourceId"]]
+                    if code == "CONTENT_HASH_MISMATCH":
+                        item.stream.seek(0)
+                        item.stream.write(b"!")
+                    else:
+                        item.stream.truncate(item.length - 1)
+                    item.stream.flush()
+                request_id = "rejected-" + code.lower()
+                fixed_params = dumps(params)
+                response = self.request("workflow.save", params, request_id=request_id)
+                self.assertEqual(response["error"]["code"], code)
+                status = self.success("request.status", {"requestId": request_id})
+                self.assertEqual((status["state"], status["result"]), ("notReceived", None))
+                repeated = self.request("workflow.save", params, request_id=request_id)
+                self.assertEqual(repeated["error"], response["error"])
+                self.assertEqual(dumps(params), fixed_params)
+                history = self.success("workflow.revisions", {"workflowId": "hello"})
+                self.assertEqual(history["headRevision"], original["revision"])
+                self.assertEqual(len(history["items"]), 1)
+
+    def test_reference_replay_recovers_conflict_after_missing_receipt(self):
+        first = self.save()
+        current = self.save(workflow(name="外部更新"), first["revision"], session=self.remote)
+        _, reference = self.upload(workflow(name="本地草稿"))
+        params = self.save_params(reference, base=first["revision"])
+        encoded = dumps(params)
+        request_id = "recover-reference-conflict"
+
+        original = self.request("workflow.save", params, request_id=request_id)
+        self.assertEqual(original["error"]["code"], "REVISION_CONFLICT")
+        status = self.success("request.status", {"requestId": request_id})
+        self.assertEqual((status["state"], status["result"]), ("notReceived", None))
+        replay = self.request("workflow.save", params, request_id=request_id)
+        self.assertEqual(replay["error"], original["error"])
+        self.assertEqual(dumps(params), encoded)
+
+        history = self.success("workflow.revisions", {"workflowId": "hello"})
+        self.assertEqual(history["headRevision"], current["revision"])
+        self.assertEqual(len(history["items"]), 2)
+        saved = self.success(
+            "workflow.read", {"workflowId": "hello", "revision": current["revision"]}
+        )
+        self.assertEqual(saved["definition"]["name"], "外部更新")
+
+    def test_reference_replay_recovers_storage_failure_without_duplicate_versions(self):
+        original = self.save()
+        for identity, base in (("hello", original["revision"]), ("saved-copy", None)):
+            with self.subTest(workflow=identity):
+                definition = workflow(identity, "恢复保存")
+                _, reference = self.upload(definition)
+                params = self.save_params(reference, identity, base)
+                encoded = dumps(params)
+                request_id = "recover-storage-" + identity
+                with patch.object(
+                    self.workspace, "_atomic_write", side_effect=OSError("disk full")
+                ):
+                    failed = self.request("workflow.save", params, request_id=request_id)
+                    self.assertEqual(failed["error"]["code"], "STORAGE_UNAVAILABLE")
+                    status = self.success("request.status", {"requestId": request_id})
+                    self.assertEqual((status["state"], status["result"]), ("notReceived", None))
+                    repeated = self.request("workflow.save", params, request_id=request_id)
+                    self.assertEqual(repeated["error"], failed["error"])
+                self.assertEqual(dumps(params), encoded)
+
+                saved = self.success("workflow.save", params, request_id=request_id)
+                self.assertEqual(
+                    self.success("workflow.save", params, request_id=request_id), saved
+                )
+                status = self.success("request.status", {"requestId": request_id})
+                self.assertEqual((status["state"], status["result"]), ("finished", saved))
+                history = self.success("workflow.revisions", {"workflowId": identity})
+                self.assertEqual(history["headRevision"], saved["revision"])
+                self.assertEqual(len(history["items"]), 2 if base else 1)
+                actual = self.success(
+                    "workflow.read", {"workflowId": identity, "revision": saved["revision"]}
+                )
+                self.assertEqual(actual["definition"], definition)
+
     def test_saved_receipt_survives_discard_restart_and_reference_changes(self):
         identity, reference = self.upload()
         params = self.save_params(reference)

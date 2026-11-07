@@ -6,7 +6,7 @@
 | DW-002 | workflow、experience、studio | Workflow、Draft | Q02/Q36/Q37 | M2 |
 | DW-003 | storage、persistence-transactions、studio | 草稿读写、workflow.save、editVersion | Q03/Q42/Q45/Q46 | M1/M2 |
 | DW-004 | perception、recording、pointer-motion | desktop.topology、record.*、Trajectory、displayMapping、连续笔画 | Q04/Q38/Q44/Q48/Q50/Q51/Q52 | M3 |
-| DW-005 | perception | capture、vision.match | Q05/Q39/Q44 | M3 |
+| DW-005 | perception、authoring-transactions、storage | capture、vision.match | Q05/Q39/Q44 | M3 |
 | DW-006 | workflow、studio、shared-services | Value、Expression、expression.preview、limits | Q06/Q37/Q59 | M1/M2/M4 |
 | DW-007 | workflow、execution | call、join、repeat、Frame | Q07 | M1/M4 |
 | DW-008 | storage、execution | Revision、RunSnapshot、asset.delete | Q08/Q33/Q42/Q47 | M1 |
@@ -21,7 +21,7 @@
 | DW-017 | release | 签名清单、可信根、吊销与恢复 | Q17/Q40 | M5 |
 | DW-018 | configuration、storage | settings.*、设置目录、指标、容量 | Q18/Q34 | M1/M5 |
 | DW-019 | execution、local-protocol、lifecycle、persistence-transactions | epoch、effect_intent | Q19 | M1/M5 |
-| DW-020 | repository、engineering | 文档、CI、贡献入口 | Q20 | M0/M5 |
+| DW-020 | repository、engineering | 使用指南、接口文档、契约检查、兼容信息及贡献与反馈入口 | Q20 | M0/M5 |
 | DW-021 | templates、perception、persistence-transactions | template.extract/candidates/commit | Q21 | M3 |
 | DW-022 | templates、persistence-transactions | template.names、NamingPolicy | Q22 | M3 |
 | DW-023 | observations、lifecycle、command-line | observation.start/stop/session | Q23 | M4 |

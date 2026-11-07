@@ -212,11 +212,11 @@
     {
       "code": "A11",
       "id": "package-target-invalid",
-      "title": "导入映射计划失效",
+      "title": "导入预览已失效",
       "view": "completion",
       "variant": "package-target-invalid",
       "parent": null,
-      "purpose": "保留预览，目录或计划改变后重新核对内容映射。",
+      "purpose": "保留文件选择，重新检查导入内容。",
       "primary": null,
       "primaryLabel": "重新预览映射",
       "primaryKind": "local",
@@ -279,11 +279,11 @@
       "view": "authoring",
       "variant": "asset-edit-save",
       "parent": null,
-      "purpose": "选择新资产或新版本，固定源内容后提交。",
+      "purpose": "选择保存方式和名称，保存编辑后的图像或轨迹。",
       "primary": null,
-      "primaryLabel": "准备保存",
+      "primaryLabel": "保存资产",
       "primaryKind": "local",
-      "primaryResult": "选择新资产或新版本，固定源内容后提交。",
+      "primaryResult": "保存完成后显示资产版本。",
       "requirements": [
         "DW-004",
         "DW-005",
@@ -298,15 +298,15 @@
     {
       "code": "A15",
       "id": "asset-edit-conflict",
-      "title": "资产头版本冲突",
+      "title": "资产版本冲突",
       "view": "authoring",
       "variant": "asset-edit-conflict",
       "parent": null,
-      "purpose": "保留编辑，读取最新头后由用户重新提交。",
+      "purpose": "保留草稿，查看当前版本内容后选择追加版本或独立另存。",
       "primary": null,
-      "primaryLabel": "重新准备",
+      "primaryLabel": "查看当前版本",
       "primaryKind": "local",
-      "primaryResult": "保留编辑，读取最新头后由用户重新提交。",
+      "primaryResult": "展示来源与当前版本内容，并提供明确的保存选择。",
       "requirements": [
         "DW-008",
         "DW-012"
@@ -320,17 +320,61 @@
     {
       "code": "A16",
       "id": "asset-edit-cancelled",
-      "title": "资产编辑已取消",
+      "title": "资产保存已取消",
       "view": "authoring",
       "variant": "asset-edit-cancelled",
       "parent": null,
-      "purpose": "取消未提交计划不产生正式版本，编辑内容继续保留。",
+      "purpose": "保留当前编辑内容，按需重新保存。",
       "primary": null,
-      "primaryLabel": "准备保存",
+      "primaryLabel": "保存资产",
       "primaryKind": "local",
-      "primaryResult": "取消未提交计划不产生正式版本，编辑内容继续保留。",
+      "primaryResult": "保存当前编辑内容。",
       "requirements": [
         "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A17",
+      "id": "asset-edit-review",
+      "title": "资产版本内容比较",
+      "view": "authoring",
+      "variant": "asset-edit-review",
+      "parent": null,
+      "purpose": "查看草稿来源和当前版本，选择追加版本或独立另存。",
+      "primary": null,
+      "primaryLabel": "选择保存方式",
+      "primaryKind": "local",
+      "primaryResult": "按明确选择提交固定内容。",
+      "requirements": [
+        "DW-008",
+        "DW-012"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light"
+    },
+    {
+      "code": "A18",
+      "id": "asset-edit-uncertain",
+      "title": "资产保存结果查询",
+      "view": "authoring",
+      "variant": "asset-edit-uncertain",
+      "parent": null,
+      "purpose": "沿用原保存操作查询实际结果。",
+      "primary": null,
+      "primaryLabel": "查询保存结果",
+      "primaryKind": "local",
+      "primaryResult": "显示原操作的终态与已保存版本。",
+      "requirements": [
+        "DW-012",
+        "DW-N05"
       ],
       "viewport": {
         "width": 1440,
