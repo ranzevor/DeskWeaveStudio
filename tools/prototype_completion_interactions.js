@@ -43,12 +43,30 @@ async page=>{
  await assert('无效JSON值切换结构树时保留原文',()=>{const e=window.DW_DESIGN_STATE.completion.expression;return e.raw==='{"$expr":{"op":"and","args":[7,true]}}'&&!!e.error;});
  await render('trajectory-repair-many');await click('trim-preview');
  await assert('未选配对策略时不生成裁剪结果',()=>{const t=window.DW_DESIGN_STATE.completion.trim;return !!t.error&&t.output===null;});
- await click('trim-repair-all');await click('trim-preview');await click('trim-apply');
+ await click('trim-repair-all');await click('trim-preview');
+ await assert('裁剪预览显示每次相对移动的时间与带符号位移',()=>{
+  const rows=[...document.querySelectorAll('tr')].filter(row=>row.cells[1]?.textContent==='相对移动').map(row=>[...row.cells].map(cell=>cell.textContent));
+  return JSON.stringify(rows)===JSON.stringify([['150 ms','相对移动','水平 +18 · 垂直 -6（来源单位）'],['800 ms','相对移动','水平 +7 · 垂直 +4（来源单位）']]);
+ });
+ await click('trim-apply');
  await assert('精确裁剪输出左闭右开且时间归零',()=>{const t=window.DW_DESIGN_STATE.completion.trim;return t.outputDurationUs===1000000&&t.output.events[0].atUs===0&&t.output.events.every(e=>e.atUs>=0&&e.atUs<1000000);});
  await assert('裁剪保留全部累计相对位移',()=>{const a=window.DW_DESIGN_STATE.completion.trim.output.events.filter(e=>e.kind==='pointer.delta');return a.reduce((s,e)=>s+e.dx,0)===25&&a.reduce((s,e)=>s+e.dy,0)===-2;});
  await collect('配对修复后轨迹','trajectory.schema.json',()=>window.DW_DESIGN_STATE.completion.trim.output);
  await click('trim-undo');await assert('裁剪撤销保留完整源轨迹',()=>{const t=window.DW_DESIGN_STATE.completion.trim;return t.output===null&&t.source.events.length===8;});
  await assert('轨迹事件使用可读动作名称',()=>![...document.querySelectorAll('td')].some(e=>/key\.down|key\.up|pointer\.button|pointer\.delta/.test(e.textContent)));
+ await page.evaluate(()=>{
+  const t=window.DW_DESIGN_STATE.completion.trim;
+  t.source.formatVersion='1.1';
+  t.source.source=JSON.parse(JSON.stringify(window.DW_CATALOG.platformFixtures['macos-cross-display'].source));
+  t.source.events=t.source.events.map(e=>e.kind==='pointer.delta'?{...e,dx:-0.5,dy:0}:e);
+  t.source.events.push({kind:'pointer.scroll',dx:0,dy:-2,atUs:1100000});
+  t.source.events.sort((a,b)=>a.atUs-b.atUs);
+ });
+ await click('trim-preview');
+ await assert('轨迹预览保留小数、零值、滚动分量及来源单位',()=>{
+  const rows=[...document.querySelectorAll('tr')],movement=rows.filter(row=>row.cells[1]?.textContent==='相对移动');
+  return movement.length===2&&movement.every(row=>row.cells[2].textContent==='水平 -0.5 · 垂直 0（系统点）')&&rows.some(row=>row.cells[1]?.textContent==='滚动'&&row.cells[2].textContent==='水平 0 · 垂直 -2');
+ });
  await render('capture-keyboard');await page.locator('[data-cp-roi-focus]').focus();await page.keyboard.press('Shift+ArrowRight');await page.keyboard.press('Alt+ArrowDown');await click('roi-apply');
  await assert('键盘移动与缩放输出实际目标像素选区',()=>{const r=window.DW_DESIGN_STATE.completion.roi.output;return r.space==='targetPixels'&&r.x===1010&&r.y===310&&r.height===57&&r.width===142;});
  await collect('键盘选区','vision.schema.json#/$defs/roi',()=>window.DW_DESIGN_STATE.completion.roi.output);

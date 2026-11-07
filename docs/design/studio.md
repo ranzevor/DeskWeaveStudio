@@ -118,13 +118,15 @@ TopologySession 保存基准 editVersion、候选入口与出口差异、不可�
 
 ExpressionSession 保存原字段、非法原文、最后有效 Value AST、当前结构树路径及合成求值快照。递归节点依照 values.schema.json 构造；预览调用 expression.preview，由 Engine 的运行求值器计算结果并检查类型和限额。计算失败按 details.expressionPath 选择对应操作数，按 details.reason 区分缺失路径、除零、类型与容量错误，message 显示具体原因；请求结构错误按 details.fieldPath 定位参数。异步请求绑定文档与表达式编辑代次；修改值或上下文、取消或切换字段后旧结果失效。
 
-TrajectoryEditSession 保存固定源版本、左闭右开的选段、问题及逐项修复方案、预览输出与撤销补丁。修改选段或任一方案使旧预览失效；应用时再次核对源版本和预览摘要。输出为完整 Trajectory，预览不发送桌面输入。
+TrajectoryEditSession 保存固定源版本、左闭右开的选段、问题及逐项修复方案、预览输出与撤销补丁。修改选段或任一方案使旧预览失效；应用时再次核对源版本和预览摘要。输出为完整 Trajectory，预览按事件显示时间、动作、位置或按键；相对移动与滚动显示带符号的水平、垂直分量，保持来源数值及单位语义。预览不发送桌面输入。
 
 CaptureSelectionSession 保存捕获帧身份、目标与拓扑代次、targetPixels 矩形、当前手柄及数值草稿。键盘、数值输入与指针共享同一矩形；错误数值保留原文，不能覆盖最后有效矩形。确认时核对帧和目标仍有效；失效后重新采集，保留上一选区供比较，不直接使用旧坐标。
 
 ## 版本、变量与提交会话
 
 RevisionQuerySession 和 ConnectionQuerySession 保存服务返回的固定分页；VariableInspectionSession 保存快照、范围、调用帧和dataVersion，过期重查而不拼接新旧值。ConnectionTestSession 固定编辑代次与原作业，修改后取消并丢弃过期投影。AssetEditSession 保存源、目标头、编辑计划、未提交内容和原作业；成功回执匹配当前文档后才绑定新版本。完整事务见[制作设计](authoring-transactions.md)，变量和查询见[运行检查](runtime-inspection.md)。
+
+异步进度与最终刷新同时核对实际活动路由、会话对象和操作代次。离开页面后不改变当前导航；返回同一编辑会话时继续显示原操作的最新状态，重新建立会话后丢弃旧回调。取消、重新测试和编辑代次变化使旧操作回调失效；视图刷新不发起导航或新增历史记录。
 
 ## 三个平台的宿主行为
 

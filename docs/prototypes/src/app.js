@@ -171,7 +171,10 @@ document.getElementById('next').addEventListener('click',()=>{const i=data.scree
 document.getElementById('focus-preview').addEventListener('click',()=>{document.body.classList.toggle('review-focus');fit();layoutRects()});
 window.addEventListener('hashchange',()=>render(location.hash.slice(1)));
 window.addEventListener('resize',()=>{fit();requestAnimationFrame(layoutRects)});
-window.DW_PROTOTYPE={screens:data.screens,groups:data.groups,renderScreen:(id)=>{render(id);return id},go,layoutRects};
+window.DW_PROTOTYPE={screens:data.screens,groups:data.groups,renderScreen:(id)=>{render(id);return id},go,layoutRects,
+ getRoute:()=>({id:current.id}),
+ refresh:route=>{if(current.id!==route.id)return false;render(current.id,{preserve:true});return true;}
+};
 catalog();render(location.hash.slice(1)||'editor-graph');
 document.fonts.ready.then(()=>{fit();layoutRects();window.DW_READY=current.id});
 })();
