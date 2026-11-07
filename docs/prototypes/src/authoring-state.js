@@ -3,6 +3,7 @@
 const DS=window.DW_DESIGN_STATE,F=window.DW_CATALOG.authoringFixtures,A=DS.authoring={},clone=v=>JSON.parse(JSON.stringify(v)),now=()=>Date.now(),utc=n=>new Date(n??now()).toISOString().replace(/\.\d{3}Z$/,'Z');
 const bytes=v=>new TextEncoder().encode(JSON.stringify(v)),canonical=v=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(canonical).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';
 const hash=async b=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(n=>n.toString(16).padStart(2,'0')).join('');
+const runtime={waitForResult:()=>new Promise(resolve=>setTimeout(resolve,1500))};
 function stamp(seconds=300){const n=now();return{snapshotId:'query-'+(++A.sequence),snapshotAt:utc(n),expiresAt:utc(n+seconds*1000)};}
 function seed(id){
  A.sequence=A.sequence||0;
@@ -28,12 +29,52 @@ function cancelEdit(){const e=A.edit;if(e.result){e.message='此版本已保存�
 async function startContent(){const c=A.content,sequence=c.sequence=(c.sequence||0)+1;c.offset=0;c.parts=[];c.ref=null;c.stage='uploading';c.error='';c.expiresAt=now()+60000;c.fixedDraftVersion=c.draftVersion;c.message='正在保存当前草稿。';const digest=await hash(c.raw);if(c.sequence!==sequence)throw Error('本次保存已取消。');c.digest=digest;}
 async function writeChunk({offset=A.content.offset,chunk=null}={}){const c=A.content,sequence=c.sequence;if(c.stage!=='uploading'||now()>=c.expiresAt)throw Error('内容传输已到期，请重新保存。');const data=chunk||c.raw.slice(offset,offset+196608);const old=c.parts.find(p=>p.offset===offset),digest=await hash(data);if(c.sequence!==sequence||c.stage!=='uploading')throw Error('本次保存已取消。');if(old){if(old.sha256!==digest)throw Error('已接收的内容发生变化，请重新保存。');return{uploadId:'workflow-upload',nextOffset:c.offset,replayed:true};}if(offset!==c.offset||data.length===0||data.length>196608||offset+data.length>c.raw.length)throw Error('保存数据的顺序或长度不正确。');c.parts.push({offset,sha256:digest,data:[...data]});c.offset+=data.length;c.message='内容传输 '+Math.round(c.offset/c.raw.length*100)+'%。';return{uploadId:'workflow-upload',nextOffset:c.offset,replayed:false};}
 async function sealContent(){const c=A.content,sequence=c.sequence;if(c.offset!==c.raw.length)throw Error('保存数据尚未完整传输。');if(now()>=c.expiresAt)throw Error('内容上传已到期，请重新保存。');const data=new Uint8Array(c.parts.flatMap(p=>p.data));if(await hash(data)!==c.digest)throw Error('传输内容校验失败，请重新保存。');if(c.sequence!==sequence)throw Error('本次保存已取消。');JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(data));c.ref={kind:'resource',resourceId:'workflow-content',length:data.length,sha256:c.digest};c.stage='sealed';c.refExpiresAt=now()+60000;c.message='内容已接收，正在保存流程版本。';return clone(c.ref);}
-async function saveContent(){const c=A.content,sequence=c.sequence;if(c.result)return clone(c.result);if(c.stage!=='sealed'||now()>=c.refExpiresAt)throw Error('保存内容已过期，请重新保存。');if(c.draftVersion!==c.fixedDraftVersion||c.currentRevision!==c.baseRevision)throw Error('草稿或流程版本已变化，请核对当前内容后重新保存。');const definitionHash=await hash(new TextEncoder().encode(canonical(c.model.definition)));if(c.sequence!==sequence)throw Error('本次保存已取消。');c.saveParams={workflowId:c.model.definition.id,draftVersion:c.draftVersion,baseRevision:c.baseRevision,modelRef:clone(c.ref)};c.stage='saved';c.result={workflowId:c.model.definition.id,revision:'13',draftVersion:c.draftVersion,definitionHash};c.message='流程版本 13 已保存。';return clone(c.saveParams);}
+function checkContentVersion(c){
+ if(c.currentRevision===c.baseRevision)return;
+ c.stage='conflict';c.message='';
+ throw Error('流程版本已变化：当前版本 '+(c.currentRevision??'不存在')+'，草稿基于 '+(c.baseRevision??'新流程')+'。可将当前草稿另存为新流程。');
+}
+async function saveContent(){
+ const c=A.content,sequence=c.sequence;if(c.result)return clone(c.result);
+ if(c.stage!=='sealed'||now()>=c.refExpiresAt)throw Error('保存内容已过期，请重新保存。');
+ checkContentVersion(c);
+ if(c.draftVersion!==c.fixedDraftVersion)throw Error('草稿已修改，请保存当前编辑内容。');
+ const definitionHash=await hash(new TextEncoder().encode(canonical(c.model.definition)));
+ if(A.content!==c||c.sequence!==sequence)throw Error('本次保存已取消。');
+ checkContentVersion(c);
+ if(c.draftVersion!==c.fixedDraftVersion)throw Error('草稿已修改，请保存当前编辑内容。');
+ c.saveParams={workflowId:c.model.definition.id,draftVersion:c.draftVersion,baseRevision:c.baseRevision,modelRef:clone(c.ref)};
+ const revision=c.currentRevision===null?'1':String(Number(c.currentRevision)+1);
+ c.stage='saved';c.currentRevision=revision;c.result={workflowId:c.model.definition.id,revision,draftVersion:c.draftVersion,definitionHash};
+ c.message='流程版本 '+revision+' 已保存。';return clone(c.saveParams);
+}
+async function saveContentCopy(name,onProgress=()=>{}){
+ const c=A.content;if(c.saving||c.result)return;
+ if(c.stage!=='conflict')throw Error('请先核对流程的保存状态。');
+ c.copyName=name;
+ const title=name.trim();if(!title||[...title].length>120)throw Error('请填写 1～120 个字符的新流程名称。');
+ const model=clone(c.model);model.definition.id='workflow-copy-'+(++A.sequence);model.definition.name=title;
+ c.model=model;c.raw=bytes(model);c.baseRevision=null;c.currentRevision=null;c.draftVersion=1;
+ c.offset=0;c.parts=[];c.ref=null;c.digest=null;c.saveParams=null;c.stage='draft';c.error='';c.message='';
+ return submitContent(onProgress);
+}
 async function readVariableResource(){const v=A.variables,row=v.page?.items.find(x=>x.valueResource);if(!row||now()>=Date.parse(v.snapshot.expiresAt)||now()>=Date.parse(row.valueResource.expiresAt))throw Error('变量资源已过期，请重新读取快照。');const data=bytes(F.largeVariable.value);if(data.length!==row.valueResource.length||await hash(data)!==row.valueResource.sha256)throw Error('变量资源内容不完整，请重新读取。');v.resourceValue=clone(F.largeVariable.value);return clone(v.resourceValue);}
-async function testConnection(onProgress=()=>{}){const t=A.test,pending=await beginTest();onProgress();await new Promise(resolve=>requestAnimationFrame(resolve));if(A.test!==t||!pending||t.sequence!==pending.seq)return;finishTest(null,pending);onProgress();}
-async function submitEdit(onProgress=()=>{}){const e=A.edit;if(e.saving||e.result)return;const sequence=e.sequence=(e.sequence||0)+1;e.saving=true;try{prepareEdit();await commitEdit();onProgress();await new Promise(resolve=>requestAnimationFrame(resolve));if(A.edit!==e||e.sequence!==sequence)return;await finishEdit();}finally{if(A.edit===e&&e.sequence===sequence){e.saving=false;onProgress();}}}
+async function testConnection(onProgress=()=>{}){const t=A.test,pending=await beginTest();onProgress();await runtime.waitForResult();if(A.test!==t||!pending||t.sequence!==pending.seq)return;finishTest(null,pending);onProgress();}
+async function submitEdit(onProgress=()=>{}){const e=A.edit;if(e.saving||e.result)return;const sequence=e.sequence=(e.sequence||0)+1;e.saving=true;try{prepareEdit();await commitEdit();onProgress();await runtime.waitForResult();if(A.edit!==e||e.sequence!==sequence)return;await finishEdit();}finally{if(A.edit===e&&e.sequence===sequence){e.saving=false;onProgress();}}}
 const previousReset=DS.resetForScreen;DS.resetForScreen=id=>{previousReset?.(id);seed(id);};
 function cancelContent(){const c=A.content;if(c.result)return;c.sequence=(c.sequence||0)+1;c.saving=false;c.stage='draft';c.parts=[];c.offset=0;c.ref=null;c.message='保存已取消，当前草稿继续保留。';}
-async function submitContent(onProgress=()=>{}){const c=A.content;if(c.saving||c.result)return;c.saving=true;const sequence=(c.sequence||0)+1;try{await startContent();onProgress();while(c.offset<c.raw.length){if(A.content!==c||c.sequence!==sequence)return;await writeChunk();onProgress();await new Promise(resolve=>requestAnimationFrame(resolve));}if(A.content!==c||c.sequence!==sequence)return;await sealContent();onProgress();await saveContent();}catch(error){if(A.content!==c||c.sequence!==sequence)return;c.stage='failed';throw error;}finally{if(A.content===c&&c.sequence===sequence){c.saving=false;onProgress();}}}
-window.DW_AUTHORING={api:{seed,readVariables,variablesNext,readRevisions,readConnections,beginTest,finishTest,changeTest,testConnection,prepareEdit,commitEdit,finishEdit,cancelEdit,submitEdit,startContent,writeChunk,sealContent,saveContent,cancelContent,submitContent,readVariableResource,hash,canonical}};
+async function submitContent(onProgress=()=>{}){
+ const c=A.content;if(c.saving||c.result)return;checkContentVersion(c);
+ c.saving=true;const sequence=(c.sequence||0)+1;
+ try{
+  await startContent();onProgress();
+  while(c.offset<c.raw.length){if(A.content!==c||c.sequence!==sequence)return;await writeChunk();onProgress();await new Promise(resolve=>requestAnimationFrame(resolve));}
+  if(A.content!==c||c.sequence!==sequence)return;
+  await sealContent();onProgress();await runtime.waitForResult();
+  if(A.content!==c||c.sequence!==sequence)return;
+  await saveContent();
+ }catch(error){if(A.content!==c||c.sequence!==sequence)return;if(c.stage!=='conflict')c.stage='failed';throw error;}
+ finally{if(A.content===c&&c.sequence===sequence){c.saving=false;onProgress();}}
+}
+window.DW_AUTHORING={runtime,api:{seed,readVariables,variablesNext,readRevisions,readConnections,beginTest,finishTest,changeTest,testConnection,prepareEdit,commitEdit,finishEdit,cancelEdit,submitEdit,startContent,writeChunk,sealContent,saveContent,saveContentCopy,cancelContent,submitContent,readVariableResource,hash,canonical}};
 })();

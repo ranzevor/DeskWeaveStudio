@@ -3,6 +3,12 @@ async page=>{
  const render=async id=>{const size=await page.evaluate(id=>window.DW_CATALOG.screens.find(s=>s.id===id).viewport,id);await page.setViewportSize(size);await page.evaluate(id=>window.DW_PROTOTYPE.renderScreen(id),id);await page.waitForFunction(id=>window.DW_READY===id,id);};
  const click=async action=>{await page.locator('[data-au-action="'+action+'"]').first().click();await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);};
  const field=name=>page.locator('[data-au-field="'+name+'"]');
+ const holdResults=async()=>page.evaluate(()=>{
+  window.auDeferred=[];window.auWaitOriginal=window.DW_AUTHORING.runtime.waitForResult;
+  window.DW_AUTHORING.runtime.waitForResult=()=>new Promise(resolve=>window.auDeferred.push(resolve));
+ });
+ const releaseResult=async index=>page.evaluate(index=>{const resolve=window.auDeferred[index];window.auDeferred[index]=null;resolve();},index);
+ const restoreResults=async()=>page.evaluate(()=>{window.DW_AUTHORING.runtime.waitForResult=window.auWaitOriginal;delete window.auDeferred;delete window.auWaitOriginal;});
  const check=async(name,fn,arg)=>{if(!await page.evaluate(fn,arg))throw Error(name);checks.push({name,result:'pass'});};
  const collect=async(name,schema,fn)=>{const value=await page.evaluate(fn);if(value==null)throw Error('缺少输出：'+name);contractOutputs.push({name,schema,value});};
  await render('variables-inspect');
@@ -55,8 +61,30 @@ async page=>{
  await check('确认块相同重放保持偏移',async()=>{const c=window.DW_DESIGN_STATE.authoring.content,offset=c.offset,r=await window.DW_AUTHORING.api.writeChunk({offset:0});return r.replayed&&c.offset===offset;});
  await check('确认块不同内容重放拒绝',async()=>{try{await window.DW_AUTHORING.api.writeChunk({offset:0,chunk:new Uint8Array([1,2,3])});return false;}catch{return true;}});
  await page.evaluate(async()=>{const api=window.DW_AUTHORING.api,c=window.DW_DESIGN_STATE.authoring.content;while(c.offset<c.raw.length)await api.writeChunk();await api.sealContent();});await check('全部内容核验通过才生成引用',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.offset===c.raw.length&&c.ref.length===c.raw.length&&c.ref.sha256===c.digest&&c.stage==='sealed'&&c.result===null;});await collect('完整大流程内容引用','content.schema.json#/$defs/contentRef',()=>window.DW_DESIGN_STATE.authoring.content.ref);
- await page.evaluate(()=>window.DW_DESIGN_STATE.authoring.content.currentRevision='14');await check('保存版本冲突保留本地草稿和完整内容',async()=>{const c=window.DW_DESIGN_STATE.authoring.content;try{await window.DW_AUTHORING.api.saveContent();return false;}catch(error){return c.result===null&&c.stage==='sealed'&&error.message.includes('版本')&&c.model.definition.variables.largeSample.length===2048;}});
- await page.evaluate(()=>window.DW_DESIGN_STATE.authoring.content.currentRevision='12');await click('content-submit');await check('一次保存自动完成分块传输和版本保存',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='saved'&&!c.saving&&c.result.revision==='13'&&c.saveParams.modelRef&&!c.saveParams.definition;});await collect('大流程保存请求参数','service.schema.json#/$defs/workflow.save/properties/params',()=>window.DW_DESIGN_STATE.authoring.content.saveParams);await collect('大流程保存实际结果','service.schema.json#/$defs/workflow.save/properties/result',()=>window.DW_DESIGN_STATE.authoring.content.result);
+ await page.evaluate(()=>{const c=window.DW_DESIGN_STATE.authoring.content;c.currentRevision='14';window.auConflictOrigin={model:c.model,raw:c.raw,revision:c.currentRevision};});
+ await check('保存版本冲突保留本地草稿和完整内容',async()=>{const c=window.DW_DESIGN_STATE.authoring.content;try{await window.DW_AUTHORING.api.saveContent();return false;}catch(error){return c.result===null&&c.stage==='conflict'&&c.ref.length===c.raw.length&&error.message.includes('版本')&&c.model.definition.variables.largeSample.length===2048;}});
+ await page.evaluate(()=>window.DW_PROTOTYPE.go('content-save'));
+ await check('冲突页面显示版本差异并提供另存入口',()=>{const text=document.querySelector('.au-page').textContent;return text.includes('当前版本14')&&text.includes('草稿基于12')&&!document.querySelector('[data-au-action="content-submit"]')&&!!document.querySelector('[data-au-action="content-copy"]');});
+ await check('冲突恢复操作完整显示在底栏上方',()=>{
+  const copy=document.querySelector('[data-au-action="content-copy"]'),back=copy.parentElement.querySelector('[data-go="editor-graph"]'),bottom=document.querySelector('.statusbar').getBoundingClientRect().top;
+  return [copy,back].every(button=>button.getBoundingClientRect().bottom<=bottom&&button.getBoundingClientRect().height>0);
+ });
+ await check('冲突后直接重试不重复上传或修改基准',async()=>{
+  const c=window.DW_DESIGN_STATE.authoring.content,{sequence,offset,parts,ref}=c;
+  try{await window.DW_AUTHORING.api.submitContent();return false;}catch{return c.stage==='conflict'&&c.sequence===sequence&&c.offset===offset&&c.parts===parts&&c.ref===ref&&c.baseRevision==='12'&&c.currentRevision==='14'&&!c.saving;}
+ });
+ await field('content-copy-name').fill('   ');await click('content-copy');
+ await check('另存名称无效时保留冲突草稿',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='conflict'&&c.model===window.auConflictOrigin.model&&c.error.includes('名称');});
+ await field('content-copy-name').fill('季度归档副本');await click('content-copy');
+ await check('冲突草稿另存为独立流程并保留完整内容与依赖',()=>{
+  const c=window.DW_DESIGN_STATE.authoring.content,original=window.auConflictOrigin,copy=JSON.parse(JSON.stringify(c.model));
+  copy.definition.id=original.model.definition.id;copy.definition.name=original.model.definition.name;
+  return c.stage==='saved'&&c.result.revision==='1'&&c.result.workflowId!==original.model.definition.id&&c.saveParams.baseRevision===null&&c.model.definition.name==='季度归档副本'&&JSON.stringify(copy)===JSON.stringify(original.model)&&original.revision==='14'&&new TextDecoder().decode(original.raw)===JSON.stringify(original.model);
+ });
+ await collect('冲突后另存流程参数','service.schema.json#/$defs/workflow.save/properties/params',()=>window.DW_DESIGN_STATE.authoring.content.saveParams);
+ await collect('冲突后另存流程结果','service.schema.json#/$defs/workflow.save/properties/result',()=>window.DW_DESIGN_STATE.authoring.content.result);
+ await page.evaluate(()=>delete window.auConflictOrigin);
+ await render('content-save');await click('content-submit');await check('一次保存自动完成分块传输和版本保存',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='saved'&&!c.saving&&c.result.revision==='13'&&c.saveParams.modelRef&&!c.saveParams.definition;});await collect('大流程保存请求参数','service.schema.json#/$defs/workflow.save/properties/params',()=>window.DW_DESIGN_STATE.authoring.content.saveParams);await collect('大流程保存实际结果','service.schema.json#/$defs/workflow.save/properties/result',()=>window.DW_DESIGN_STATE.authoring.content.result);
  await render('content-transfer-failed');await page.evaluate(async()=>{const api=window.DW_AUTHORING.api;await api.startContent();await api.writeChunk();window.DW_PROTOTYPE.go('content-transfer-failed');});await click('content-cancel');await check('取消传输保留草稿且没有保存结果',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='draft'&&c.result===null&&c.raw.length>1048576&&c.offset===0;});
  await check('取消自动保存后迟到结果不改变草稿',async()=>{const api=window.DW_AUTHORING.api,c=window.DW_DESIGN_STATE.authoring.content;await api.submitContent(()=>{if(c.offset>0)api.cancelContent();});return c.stage==='draft'&&!c.saving&&c.result===null&&c.offset===0;});
  await page.evaluate(async()=>{await window.DW_AUTHORING.api.startContent();window.DW_DESIGN_STATE.authoring.content.expiresAt=Date.now()-1;});await check('上传到期禁止继续写入',async()=>{const c=window.DW_DESIGN_STATE.authoring.content;try{await window.DW_AUTHORING.api.writeChunk();return false;}catch(error){return error.message.includes('到期')&&c.offset===0;}});
@@ -109,7 +137,7 @@ async page=>{
    const c=window.DW_DESIGN_STATE.authoring.content,p=window.auSaveProgress,text=document.querySelector('.au-page').textContent;
    if(!p.transferred||!p.accurate||c.saving)return false;
    if(outcome==='success')return p.sealed&&c.stage==='saved'&&c.result.revision==='13'&&text.includes('已保存')&&document.querySelector('.au-save-stages>div:last-child').classList.contains('complete');
-   return c.stage==='failed'&&c.result===null&&text.includes('保存失败')&&text.includes(outcome==='integrity'?'校验失败':'版本已变化')&&c.model.definition.variables.largeSample.length===2048;
+   return c.stage===(outcome==='conflict'?'conflict':'failed')&&c.result===null&&text.includes(outcome==='conflict'?'版本冲突':'保存失败')&&text.includes(outcome==='integrity'?'校验失败':'版本已变化')&&c.model.definition.variables.largeSample.length===2048;
   },outcome);
   await page.evaluate(()=>delete window.auSaveProgress);
  }
@@ -132,5 +160,40 @@ async page=>{
  await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
  await check('取消后重存不被旧操作的失败和最终刷新覆盖',()=>{const c=window.DW_DESIGN_STATE.authoring.content;return c.stage==='saved'&&!c.error&&c.result.revision==='13'&&window.auCurrentSave===document.querySelector('.app-window');});
  await page.evaluate(()=>{delete window.auCurrentSave;delete window.auLateSave;});
+ for(const [screen,action,key,destination] of [['content-save','content-submit','content','editor-graph'],['asset-edit-save','edit-submit','edit','assets'],['connection-draft-test','test-start','test','connection-browser']]){
+  await render(screen);await holdResults();
+  await page.evaluate(({screen,key})=>{history.replaceState(null,'','#'+screen);window.auHistoryState=window.DW_DESIGN_STATE.authoring[key];},{screen,key});
+  await page.locator('[data-au-action="'+action+'"]').click();
+  await page.waitForFunction(()=>window.auDeferred.length===1);
+  await page.locator('.au-page [data-go="'+destination+'"]').first().click();
+  await page.goBack();await page.waitForFunction(id=>window.DW_READY===id,screen);
+  await check(screen+' 浏览器后退保持进行中的同一会话',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return state===window.auHistoryState&&state.result===null&&(state.saving||state.status==='testing');},key);
+  await page.goForward();await page.waitForFunction(id=>window.DW_READY===id,destination);
+  await releaseResult(0);await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+  await check(screen+' 浏览器前进后后台完成不改变当前页面',destination=>window.DW_PROTOTYPE.getRoute().id===destination,destination);
+  await page.goBack();await page.waitForFunction(id=>window.DW_READY===id,screen);
+  await check(screen+' 浏览器后退恢复已完成结果',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return state===window.auHistoryState&&!!state.result&&!state.error&&document.querySelector('.au-page').textContent.includes(key==='test'?'连接成功':'已保存');},key);
+  await restoreResults();await render(screen);
+  await check(screen+' 显式初始化建立独立会话',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return state!==window.auHistoryState&&state.result===null;},key);
+  await page.evaluate(()=>delete window.auHistoryState);
+ }
+ for(const [screen,start,cancel,key] of [['connection-draft-test','test-start','test-cancel','test'],['asset-edit-save','edit-submit','edit-cancel','edit'],['content-save','content-submit','content-cancel','content']]){
+  await render(screen);await holdResults();
+  const startButton=()=>page.locator('[data-au-action="'+start+'"]'),cancelButton=()=>page.locator('[data-au-action="'+cancel+'"]');
+  await startButton().click();await page.waitForFunction(()=>window.auDeferred.length===1);
+  await check(screen+' 实际按钮启动后显示可操作的取消入口',cancel=>{const button=document.querySelector('[data-au-action="'+cancel+'"]');return !button.disabled&&button.getBoundingClientRect().height>0;},cancel);
+  await cancelButton().click();
+  await check(screen+' 实际取消按钮立即恢复编辑状态',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return !state.result&&!state.saving&&(key==='test'?state.status==='cancelled':key==='edit'?!state.pending:state.stage==='draft');},key);
+  await releaseResult(0);await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+  await check(screen+' 取消后的迟到完成不产生结果',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return !state.result&&!state.error&&(key==='edit'?state.committed===0&&state.currentVersion==='3':key==='content'?state.currentRevision==='12':state.status==='cancelled'&&state.savedVersion===2);},key);
+  await startButton().click();await page.waitForFunction(()=>window.auDeferred.length===2);
+  await cancelButton().click();await startButton().click();await page.waitForFunction(()=>window.auDeferred.length===3);
+  await page.evaluate(()=>{window.auPendingApp=document.querySelector('.app-window');});
+  await releaseResult(1);await page.waitForFunction(()=>window.DW_AUTHORING_BUSY===1);
+  await check(screen+' 旧完成不覆盖重新发起的操作',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return !state.result&&!state.error&&window.auPendingApp===document.querySelector('.app-window')&&(state.saving||state.status==='testing');},key);
+  await releaseResult(2);await page.waitForFunction(()=>!window.DW_AUTHORING_BUSY);
+  await check(screen+' 重新发起后按当前操作完成一次',key=>{const state=window.DW_DESIGN_STATE.authoring[key];return !!state.result&&!state.error&&(key==='edit'?state.committed===1&&state.currentVersion==='4':key==='content'?state.currentRevision==='13':state.status==='passed'&&state.savedVersion===2);},key);
+  await restoreResults();await page.evaluate(()=>delete window.auPendingApp);
+ }
  return {checks,contractOutputs};
 }

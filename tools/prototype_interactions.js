@@ -227,6 +227,12 @@ async (page) => {
   const base = new URL(page.url());base.search="";base.hash="editor-graph";
   await page.goto(base.href);
   await page.waitForFunction(()=>window.DW_READY==="editor-graph");
+  await page.locator('.review-link[data-screen="connection-test-stale"]').click();
+  await expect('connection-test-stale','原型目录入口初始化所选状态');
+  await page.evaluate(()=>{window.DW_DESIGN_STATE.authoring.test.draft.model='edited-model';});
+  await page.locator('.review-link[data-screen="connection-test-stale"]').click();
+  if(await page.evaluate(()=>window.DW_DESIGN_STATE.authoring.test.draft.model)!=='vision-local-v2')throw Error('重新选择画板未初始化对应状态');
+  checks.push({name:'明确重选原型画板重新初始化',result:'pass'});
   await render("templates-source");
   await page.locator(".page-header [data-ve-validate]").click();
   await expect("templates-candidates","模板提取完成后进入候选结果");
