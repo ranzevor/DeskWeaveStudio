@@ -129,8 +129,18 @@ class ServiceProcessingTests(ContentCase):
             )
         entered = threading.Event()
         resume = threading.Event()
-        status_started = threading.Event()
+        waiting = threading.Event()
+        mutex = self.engine._mutex
         original = content.loads
+
+        class ContendedLock:
+            def __enter__(self):
+                if not mutex.acquire(blocking=False):
+                    waiting.set()
+                    mutex.acquire()
+
+            def __exit__(self, *_args):
+                mutex.release()
 
         def parsing(*args, **kwargs):
             entered.set()
@@ -139,7 +149,6 @@ class ServiceProcessingTests(ContentCase):
             return original(*args, **kwargs)
 
         def read_status():
-            status_started.set()
             return self.request(
                 "request.status",
                 {"requestId": "missing"},
@@ -147,7 +156,10 @@ class ServiceProcessingTests(ContentCase):
                 deadline_ms=500,
             )
 
-        with patch.object(content, "loads", side_effect=parsing):
+        with (
+            patch.object(content, "loads", side_effect=parsing),
+            patch.object(self.engine, "_mutex", ContendedLock()),
+        ):
             with ThreadPoolExecutor(max_workers=2) as pool:
                 pending = pool.submit(
                     self.request, "content.seal", {"uploadId": identity}, deadline_ms=20
@@ -155,7 +167,7 @@ class ServiceProcessingTests(ContentCase):
                 try:
                     self.assertTrue(entered.wait(5))
                     other = pool.submit(read_status)
-                    self.assertTrue(status_started.wait(5))
+                    self.assertTrue(waiting.wait(5))
                 finally:
                     resume.set()
                 sealed = pending.result(timeout=5)

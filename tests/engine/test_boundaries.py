@@ -296,6 +296,94 @@ class BoundaryTests(EngineCase):
                 self.assertEqual(recovered["items"][0]["id"], "flow-000003")
                 self.success("query.close", {"snapshotId": recovered["snapshotId"]})
 
+    def test_query_response_timeout_rolls_back_snapshot_and_cursor(self):
+        from deskweave.contracts import method_schema
+        from deskweave.engine import service
+
+        self.seed_versions(3)
+        revision = None
+        for _ in range(3):
+            revision = self.save(workflow("history"), revision)["revision"]
+        definition = workflow()
+        definition["nodes"][0].update(action="time.wait", params={})
+        definition["nodes"].extend(
+            dict(definition["nodes"][0], id=identity) for identity in ("second", "third")
+        )
+        diagnostics = self.success("workflow.validate", {"definition": definition})
+        self.assertGreaterEqual(diagnostics["diagnosticCount"], 3)
+        queries = (
+            ("workspace.catalog", {"kind": "workflow", "pageSize": 1}),
+            ("workflow.revisions", {"workflowId": "history", "pageSize": 1}),
+            (
+                "query.read",
+                {
+                    "kind": "diagnostics",
+                    "collectionId": diagnostics["diagnosticsQuery"]["collectionId"],
+                    "pageSize": 1,
+                },
+            ),
+        )
+        for method, params in queries:
+            for stage in ("validate", "dumps"):
+                for continuation in (False, True):
+                    with self.subTest(method=method, stage=stage, continuation=continuation):
+                        with self.workspace.transaction() as connection:
+                            connection.execute("DELETE FROM query_snapshot")
+                        request = dict(params)
+                        if continuation:
+                            first = self.success(method, request)
+                            request["cursor"] = first["nextCursor"]
+                            self.assertIsNotNone(request["cursor"])
+                        baseline = (1, 1) if continuation else (0, 0)
+                        original = getattr(service, stage)
+
+                        def counts():
+                            return tuple(
+                                self.workspace._connection.execute(
+                                    f"SELECT COUNT(*) FROM {table}"
+                                ).fetchone()[0]
+                                for table in ("query_snapshot", "query_cursor")
+                            )
+
+                        for _ in range(8):
+                            observed = []
+
+                            def expire(
+                                *args,
+                                original=original,
+                                stage=stage,
+                                method=method,
+                                observed=observed,
+                                **kwargs,
+                            ):
+                                result_validation = stage == "validate" and args[
+                                    0
+                                ] == method_schema(method, "result")
+                                response_encoding = (
+                                    stage == "dumps"
+                                    and isinstance(args[0], dict)
+                                    and args[0].get("kind") == "response"
+                                    and args[0].get("ok") is True
+                                )
+                                if result_validation or response_encoding:
+                                    observed.append(counts())
+                                    self.elapsed[0] += 2.0
+                                return original(*args, **kwargs)
+
+                            with patch.object(service, stage, side_effect=expire):
+                                response = self.request(method, request)
+                            self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+                            self.assertEqual(observed, [(1, 2) if continuation else (1, 1)])
+                            self.assertEqual(counts(), baseline)
+                        recovered = self.success(method, request)
+                        self.assertEqual(len(recovered["items"]), 1)
+                        snapshot = recovered.get("querySnapshot", recovered)["snapshotId"]
+                        if continuation:
+                            self.assertEqual(
+                                snapshot, first.get("querySnapshot", first)["snapshotId"]
+                            )
+                        self.success("query.close", {"snapshotId": snapshot})
+
     def test_large_history_pages_share_revision_storage(self):
         self.seed_versions(12000, history=True)
         with self.workspace.transaction() as connection:
