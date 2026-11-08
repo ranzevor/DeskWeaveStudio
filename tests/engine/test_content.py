@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch
 
 from deskweave.adapters.content import MAX_CHUNK, MAX_CONTENT
 from deskweave.adapters.workspace import Workspace
-from deskweave.engine.service import Engine
 from deskweave.json import digest, dumps, loads
 from tests.engine.test_service import EngineCase, workflow
 
@@ -466,7 +465,7 @@ class ContentTests(ContentCase):
         )
         self.engine.close()
         self.workspace = Workspace(self.directory)
-        self.engine = Engine(self.workspace, clock=lambda: self.now[0])
+        self.engine = self.make_engine()
         self.editor = self.engine.open_session(
             "studio",
             {"workflow.write", "workflow.read"},

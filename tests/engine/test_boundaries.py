@@ -260,6 +260,42 @@ class BoundaryTests(EngineCase):
         self.success("query.close", {"snapshotId": pages[0]["snapshotId"]}, session=sessions[0])
         self.success("workspace.catalog", {"kind": "workflow"}, session=sessions[4])
 
+    def test_catalog_deadline_boundaries_roll_back_and_allow_recovery(self):
+        self.seed_versions(3)
+        original = self.workspace.catalog_rows
+        for deadline_ms, elapsed, succeeds in (
+            (30000, 1.999, True),
+            (30000, 2.0, False),
+            (50, 0.049, True),
+            (50, 0.050, False),
+        ):
+            with self.subTest(deadline_ms=deadline_ms, elapsed=elapsed):
+
+                def delayed(*args, elapsed=elapsed):
+                    self.elapsed[0] += elapsed
+                    yield from original(*args)
+
+                with patch.object(self.workspace, "catalog_rows", side_effect=delayed):
+                    response = self.request(
+                        "workspace.catalog",
+                        {"kind": "workflow", "pageSize": 1},
+                        deadline_ms=deadline_ms,
+                    )
+                self.assertEqual(response["ok"], succeeds, response)
+                if succeeds:
+                    self.assertEqual(response["result"]["items"][0]["id"], "flow-000003")
+                    self.success("query.close", {"snapshotId": response["result"]["snapshotId"]})
+                else:
+                    self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+                with self.workspace.transaction() as connection:
+                    for table in ("query_snapshot", "query_cursor"):
+                        self.assertEqual(
+                            connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0
+                        )
+                recovered = self.success("workspace.catalog", {"kind": "workflow", "pageSize": 1})
+                self.assertEqual(recovered["items"][0]["id"], "flow-000003")
+                self.success("query.close", {"snapshotId": recovered["snapshotId"]})
+
     def test_large_history_pages_share_revision_storage(self):
         self.seed_versions(12000, history=True)
         with self.workspace.transaction() as connection:
@@ -449,11 +485,10 @@ class BoundaryTests(EngineCase):
 
     def test_existing_workspace_preserves_versions_and_receipts(self):
         from deskweave.adapters.workspace import Workspace
-        from deskweave.engine.service import Engine
 
         first, second = self.prepare_version_one_database()
         self.workspace = Workspace(self.directory)
-        self.engine = Engine(self.workspace, clock=lambda: self.now[0])
+        self.engine = self.make_engine()
         self.editor = self.engine.open_session(
             "studio", {"workflow.read", "workflow.write"}, local=True
         )
