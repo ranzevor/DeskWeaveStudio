@@ -30,11 +30,15 @@ class EngineCase(unittest.TestCase):
         self.directory = Path(self.temporary.name) / "workspace"
         self.workspace = Workspace(self.directory, create=True)
         self.now = [1_800_000_000.0]
-        self.engine = Engine(self.workspace, clock=lambda: self.now[0])
+        self.elapsed = [0.0]
+        self.engine = self.make_engine()
         self.editor = self.engine.open_session(
             "studio", {"workflow.read", "workflow.write"}, local=True
         )
         self.remote = self.engine.open_session("bridge-client", {"workflow.read", "workflow.write"})
+
+    def make_engine(self):
+        return Engine(self.workspace, clock=lambda: self.now[0], monotonic=lambda: self.elapsed[0])
 
     def tearDown(self):
         self.workspace.close()
@@ -105,7 +109,7 @@ class ServiceTests(EngineCase):
         self.assertEqual(response["error"]["code"], "REQUEST_CONFLICT")
         self.workspace.close()
         self.workspace = Workspace(self.directory)
-        self.engine = Engine(self.workspace, clock=lambda: self.now[0])
+        self.engine = self.make_engine()
         self.editor = self.engine.open_session(
             "studio", {"workflow.read", "workflow.write"}, local=True
         )

@@ -220,11 +220,21 @@ class Engine:
                 deadline = started + request["deadlineMs"] / 1000
                 if request["method"] == "expression.preview":
                     deadline = min(deadline, started + 1)
-                if request["method"] in {"query.read", "workspace.catalog", "workflow.revisions"}:
+                is_query = request["method"] in {
+                    "query.read",
+                    "workspace.catalog",
+                    "workflow.revisions",
+                }
+                if is_query:
                     deadline = min(
                         deadline, started + (5 if request["params"].get("includeTotal") else 2)
                     )
-                with self.workspace.budget(deadline, self.monotonic):
+                scope = (
+                    self.workspace.transaction(deadline=deadline, clock=self.monotonic)
+                    if is_query
+                    else self.workspace.budget(deadline, self.monotonic)
+                )
+                with scope:
                     dumps(
                         request["params"],
                         max_bytes=method.params_bytes,

@@ -1,6 +1,5 @@
 import json
 import threading
-import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
@@ -129,25 +128,48 @@ class ServiceProcessingTests(ContentCase):
                 self.write(identity, offset, raw[offset : offset + content.MAX_CHUNK])["ok"]
             )
         entered = threading.Event()
+        resume = threading.Event()
+        waiting = threading.Event()
+        mutex = self.engine._mutex
         original = content.loads
+
+        class ContendedLock:
+            def __enter__(self):
+                if not mutex.acquire(blocking=False):
+                    waiting.set()
+                    mutex.acquire()
+
+            def __exit__(self, *_args):
+                mutex.release()
 
         def parsing(*args, **kwargs):
             entered.set()
+            self.assertTrue(resume.wait(5))
+            self.elapsed[0] += 0.020
             return original(*args, **kwargs)
 
-        with patch.object(content, "loads", side_effect=parsing):
+        def read_status():
+            return self.request(
+                "request.status",
+                {"requestId": "missing"},
+                session=self.remote,
+                deadline_ms=500,
+            )
+
+        with (
+            patch.object(content, "loads", side_effect=parsing),
+            patch.object(self.engine, "_mutex", ContendedLock()),
+        ):
             with ThreadPoolExecutor(max_workers=2) as pool:
                 pending = pool.submit(
                     self.request, "content.seal", {"uploadId": identity}, deadline_ms=20
                 )
-                self.assertTrue(entered.wait(5))
-                other = pool.submit(
-                    self.request,
-                    "request.status",
-                    {"requestId": "missing"},
-                    session=self.remote,
-                    deadline_ms=500,
-                )
+                try:
+                    self.assertTrue(entered.wait(5))
+                    other = pool.submit(read_status)
+                    self.assertTrue(waiting.wait(5))
+                finally:
+                    resume.set()
                 sealed = pending.result(timeout=5)
                 status = other.result(timeout=5)
         self.assertEqual(sealed["error"]["code"], "DEADLINE_EXCEEDED")
@@ -184,7 +206,7 @@ class ServiceProcessingTests(ContentCase):
                     result = self.request(method, params)
                 self.assertEqual(result["error"]["code"], "DEADLINE_EXCEEDED")
                 self.assertEqual(count, 10)
-        self.engine.monotonic = time.monotonic
+        self.engine.monotonic = lambda: self.elapsed[0]
         self.assertEqual(self.workspace.read("hello", saved["revision"])["definition"], workflow())
 
     def test_result_validation_preserves_deadline_error(self):
