@@ -50,17 +50,24 @@ class ContentStore:
         self.checkpoint = checkpoint
         self.uploads: dict[str, Content] = {}
         self.resources: dict[str, Content] = {}
+        self._closing: dict[str, Content] = {}
 
     def _drop(self, item: Content) -> None:
         if item.upload_id is not None:
             self.uploads.pop(item.upload_id, None)
         self.resources.pop(item.resource_id, None)
-        item.stream.close()
+        self._closing[item.resource_id] = item
+        try:
+            item.stream.close()
+        finally:
+            if item.stream.closed:
+                self._closing.pop(item.resource_id, None)
 
     def _expired(self, item: Content) -> bool:
         return self.clock() >= item.expires or self.monotonic() >= item.deadline
 
     def expire(self) -> None:
+        self._drop_all(list(self._closing.values()))
         for item in set(self.uploads.values()) | set(self.resources.values()):
             self.checkpoint()
             if self._expired(item):
@@ -328,22 +335,27 @@ class ContentStore:
             self._drop(item)
 
     def _drop_all(self, items) -> None:
-        failure = None
+        failures = []
         for item in items:
             try:
                 self._drop(item)
-            except OSError as error:
-                if failure is None:
-                    failure = error
-        if failure is not None:
-            raise failure
+            except BaseException as error:
+                failures.append(error)
+        if len(failures) == 1:
+            raise failures[0]
+        if failures:
+            raise BaseExceptionGroup("内容资源关闭失败。", failures)
 
     def release(self, owner: str) -> None:
         self._drop_all(
             item
-            for item in set(self.uploads.values()) | set(self.resources.values())
+            for item in set(self.uploads.values())
+            | set(self.resources.values())
+            | set(self._closing.values())
             if item.owner == owner
         )
 
     def close(self) -> None:
-        self._drop_all(set(self.uploads.values()) | set(self.resources.values()))
+        self._drop_all(
+            set(self.uploads.values()) | set(self.resources.values()) | set(self._closing.values())
+        )

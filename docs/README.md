@@ -36,6 +36,7 @@
 | [模型连接](design/model-connections.md) | 模型参数、图像消息模板、输出结构和连接测试 |
 | [数据设计](design/storage.md) | 表结构、对象存储、事务、包交换与备份 |
 | [协议对象与状态](interfaces/objects-and-states.md) | 接口对象、状态编码、时间单位与身份字段 |
+| [连接认证](interfaces/connection.md) | 双向挑战、一次性票据、身份恢复、撤权与会话清理 |
 | [本机协议](interfaces/local-protocol.md) | 帧格式、命令、事件、资源、兼容与重连 |
 | [原生 Agent 协议](interfaces/desktop-agent.md) | 租约、已求值输入、资源封存、录制与急停 |
 | [MCP 接口](interfaces/mcp.md) | 工具与资源、授权、取消和通知 |
@@ -56,6 +57,7 @@
 | 文件 | 用途 |
 |---|---|
 | [流程 Schema](../contracts/workflow.schema.json) | 工作流定义的结构约束 |
+| [连接 Schema](../contracts/connection.schema.json) | 连接握手包、协商资料及可信身份输入 |
 | [消息 Schema](../contracts/message.schema.json) | 请求、响应和事件信封 |
 | [任务包 Schema](../contracts/package.schema.json) | 导入导出包清单 |
 | [动作 Schema](../contracts/actions.schema.json) | 节点与动作参数 |

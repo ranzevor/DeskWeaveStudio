@@ -10,9 +10,10 @@ Python 包位于 `python/deskweave`。`Engine` 统一分发方法、权限校验
 uv sync --frozen
 uv run --frozen python examples/engine/workspace.py
 uv run --frozen python examples/engine/content_transfer.py
+uv run --frozen python examples/engine/connection.py
 ```
 
-两个示例均使用临时工作空间。`workspace.py` 完成流程保存、读取、校验和表达式预览；`content_transfer.py` 上传超过 1MiB 的合成模型，通过引用保存，再分块读取并校验完整模型。内容传输示例在完成或发生异常时关闭 Engine；两个示例退出时均删除临时数据。
+示例均使用临时工作空间。`workspace.py` 完成流程保存、读取、校验和表达式预览；`content_transfer.py` 上传超过 1MiB 的合成模型，通过引用保存，再分块读取并校验完整模型。`connection.py` 使用合成对端身份，完成字节帧握手、流程保存和重连后的原请求查询。示例退出时关闭资源并删除临时数据。
 
 ```bash
 uv run --frozen ruff check python tests examples/engine
@@ -45,13 +46,13 @@ uv build
 | content.discard | 按 uploadId 或 resourceId 释放当前会话的临时内容；参数互斥、重复释放幂等 |
 | resource.read | 按偏移读取最多 192KiB；返回整段资源摘要与实际块长度 |
 
-`workflow.save` 在资源声明或依赖绑定非空时返回 `METHOD_UNAVAILABLE`。`trajectoryEdit` 的处理结果为通过结构校验的封存内容引用；资产提交和依赖版本绑定未实现。M1 后续组件包括独立 Engine 进程、认证 IPC、运行调度和原生输入，见[路线图](../../ROADMAP.md)。方法与参数见[本机协议](../interfaces/local-protocol.md)。
+`workflow.save` 在资源声明或依赖绑定非空时返回 `METHOD_UNAVAILABLE`。`trajectoryEdit` 的处理结果为通过结构校验的封存内容引用；资产提交和依赖版本绑定未实现。M1 后续组件包括独立 Engine 进程、原生 IPC 端点及对端身份采集、运行调度和原生输入，见[路线图](../../ROADMAP.md)。方法与参数见[本机协议](../interfaces/local-protocol.md)。
 
 ## 服务调用
 
 `Workspace(path, create=True)` 只在空目录创建工作空间；已有工作空间使用 `Workspace(path)`。实例持有操作系统文件锁，直到关闭才释放；同一目录的别名解析到相同位置。数据库事务与内容发布分开，文件写入失败或提交前超时不会更新流程头版本。
 
-`Engine.open_session` 由受信启动器或适配器调用，传入已认证的稳定客户端身份、权限、流程范围和已协商的 `capabilities`。使用内容传输时传入 `capabilities={"contentRefsV1"}`；能力选择独立于用途权限。当前服务库通过该入口接收可信调用参数，认证与握手由后续 IPC 适配器实现。网络消息不能创建会话或覆盖这些字段。`dispatch` 使用会话身份和公共消息信封；返回值符合公共响应契约。
+`Engine.open_session` 由受信启动器或适配器调用，传入已认证的稳定客户端身份、权限、流程范围和已协商的 `capabilities`。使用内容传输时传入 `capabilities={"contentRefsV1"}`；能力选择独立于用途权限。`ConnectionAuthority` 与 `ClientConnection` 实现[连接认证](../interfaces/connection.md)，验证票据和双向应答后调用此入口，并传入 `authorization_version`；原生适配器提供已核验对端身份。网络消息不能创建会话或覆盖这些字段。`dispatch` 使用会话身份和公共消息信封；连接的 `authorize` 回调覆盖解析、处理、提交检查和响应编码。返回值符合公共响应契约。
 
 `local=True` 仅用于已经完成本地窗口身份核验的调用方。表达式预览保持本地准入限制；其他入口对相同业务参数调用相同方法处理器。`revoke_client` 关闭该客户端全部会话、查询与临时内容，`close` 释放 Engine 与工作空间。单个临时文件关闭失败时仍清理其余资源及会话，随后向调用方报告存储异常。
 

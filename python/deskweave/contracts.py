@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Callable
@@ -12,7 +13,7 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from deskweave.errors import DeskWeaveError
-from deskweave.json import json_pointer
+from deskweave.json import dumps, json_pointer
 
 _checkpoint = ContextVar("schema_checkpoint", default=lambda: None)
 
@@ -55,6 +56,19 @@ def contract_registry() -> tuple[dict, Registry]:
         )
     registry = Registry().with_resources(resources)
     return schemas, registry
+
+
+@lru_cache(maxsize=1)
+def contract_digest() -> str:
+    schemas, _ = contract_registry()
+    documents = {"schema:" + identity: contents for identity, contents in schemas.items()}
+    directory = Path(__file__).with_name("contracts")
+    if not directory.is_dir():
+        directory = Path(__file__).resolve().parents[2] / "contracts"
+    for path in directory.glob("*.json"):
+        if not path.name.endswith(".schema.json"):
+            documents["catalog:" + path.name] = json.loads(path.read_text(encoding="utf-8"))
+    return hashlib.sha256(dumps(documents, max_bytes=32 * 1024 * 1024)).hexdigest()
 
 
 @lru_cache(maxsize=128)
