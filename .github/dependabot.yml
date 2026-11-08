@@ -16,3 +16,17 @@ updates:
       time: '09:00'
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    groups:
+      validation:
+        applies-to: version-updates
+        patterns:
+          - attrs
+          - jsonschema
+          - jsonschema-specifications
+          - referencing
+          - rpds-py
+          - typing-extensions
+          - typing_extensions
+          - pyyaml
+          - PyYAML
+          - rfc8785
