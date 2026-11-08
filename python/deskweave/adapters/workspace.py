@@ -7,7 +7,7 @@ import threading
 import time
 import unicodedata
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -290,19 +290,32 @@ class Workspace:
                 self._deadline, self._clock = previous
 
     @contextmanager
-    def transaction(self):
+    def transaction(self, *, deadline: float | None = None, clock=time.monotonic):
         with self._mutex:
             if self._closed or self._connection is None:
                 raise DeskWeaveError("WORKSPACE_CLOSED", "工作空间已关闭。")
             connection = self._connection
+            savepoint = f"txn_{uuid.uuid4().hex}" if connection.in_transaction else None
+            budget = self.budget(deadline, clock) if deadline is not None else nullcontext()
+            started = False
             try:
-                self.check_deadline()
-                connection.execute("BEGIN IMMEDIATE")
-                yield connection
-                self.check_deadline()
-                connection.commit()
+                with budget:
+                    self.check_deadline()
+                    connection.execute(f"SAVEPOINT {savepoint}" if savepoint else "BEGIN IMMEDIATE")
+                    started = True
+                    yield connection
+                    self.check_deadline()
+                if savepoint:
+                    connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    connection.commit()
             except BaseException:
-                connection.rollback()
+                if started:
+                    if savepoint:
+                        connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                        connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+                    else:
+                        connection.rollback()
                 raise
 
     def _put_object(self, value: object) -> str:

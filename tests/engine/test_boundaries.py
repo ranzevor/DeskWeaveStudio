@@ -260,6 +260,130 @@ class BoundaryTests(EngineCase):
         self.success("query.close", {"snapshotId": pages[0]["snapshotId"]}, session=sessions[0])
         self.success("workspace.catalog", {"kind": "workflow"}, session=sessions[4])
 
+    def test_catalog_deadline_boundaries_roll_back_and_allow_recovery(self):
+        self.seed_versions(3)
+        original = self.workspace.catalog_rows
+        for deadline_ms, elapsed, succeeds in (
+            (30000, 1.999, True),
+            (30000, 2.0, False),
+            (50, 0.049, True),
+            (50, 0.050, False),
+        ):
+            with self.subTest(deadline_ms=deadline_ms, elapsed=elapsed):
+
+                def delayed(*args, elapsed=elapsed):
+                    self.elapsed[0] += elapsed
+                    yield from original(*args)
+
+                with patch.object(self.workspace, "catalog_rows", side_effect=delayed):
+                    response = self.request(
+                        "workspace.catalog",
+                        {"kind": "workflow", "pageSize": 1},
+                        deadline_ms=deadline_ms,
+                    )
+                self.assertEqual(response["ok"], succeeds, response)
+                if succeeds:
+                    self.assertEqual(response["result"]["items"][0]["id"], "flow-000003")
+                    self.success("query.close", {"snapshotId": response["result"]["snapshotId"]})
+                else:
+                    self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+                with self.workspace.transaction() as connection:
+                    for table in ("query_snapshot", "query_cursor"):
+                        self.assertEqual(
+                            connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0
+                        )
+                recovered = self.success("workspace.catalog", {"kind": "workflow", "pageSize": 1})
+                self.assertEqual(recovered["items"][0]["id"], "flow-000003")
+                self.success("query.close", {"snapshotId": recovered["snapshotId"]})
+
+    def test_query_response_timeout_rolls_back_snapshot_and_cursor(self):
+        from deskweave.contracts import method_schema
+        from deskweave.engine import service
+
+        self.seed_versions(3)
+        revision = None
+        for _ in range(3):
+            revision = self.save(workflow("history"), revision)["revision"]
+        definition = workflow()
+        definition["nodes"][0].update(action="time.wait", params={})
+        definition["nodes"].extend(
+            dict(definition["nodes"][0], id=identity) for identity in ("second", "third")
+        )
+        diagnostics = self.success("workflow.validate", {"definition": definition})
+        self.assertGreaterEqual(diagnostics["diagnosticCount"], 3)
+        queries = (
+            ("workspace.catalog", {"kind": "workflow", "pageSize": 1}),
+            ("workflow.revisions", {"workflowId": "history", "pageSize": 1}),
+            (
+                "query.read",
+                {
+                    "kind": "diagnostics",
+                    "collectionId": diagnostics["diagnosticsQuery"]["collectionId"],
+                    "pageSize": 1,
+                },
+            ),
+        )
+        for method, params in queries:
+            for stage in ("validate", "dumps"):
+                for continuation in (False, True):
+                    with self.subTest(method=method, stage=stage, continuation=continuation):
+                        with self.workspace.transaction() as connection:
+                            connection.execute("DELETE FROM query_snapshot")
+                        request = dict(params)
+                        if continuation:
+                            first = self.success(method, request)
+                            request["cursor"] = first["nextCursor"]
+                            self.assertIsNotNone(request["cursor"])
+                        baseline = (1, 1) if continuation else (0, 0)
+                        original = getattr(service, stage)
+
+                        def counts():
+                            return tuple(
+                                self.workspace._connection.execute(
+                                    f"SELECT COUNT(*) FROM {table}"
+                                ).fetchone()[0]
+                                for table in ("query_snapshot", "query_cursor")
+                            )
+
+                        for _ in range(8):
+                            observed = []
+
+                            def expire(
+                                *args,
+                                original=original,
+                                stage=stage,
+                                method=method,
+                                observed=observed,
+                                **kwargs,
+                            ):
+                                result_validation = stage == "validate" and args[
+                                    0
+                                ] == method_schema(method, "result")
+                                response_encoding = (
+                                    stage == "dumps"
+                                    and isinstance(args[0], dict)
+                                    and args[0].get("kind") == "response"
+                                    and args[0].get("ok") is True
+                                )
+                                if result_validation or response_encoding:
+                                    observed.append(counts())
+                                    self.elapsed[0] += 2.0
+                                return original(*args, **kwargs)
+
+                            with patch.object(service, stage, side_effect=expire):
+                                response = self.request(method, request)
+                            self.assertEqual(response["error"]["code"], "DEADLINE_EXCEEDED")
+                            self.assertEqual(observed, [(1, 2) if continuation else (1, 1)])
+                            self.assertEqual(counts(), baseline)
+                        recovered = self.success(method, request)
+                        self.assertEqual(len(recovered["items"]), 1)
+                        snapshot = recovered.get("querySnapshot", recovered)["snapshotId"]
+                        if continuation:
+                            self.assertEqual(
+                                snapshot, first.get("querySnapshot", first)["snapshotId"]
+                            )
+                        self.success("query.close", {"snapshotId": snapshot})
+
     def test_large_history_pages_share_revision_storage(self):
         self.seed_versions(12000, history=True)
         with self.workspace.transaction() as connection:
@@ -449,11 +573,10 @@ class BoundaryTests(EngineCase):
 
     def test_existing_workspace_preserves_versions_and_receipts(self):
         from deskweave.adapters.workspace import Workspace
-        from deskweave.engine.service import Engine
 
         first, second = self.prepare_version_one_database()
         self.workspace = Workspace(self.directory)
-        self.engine = Engine(self.workspace, clock=lambda: self.now[0])
+        self.engine = self.make_engine()
         self.editor = self.engine.open_session(
             "studio", {"workflow.read", "workflow.write"}, local=True
         )
