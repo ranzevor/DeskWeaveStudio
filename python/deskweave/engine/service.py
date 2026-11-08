@@ -52,6 +52,7 @@ class Engine:
         )
         self._mutex = threading.RLock()
         self._sessions: dict[str, Session] = {}
+        self._closing_sessions: dict[str, Session] = {}
         self._collections: dict[str, dict] = {}
         self._methods: dict[str, Method] = {}
         self.register(
@@ -133,18 +134,25 @@ class Engine:
         local: bool = False,
         workflow_ids: set[str] | None = None,
         capabilities: set[str] | None = None,
+        authorization_version: int = 1,
     ) -> Session:
         with self._mutex:
             if self.workspace.closed:
                 raise DeskWeaveError("WORKSPACE_CLOSED", "工作空间已关闭。")
             if not client_id or len(client_id) > 128:
                 raise ValueError("客户端身份长度应为 1～128。")
+            if (
+                type(authorization_version) is not int
+                or not 1 <= authorization_version <= 9007199254740991
+            ):
+                raise ValueError("授权版本无效。")
             session = Session(
                 secrets.token_urlsafe(24),
                 client_id,
                 frozenset(permissions),
                 None if workflow_ids is None else frozenset(workflow_ids),
                 local,
+                authorization_version=authorization_version,
                 capabilities=frozenset(capabilities or ()),
             )
             self._sessions[session.id] = session
@@ -156,40 +164,60 @@ class Engine:
             self._collections.clear()
             try:
                 self.contents.close()
+                self._closing_sessions.clear()
             finally:
                 self.workspace.close()
 
     def revoke_client(self, client_id: str) -> None:
         with self._mutex:
-            failure = None
-            for identity, session in tuple(self._sessions.items()):
+            failures = []
+            for session in tuple({**self._sessions, **self._closing_sessions}.values()):
                 if session.client_id == client_id:
                     try:
-                        self.close_session(identity)
-                    except OSError as error:
-                        if failure is None:
-                            failure = error
-            if failure is not None:
-                raise failure
+                        self.close_session(session.id)
+                    except BaseException as error:
+                        failures.append(error)
+            self._raise_cleanup(failures)
+
+    @staticmethod
+    def _raise_cleanup(failures) -> None:
+        if len(failures) == 1:
+            raise failures[0]
+        if failures:
+            raise BaseExceptionGroup("会话资源关闭失败。", failures)
 
     def close_session(self, session_id: str) -> None:
         with self._mutex:
             session = self._sessions.pop(session_id, None)
-            if session:
+            if session is not None:
+                self._closing_sessions[session.id] = session
+            failures = []
+            releases = [self.contents.release]
+            if not self.workspace.closed:
+                releases.append(self.pages.release)
+            for release in releases:
                 try:
-                    self.contents.release(session.id)
-                finally:
-                    try:
-                        if not self.workspace.closed:
-                            self.pages.release(session.id)
-                    finally:
-                        self._collections = {
-                            key: value
-                            for key, value in self._collections.items()
-                            if value["owner"] != session.id
-                        }
+                    release(session_id)
+                except BaseException as error:
+                    failures.append(error)
+            self._collections = {
+                key: value
+                for key, value in self._collections.items()
+                if value["owner"] != session_id
+            }
+            self._raise_cleanup(failures)
+            self._closing_sessions.pop(session_id, None)
 
-    def dispatch(self, session_id: str, request: dict) -> dict:
+    def dispatch(
+        self,
+        session_id: str,
+        request: dict,
+        *,
+        authorize: Callable[[], None] | None = None,
+        max_frame_bytes: int = MAX_FRAME,
+    ) -> dict:
+        if type(max_frame_bytes) is not int or not 1024 <= max_frame_bytes <= MAX_FRAME:
+            raise ValueError("连接帧上限无效。")
         reply_id = request.get("id", "invalid") if type(request) is dict else "invalid"
         if type(reply_id) is not str or not 1 <= len(reply_id) <= 128:
             reply_id = "invalid"
@@ -200,8 +228,12 @@ class Engine:
         header = {"protocolVersion": "1.0", "kind": "response", "replyTo": reply_id}
         started = self.monotonic()
         try:
-            dumps(request)
-            validate("urn:deskweave:message:1#/$defs/requestEnvelope", request)
+            checkpoint = authorize or (lambda: None)
+            checkpoint()
+            dumps(request, max_bytes=max_frame_bytes, checkpoint=checkpoint)
+            validate(
+                "urn:deskweave:message:1#/$defs/requestEnvelope", request, checkpoint=checkpoint
+            )
             with self._mutex:
                 session = self._sessions.get(session_id)
                 if session is None or request["session"] != session_id:
@@ -230,9 +262,11 @@ class Engine:
                         deadline, started + (5 if request["params"].get("includeTotal") else 2)
                     )
                 scope = (
-                    self.workspace.transaction(deadline=deadline, clock=self.monotonic)
+                    self.workspace.transaction(
+                        deadline=deadline, clock=self.monotonic, authorize=authorize
+                    )
                     if is_query
-                    else self.workspace.budget(deadline, self.monotonic)
+                    else self.workspace.budget(deadline, self.monotonic, authorize=authorize)
                 )
                 with scope:
                     dumps(
@@ -270,7 +304,11 @@ class Engine:
                         checkpoint=self.workspace.check_deadline,
                     )
                     response = {**header, "ok": True, "result": result}
-                    dumps(response, checkpoint=self.workspace.check_deadline)
+                    dumps(
+                        response,
+                        max_bytes=max_frame_bytes,
+                        checkpoint=self.workspace.check_deadline,
+                    )
             return response
         except DeskWeaveError as error:
             response = {**header, "ok": False, "error": error.as_dict()}
@@ -285,7 +323,7 @@ class Engine:
                 ).as_dict(),
             }
         try:
-            dumps(response)
+            dumps(response, max_bytes=max_frame_bytes)
         except DeskWeaveError as error:
             response = {**header, "ok": False, "error": error.as_dict()}
         return response

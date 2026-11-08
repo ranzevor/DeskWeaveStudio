@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:connection:1",
+  "title": "DeskWeaveStudio connection authentication",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/hello"
+    },
+    {
+      "$ref": "#/$defs/challenge"
+    },
+    {
+      "$ref": "#/$defs/authenticate"
+    },
+    {
+      "$ref": "#/$defs/ready"
+    }
+  ],
+  "$defs": {
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "maxFrameBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        }
+      },
+      "required": [
+        "maxFrameBytes"
+      ],
+      "additionalProperties": false
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "type": "string",
+          "pattern": "^[0-9]{1,4}\\.[0-9]{1,4}$"
+        },
+        "componentVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.+-]+)?$"
+        },
+        "instanceEpoch": {
+          "$ref": "#/$defs/identity"
+        },
+        "schemaDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9.-]*$"
+          }
+        },
+        "limits": {
+          "$ref": "#/$defs/limits"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "componentVersion",
+        "instanceEpoch",
+        "schemaDigest",
+        "capabilities",
+        "limits"
+      ],
+      "additionalProperties": false
+    },
+    "selected": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "type": "string",
+          "pattern": "^[0-9]{1,4}\\.[0-9]{1,4}$"
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9.-]*$"
+          }
+        },
+        "limits": {
+          "$ref": "#/$defs/limits"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "capabilities",
+        "limits"
+      ],
+      "additionalProperties": false
+    },
+    "peerIdentity": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "enum": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "osSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "processId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "processStarted": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "installationDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "instanceEpoch": {
+          "$ref": "#/$defs/identity"
+        }
+      },
+      "required": [
+        "platform",
+        "userId",
+        "osSessionId",
+        "processId",
+        "processStarted",
+        "installationDigest",
+        "instanceEpoch"
+      ],
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "permissions": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$"
+          }
+        },
+        "workflowIds": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "maxItems": 10000,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/identity"
+              }
+            }
+          ]
+        },
+        "local": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "permissions",
+        "workflowIds",
+        "local"
+      ],
+      "additionalProperties": false
+    },
+    "hello": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "connection.hello"
+        },
+        "ticketId": {
+          "$ref": "#/$defs/identity"
+        },
+        "nonce": {
+          "$ref": "#/$defs/digest"
+        },
+        "peer": {
+          "$ref": "#/$defs/profile"
+        }
+      },
+      "required": [
+        "kind",
+        "ticketId",
+        "nonce",
+        "peer"
+      ],
+      "additionalProperties": false
+    },
+    "challenge": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "connection.challenge"
+        },
+        "nonce": {
+          "$ref": "#/$defs/digest"
+        },
+        "peer": {
+          "$ref": "#/$defs/profile"
+        },
+        "selected": {
+          "$ref": "#/$defs/selected"
+        },
+        "proof": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "kind",
+        "nonce",
+        "peer",
+        "selected",
+        "proof"
+      ],
+      "additionalProperties": false
+    },
+    "authenticate": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "connection.authenticate"
+        },
+        "proof": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "kind",
+        "proof"
+      ],
+      "additionalProperties": false
+    },
+    "ready": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "connection.ready"
+        },
+        "session": {
+          "$ref": "#/$defs/identity"
+        },
+        "workspace": {
+          "$ref": "#/$defs/identity"
+        },
+        "clientId": {
+          "$ref": "#/$defs/identity"
+        },
+        "authorizationVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "selected": {
+          "$ref": "#/$defs/selected"
+        },
+        "proof": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "kind",
+        "session",
+        "workspace",
+        "clientId",
+        "authorizationVersion",
+        "selected",
+        "proof"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

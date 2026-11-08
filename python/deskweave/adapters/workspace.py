@@ -7,6 +7,7 @@ import threading
 import time
 import unicodedata
 import uuid
+from collections.abc import Callable
 from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,8 @@ class Workspace:
         self._closed = False
         self._deadline: float | None = None
         self._clock = time.monotonic
+        self._authorize: Callable[[], None] | None = None
+        self._progress = None
         self._connection: sqlite3.Connection | None = None
         self._lock_file = None
         if create:
@@ -263,40 +266,80 @@ class Workspace:
         return self._closed
 
     def check_deadline(self) -> None:
+        if self._authorize is not None:
+            self._authorize()
         if self._deadline is not None and self._clock() >= self._deadline:
             raise DeskWeaveError("DEADLINE_EXCEEDED", "请求处理超时。", retry="afterQuery")
 
     @contextmanager
-    def budget(self, deadline: float, clock=time.monotonic):
+    def budget(self, deadline: float | None, clock=time.monotonic, *, authorize=None):
         with self._mutex:
             if self._closed or self._connection is None:
                 raise DeskWeaveError("WORKSPACE_CLOSED", "工作空间已关闭。")
-            previous = self._deadline, self._clock
+            previous = self._deadline, self._clock, self._authorize, self._progress
+            outer_deadline, outer_clock, outer_authorize, outer_progress = previous
+
+            def authorization():
+                if outer_authorize is not None:
+                    outer_authorize()
+                if authorize is not None:
+                    authorize()
+                if outer_deadline is not None and outer_clock() >= outer_deadline:
+                    raise DeskWeaveError("DEADLINE_EXCEEDED", "请求处理超时。", retry="afterQuery")
+
+            interrupted = None
+
+            def progress():
+                nonlocal interrupted
+                try:
+                    self.check_deadline()
+                except BaseException as error:
+                    interrupted = error
+                    return 1
+                return 0
+
             self._deadline, self._clock = deadline, clock
+            self._authorize, self._progress = authorization, progress
             connection = self._connection
             try:
                 self.check_deadline()
-                wait_ms = max(1, min(2000, int((deadline - clock()) * 1000)))
+                wait_ms = (
+                    2000
+                    if deadline is None
+                    else max(1, min(2000, int((deadline - clock()) * 1000)))
+                )
                 connection.execute(f"PRAGMA busy_timeout={wait_ms}")
-                connection.set_progress_handler(lambda: int(clock() >= deadline), 1000)
+                connection.set_progress_handler(progress, 1000)
                 yield
                 self.check_deadline()
-            except sqlite3.Error:
+            except sqlite3.Error as error:
+                if interrupted is not None:
+                    raise interrupted from error
                 self.check_deadline()
                 raise
             finally:
                 connection.set_progress_handler(None, 0)
-                connection.execute("PRAGMA busy_timeout=2000")
-                self._deadline, self._clock = previous
+                self._deadline, self._clock, self._authorize, self._progress = previous
+                wait_ms = (
+                    2000
+                    if outer_deadline is None
+                    else max(1, min(2000, int((outer_deadline - outer_clock()) * 1000)))
+                )
+                connection.execute(f"PRAGMA busy_timeout={wait_ms}")
+                connection.set_progress_handler(outer_progress, 1000 if outer_progress else 0)
 
     @contextmanager
-    def transaction(self, *, deadline: float | None = None, clock=time.monotonic):
+    def transaction(self, *, deadline: float | None = None, clock=time.monotonic, authorize=None):
         with self._mutex:
             if self._closed or self._connection is None:
                 raise DeskWeaveError("WORKSPACE_CLOSED", "工作空间已关闭。")
             connection = self._connection
             savepoint = f"txn_{uuid.uuid4().hex}" if connection.in_transaction else None
-            budget = self.budget(deadline, clock) if deadline is not None else nullcontext()
+            budget = (
+                self.budget(deadline, clock, authorize=authorize)
+                if deadline is not None or authorize is not None
+                else nullcontext()
+            )
             started = False
             try:
                 with budget:
@@ -305,18 +348,23 @@ class Workspace:
                     started = True
                     yield connection
                     self.check_deadline()
+                # 完成提交检查后，事务收尾不再被 SQLite 进度回调中断。
+                connection.set_progress_handler(None, 0)
                 if savepoint:
                     connection.execute(f"RELEASE SAVEPOINT {savepoint}")
                 else:
                     connection.commit()
             except BaseException:
-                if started:
+                connection.set_progress_handler(None, 0)
+                if started and connection.in_transaction:
                     if savepoint:
                         connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
                         connection.execute(f"RELEASE SAVEPOINT {savepoint}")
                     else:
                         connection.rollback()
                 raise
+            finally:
+                connection.set_progress_handler(self._progress, 1000 if self._progress else 0)
 
     def _put_object(self, value: object) -> str:
         self.check_deadline()
