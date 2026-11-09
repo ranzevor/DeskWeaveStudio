@@ -125,8 +125,9 @@ class ProcessBinding(Resource):
             raise ValueError("受控进程登记需要进程号和安装策略。")
         budget = Budget(timeout, cancel)
         self.installation = installation
-        self.process = platform.Process(pid)
+        self.process = None
         try:
+            self.process = platform.Process(pid)
             self._snapshot = self.process.initial
             user, session, started, executable = self._snapshot[:4]
             if not executable.samefile(installation.executable.path):
@@ -142,8 +143,25 @@ class ProcessBinding(Resource):
             )
             self._stamps = self._verify_installation(budget.check_time)
             self._check_process(budget.check_time)
-        except BaseException:
-            self.process.close()
+        except BaseException as error:
+            unavailable = (
+                isinstance(
+                    error, (ProcessLookupError, FileNotFoundError, PermissionError, OverflowError)
+                )
+                or getattr(error, "winerror", None) == 87
+            )
+            failure = rejected() if unavailable else error
+            if unavailable:
+                failure.__cause__ = error
+            if self.process is not None:
+                try:
+                    self.process.close()
+                except BaseException as closing:
+                    raise BaseExceptionGroup(
+                        "进程登记与引用关闭失败。", [failure, closing]
+                    ) from None
+            if unavailable:
+                raise failure from error
             raise
 
     def _verify_image(self, checkpoint=lambda: None):

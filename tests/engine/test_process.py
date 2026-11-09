@@ -160,6 +160,67 @@ class ProcessCase(unittest.TestCase):
         self.error("ACCESS_DENIED", lambda: process.issue(credential))
         self.query(other)
 
+    def test_exiting_registration_does_not_drain_other_clients(self):
+        process = self.start()
+        client, _ = self.client(process)
+        candidate = subprocess.Popen(
+            [
+                str(self.launch.launcher.path),
+                "-I",
+                "-S",
+                "-X",
+                "utf8",
+                "-c",
+                "import sys; print('ready', flush=True); sys.stdin.read()",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        ready = queue.Queue()
+        reader = threading.Thread(
+            target=lambda: ready.put(candidate.stdout.readline()), daemon=True
+        )
+        reader.start()
+
+        def finish():
+            if candidate.poll() is None:
+                candidate.kill()
+            candidate.wait(10)
+            reader.join(5)
+            candidate.stdin.close()
+            candidate.stdout.close()
+
+        self.stack.callback(finish)
+        self.assertEqual(ready.get(timeout=10).strip(), b"ready")
+        with ProcessBinding(
+            candidate.pid, self.launch.installation, instance_epoch="departing-client"
+        ) as peer:
+            original = process._exchange
+
+            def exchange(method, params, budget):
+                if method == "register.commit":
+                    candidate.kill()
+                    candidate.wait(5)
+                return original(method, params, budget)
+
+            with patch.object(process, "_exchange", exchange):
+                self.error(
+                    "AUTHENTICATION_FAILED",
+                    lambda: process.authorize(
+                        peer, ConnectionPolicy({"workflow.read"}), lifetime=60
+                    ),
+                )
+        self.query(client)
+        self.assertEqual(process.status()["clients"], 1)
+        replacement = process.authorize(
+            self.local, ConnectionPolicy({"workflow.read"}), lifetime=60
+        )
+        with process.connect(replacement, self.local) as other:
+            self.query(other)
+
     def test_client_capacity_and_same_installation_reuse(self):
         process = self.start(max_clients=1)
         methods = []

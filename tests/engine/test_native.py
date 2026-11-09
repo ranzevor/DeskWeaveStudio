@@ -118,6 +118,50 @@ class NativeCase(unittest.TestCase):
                 lambda: ProcessBinding(os.getpid(), self.installation, instance_epoch="session"),
             )
 
+    def test_binding_creation_normalizes_unavailable_process(self):
+        from deskweave.transport.native import identity
+
+        missing_windows_pid = OSError("invalid process parameter")
+        missing_windows_pid.winerror = 87
+        for error in (
+            ProcessLookupError("process exited"),
+            FileNotFoundError("process image disappeared"),
+            PermissionError("process access denied"),
+            OverflowError("process id outside native range"),
+            missing_windows_pid,
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(identity.platform, "Process", side_effect=error),
+            ):
+                self.error(
+                    "AUTHENTICATION_FAILED",
+                    lambda: ProcessBinding(
+                        os.getpid(), self.installation, instance_epoch="unavailable"
+                    ),
+                )
+        process_type = identity.platform.Process
+        opened = process_type(os.getpid())
+        self.stack.callback(opened.close)
+        with (
+            patch.object(identity.platform, "Process", return_value=opened) as factory,
+            patch.object(
+                ProcessBinding,
+                "_verify_installation",
+                side_effect=FileNotFoundError("process image disappeared"),
+            ),
+        ):
+            factory.platform = process_type.platform
+            self.error(
+                "AUTHENTICATION_FAILED",
+                lambda: ProcessBinding(os.getpid(), self.installation, instance_epoch="exited"),
+            )
+        self.error("AUTHENTICATION_FAILED", opened.snapshot)
+        with patch.object(identity.platform, "Process", side_effect=OSError("resource failure")):
+            with self.assertRaisesRegex(OSError, "resource failure"):
+                ProcessBinding(os.getpid(), self.installation, instance_epoch="resource")
+        self.local.check()
+
     def test_kernel_peer_and_unicode_frame(self):
         client, server, _listener = self.pair()
         self.assertEqual(server.peer.process_id, os.getpid())
@@ -267,9 +311,12 @@ class NativeCase(unittest.TestCase):
                         self.assertEqual(error.code, "AUTHENTICATION_FAILED")
 
     def test_shared_installation_reads_components_once_per_check(self):
-        source = Path(self.directory) / "shared-component.py"
+        alias = Path(self.directory) / "alias"
+        alias.mkdir()
+        source = alias / ".." / "shared-component.py"
         source.write_bytes(b"one")
         selected = replace(self.installation, components=(installed(source),))
+        actual = selected.components[0].path
         with (
             ProcessBinding(os.getpid(), selected, instance_epoch="shared-local") as local,
             ProcessBinding(os.getpid(), selected, instance_epoch="shared-peer") as peer,
@@ -281,7 +328,7 @@ class NativeCase(unittest.TestCase):
             original = Path.open
 
             def opened(path, *args, **kwargs):
-                if path == source:
+                if path == actual:
                     reads.append(path)
                 return original(path, *args, **kwargs)
 
