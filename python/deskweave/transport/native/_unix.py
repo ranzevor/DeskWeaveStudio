@@ -36,6 +36,7 @@ class Stream(Resource):
         self.sock.set_inheritable(False)
         self._lock = threading.RLock()
         self._closed = False
+        self._peer = None
 
     def read(self, size, budget):
         while True:
@@ -65,7 +66,14 @@ class Stream(Resource):
         with self._lock:
             if self._closed:
                 raise closed()
-            return platform.peer(self.sock)
+            if self._peer is None:
+                try:
+                    self._peer = platform.peer(self.sock)
+                except OSError as error:
+                    if error.errno == errno.ENOTCONN:
+                        raise closed() from error
+                    raise
+            return self._peer
 
     def close(self):
         with self._lock:
@@ -124,7 +132,13 @@ class Listener(Resource):
                     self._check()
                     try:
                         sock, _ = self.sock.accept()
-                        return Stream(sock)
+                        try:
+                            stream = Stream(sock)
+                            stream.peer()
+                            return stream
+                        except BaseException:
+                            sock.close()
+                            raise
                     except BlockingIOError:
                         pass
                 select.select([self.sock], [], [], delay)
@@ -178,6 +192,7 @@ def connect(address, budget):
                 raise OSError(error, "无法连接本机端点。")
         if identity(path) != (info.st_dev, info.st_ino):
             raise rejected()
+        stream.peer()
         budget.check()
         return stream
     except BaseException:

@@ -26,7 +26,7 @@
 | macOS | 0700 私有目录、0600 Unix socket；`LOCAL_PEERTOKEN` | audit token 的 PID、有效 UID 和 audit session；kqueue 进程生命周期；Security.framework 按 audit token 获取动态代码并校验可信 requirement，组件清单单独核验 |
 | Linux | 0700 私有目录、0600 Unix socket；`SO_PEERCRED` | pidfd、`/proc` 创建标识及映像；有效内核 audit session 或 systemd/elogind 登录会话；组件摘要 |
 
-macOS 登记以控制方当前 audit session 为预期，连接后必须与内核对端 token 一致。Linux 登录会话取自 audit 或登录管理器，读取不到时拒绝登记；`XDG_SESSION_ID` 等环境值不参与身份核验。CI 在实际 PAM 登录会话中运行 Linux 原生测试。
+Unix 对端凭据在连接建立时从内核采集并绑定到该 socket，接收已缓冲消息和 EOF 时沿用该凭据；进程生命周期、当前身份、安装内容与授权继续逐次核验。macOS 登记以控制方当前 audit session 为预期，连接后必须与内核对端 token 一致。Linux 登录会话取自 audit 或登录管理器，读取不到时拒绝登记；`XDG_SESSION_ID` 等环境值不参与身份核验。CI 在实际 PAM 登录会话中运行 Linux 原生测试。
 
 端点权限与进程身份分别检查。随机端点名用于分配端点，安装策略和双方一次性票据共同约束应用接入。票据不写入普通发现记录、命令行或日志。端点目录与 socket 的文件身份固定，清理只移除该监听器创建的对象；清理失败可再次关闭重试。
 

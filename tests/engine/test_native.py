@@ -189,6 +189,14 @@ class NativeCase(unittest.TestCase):
         self.assertGreater(len(encoded), MAX_FRAME)
         self.assertEqual(selected.digest, hashlib.sha256(encoded).hexdigest())
 
+    def test_complete_frame_before_peer_close(self):
+        client, server, _ = self.pair()
+        message = {"value": "final frame"}
+        client.send(message)
+        client.close()
+        self.assertEqual(server.receive(), message)
+        self.error("TRANSPORT_CLOSED", server.receive)
+
     def test_partial_frame_and_eof(self):
         client, server, _ = self.pair()
         client._raw.write(struct.pack("<I", 10) + b"{}", Budget(2))
