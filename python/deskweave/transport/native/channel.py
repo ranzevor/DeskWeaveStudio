@@ -33,9 +33,14 @@ class NativeChannel(Resource):
         self._read_lock, self._write_lock = threading.Lock(), threading.Lock()
         self._closed = False
         self.max_frame_bytes = MAX_FRAME
-        local_binding(local, budget.check_time)
-        self.local = local.identity
-        self.peer = peer.verify(raw, budget.check_time)
+        if (
+            type(local) is not ProcessBinding
+            or type(peer) is not ProcessBinding
+            or local.identity.process_id != os.getpid()
+        ):
+            raise rejected()
+        self.local, self.peer = local.identity, peer.identity
+        self.check(budget.check_time)
         if (self.local.platform, self.local.user_id, self.local.os_session_id) != (
             self.peer.platform,
             self.peer.user_id,
@@ -46,8 +51,19 @@ class NativeChannel(Resource):
     def check(self, checkpoint=lambda: None):
         if self._closed:
             raise closed()
-        self._local_binding.check(checkpoint)
-        self._peer_binding.verify(self._raw, checkpoint)
+        local, peer = self._local_binding, self._peer_binding
+        peer._verify_peer(self._raw, checkpoint)
+        local.check(checkpoint)
+        if peer is local:
+            return
+        if peer.identity.installation_digest == local.identity.installation_digest:
+            peer._check_process(checkpoint)
+            peer._verify_image(checkpoint)
+            if peer._stamps != local._stamps:
+                raise rejected()
+            peer._check_process(checkpoint)
+        else:
+            peer.check(checkpoint)
 
     def _check_identity(self, checkpoint=lambda: None):
         if self._closed:

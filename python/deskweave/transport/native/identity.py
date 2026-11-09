@@ -146,13 +146,17 @@ class ProcessBinding(Resource):
             self.process.close()
             raise
 
-    def _verify_installation(self, checkpoint=lambda: None):
+    def _verify_image(self, checkpoint=lambda: None):
         expected = self.installation
         image = (
             self.process.image_path() if hasattr(self.process, "image_path") else self._snapshot[3]
         )
         if digest_file(image, checkpoint)[0] != expected.executable.sha256:
             raise rejected()
+
+    def _verify_installation(self, checkpoint=lambda: None):
+        self._verify_image(checkpoint)
+        expected = self.installation
         values = {}
         for item in (expected.executable, *expected.components):
             digest, state = digest_file(item.path, checkpoint)
@@ -172,13 +176,16 @@ class ProcessBinding(Resource):
             raise rejected()
         self._check_process(checkpoint)
 
-    def verify(self, raw, checkpoint=lambda: None):
+    def _verify_peer(self, raw, checkpoint=lambda: None):
         self._check_process(checkpoint)
         pid, credential = raw.peer()
         if pid != self.identity.process_id:
             raise rejected()
         if sys.platform != "win32":
             platform.verify_peer(self.process, credential, self.installation.macos_requirement)
+
+    def verify(self, raw, checkpoint=lambda: None):
+        self._verify_peer(raw, checkpoint)
         self.check(checkpoint)
         return self.identity
 

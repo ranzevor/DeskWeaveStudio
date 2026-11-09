@@ -266,6 +266,66 @@ class NativeCase(unittest.TestCase):
                         self.assertIsInstance(error, DeskWeaveError)
                         self.assertEqual(error.code, "AUTHENTICATION_FAILED")
 
+    def test_shared_installation_reads_components_once_per_check(self):
+        source = Path(self.directory) / "shared-component.py"
+        source.write_bytes(b"one")
+        selected = replace(self.installation, components=(installed(source),))
+        with (
+            ProcessBinding(os.getpid(), selected, instance_epoch="shared-local") as local,
+            ProcessBinding(os.getpid(), selected, instance_epoch="shared-peer") as peer,
+            NativeListener(peer, directory=self.directory) as listener,
+            connect(listener.address, local, peer) as client,
+            listener.accept({os.getpid(): local}) as server,
+        ):
+            reads = []
+            original = Path.open
+
+            def opened(path, *args, **kwargs):
+                if path == source:
+                    reads.append(path)
+                return original(path, *args, **kwargs)
+
+            with patch.object(Path, "open", opened):
+                client.check()
+                self.assertEqual(len(reads), 1)
+                client.check()
+                self.assertEqual(len(reads), 2)
+            state = source.stat()
+            source.write_bytes(b"two")
+            os.utime(source, ns=(state.st_atime_ns, state.st_mtime_ns))
+            self.error("AUTHENTICATION_FAILED", client.check)
+            self.error("AUTHENTICATION_FAILED", server.check)
+
+    def test_shared_installation_checks_each_running_image(self):
+        with (
+            ProcessBinding(os.getpid(), self.installation, instance_epoch="image-peer") as peer,
+            NativeListener(peer, directory=self.directory) as listener,
+            connect(listener.address, self.local, peer) as client,
+            listener.accept({os.getpid(): self.local}),
+        ):
+            source = Path(self.directory) / "different-image"
+            source.write_bytes(b"different image")
+            with patch.object(peer.process, "image_path", return_value=source, create=True):
+                self.error("AUTHENTICATION_FAILED", client.check)
+            client.check()
+
+    def test_distinct_installations_are_checked_independently(self):
+        source = Path(self.directory) / "peer-component.py"
+        source.write_bytes(b"one")
+        selected = replace(
+            self.installation, components=(*self.installation.components, installed(source))
+        )
+        with (
+            ProcessBinding(os.getpid(), selected, instance_epoch="distinct-peer") as peer,
+            NativeListener(peer, directory=self.directory) as listener,
+            connect(listener.address, self.local, peer) as client,
+            listener.accept({os.getpid(): self.local}),
+        ):
+            client.check()
+            source.write_bytes(b"two")
+            self.local.check()
+            self.error("AUTHENTICATION_FAILED", client.check)
+
     def test_large_installation_manifest_digest_is_not_a_frame(self):
         import rfc8785
 
