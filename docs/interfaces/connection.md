@@ -2,6 +2,8 @@
 
 连接认证内核位于 `deskweave.transport`，在本机字节帧与业务消息之间完成双向挑战、票据消费、权限绑定和会话关闭。连接包结构见 [connection.schema.json](../../contracts/connection.schema.json)；业务方法继续通过 [Engine 共享服务](../architecture/shared-services.md)执行。
 
+原生实现位于 `deskweave.transport.native`，接口与平台核验见[原生本机通道](native-transport.md)。
+
 ## 原生端点与可信输入
 
 原生适配器创建受保护端点，核验实际对端后，向 `ConnectionAuthority.accept` 和 `ClientConnection` 传入 `PeerIdentity`。身份包含平台、用户、登录会话、进程号、进程启动标识、安装摘要和实例 epoch。服务端要求平台、用户与登录会话一致；票据同时固定双方全部身份字段。进程号复用、进程重启和安装替换均需重新取得票据。

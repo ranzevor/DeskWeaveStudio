@@ -44,13 +44,15 @@ jobs:
       - name: Check Python formatting
         run: uv run --locked ruff format --check python tests examples/engine
       - name: Test Engine services
-        run: uv run --locked python -m unittest discover -s tests -q
+        run: uv run --locked python tools/test_engine.py
       - name: Run workspace example
         run: uv run --locked python examples/engine/workspace.py
       - name: Run content transfer example
         run: uv run --locked python examples/engine/content_transfer.py
       - name: Run connection authentication example
         run: uv run --locked python examples/engine/connection.py
+      - name: Run native connection example
+        run: uv run --locked python tools/test_engine.py --example
       - name: Build Python packages
         run: uv build
       - name: Run installed wheel
@@ -58,10 +60,13 @@ jobs:
           uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'examples/engine/workspace.py'], check=True)"
       - name: Test installed service contracts
         run: >-
-          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', '-m', 'unittest', 'tests.engine.test_boundaries', 'tests.engine.test_content', 'tests.engine.test_processing', 'tests.engine.test_connection', '-q'], check=True)"
+          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'tools/test_engine.py', 'tests.engine.test_boundaries', 'tests.engine.test_content', 'tests.engine.test_processing', 'tests.engine.test_connection', 'tests.engine.test_native', '-q'], check=True)"
       - name: Run installed content transfer example
         run: >-
           uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'examples/engine/content_transfer.py'], check=True)"
       - name: Run installed connection authentication example
         run: >-
           uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'examples/engine/connection.py'], check=True)"
+      - name: Run installed native connection example
+        run: >-
+          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'tools/test_engine.py', '--example'], check=True)"
