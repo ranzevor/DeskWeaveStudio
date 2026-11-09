@@ -5,6 +5,7 @@ import hmac
 import math
 import secrets
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -273,7 +274,13 @@ class ConnectionAuthority:
             )
             return value
 
-    def accept(self, peer: PeerIdentity) -> ServerConnection:
+    def accept(
+        self,
+        peer: PeerIdentity,
+        *,
+        check_peer: Callable[[], None] | None = None,
+        close_transport: Callable[[], None] | None = None,
+    ) -> ServerConnection:
         from deskweave.transport.connection import ServerConnection
 
         self._peer(peer)
@@ -282,7 +289,9 @@ class ConnectionAuthority:
             self._open_locked()
             if len(self._connections) + len(self._closing) >= self.max_connections:
                 raise DeskWeaveError("LIMIT_EXCEEDED", "连接数量已满。")
-            connection = ServerConnection(self, peer)
+            connection = ServerConnection(
+                self, peer, check_peer=check_peer, close_transport=close_transport
+            )
             self._connections[connection] = _Registration(
                 None, self.now() + self.handshake_lifetime
             )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import secrets
 import threading
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from deskweave.contracts import method_schema, validate
@@ -79,9 +80,18 @@ class _Connection:
 
 
 class ServerConnection(_Connection):
-    def __init__(self, authority: ConnectionAuthority, peer: PeerIdentity):
+    def __init__(
+        self,
+        authority: ConnectionAuthority,
+        peer: PeerIdentity,
+        *,
+        check_peer: Callable[[], None] | None = None,
+        close_transport: Callable[[], None] | None = None,
+    ):
         super().__init__()
         self.authority = authority
+        self._check_peer = check_peer
+        self._close_transport = close_transport
         self.peer = peer
         self._session: Session | None = None
         self._max_frame_bytes = authority.profile.max_frame_bytes
@@ -92,6 +102,8 @@ class ServerConnection(_Connection):
             return self._session
 
     def _guard(self) -> None:
+        if self._check_peer is not None:
+            self._check_peer()
         session = self._session
         if session is None:
             raise DeskWeaveError("ACCESS_DENIED", "连接尚未完成认证。")
@@ -100,6 +112,8 @@ class ServerConnection(_Connection):
     def receive(self, value: object) -> dict:
         with self._lock:
             try:
+                if self._check_peer is not None:
+                    self._check_peer()
                 if self._state == "new":
                     return self._hello(value)
                 if self._state == "challenge":
@@ -198,13 +212,27 @@ class ServerConnection(_Connection):
         return response
 
     def close(self) -> None:
-        with self._lock:
-            super().close()
-            self.authority.release(self)
-            if self._session is not None:
-                self.authority.engine.close_session(self._session.id)
-                self._session = None
-            self.authority.finished_close(self)
+        failures = []
+        if self._close_transport is not None:
+            try:
+                self._close_transport()
+            except BaseException as error:
+                failures.append(error)
+        try:
+            with self._lock:
+                super().close()
+                self.authority.release(self)
+                if self._session is not None:
+                    self.authority.engine.close_session(self._session.id)
+                    self._session = None
+                if not failures:
+                    self.authority.finished_close(self)
+        except BaseException as error:
+            failures.append(error)
+        if failures:
+            if len(failures) == 1:
+                raise failures[0]
+            raise BaseExceptionGroup("连接资源关闭失败。", failures)
 
 
 class ClientConnection(_Connection):
