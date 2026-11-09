@@ -194,6 +194,13 @@ class ConnectionAuthority:
             )
             return credential
 
+    def describe(self, credential: ClientCredential) -> GrantSnapshot:
+        with self._lock:
+            grant = self._credential_locked(credential)
+            return GrantSnapshot(
+                credential.client_id, grant.policy, grant.expires_at, grant.version
+            )
+
     def authorization_version(self, credential: ClientCredential) -> int:
         with self._lock:
             return self._credential_locked(credential).version

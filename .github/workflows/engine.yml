@@ -18,7 +18,7 @@ jobs:
   engine:
     name: Engine (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +53,8 @@ jobs:
         run: uv run --locked python examples/engine/connection.py
       - name: Run native connection example
         run: uv run --locked python tools/test_engine.py --example
+      - name: Run Engine process example
+        run: uv run --locked python tools/test_engine.py --process-example
       - name: Build Python packages
         run: uv build
       - name: Run installed wheel
@@ -60,7 +62,7 @@ jobs:
           uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'examples/engine/workspace.py'], check=True)"
       - name: Test installed service contracts
         run: >-
-          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'tools/test_engine.py', 'tests.engine.test_boundaries', 'tests.engine.test_content', 'tests.engine.test_processing', 'tests.engine.test_connection', 'tests.engine.test_native', '-q'], check=True)"
+          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'tools/test_engine.py', 'tests.engine.test_boundaries', 'tests.engine.test_content', 'tests.engine.test_processing', 'tests.engine.test_connection', 'tests.engine.test_native', 'tests.engine.test_process', '-q'], check=True)"
       - name: Run installed content transfer example
         run: >-
           uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'examples/engine/content_transfer.py'], check=True)"
@@ -70,3 +72,6 @@ jobs:
       - name: Run installed native connection example
         run: >-
           uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'tools/test_engine.py', '--example'], check=True)"
+      - name: Run installed Engine process example
+        run: >-
+          uv run --locked python -c "import pathlib, subprocess; wheel, = pathlib.Path('dist').glob('*.whl'); subprocess.run(['uv', 'run', '--no-project', '--isolated', '--refresh-package', 'deskweave', '--python', '3.12', '--with', str(wheel), 'python', 'tools/test_engine.py', '--process-example'], check=True)"
