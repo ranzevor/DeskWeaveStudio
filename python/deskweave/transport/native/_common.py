@@ -64,7 +64,26 @@ def cleanup(*actions) -> None:
         raise BaseExceptionGroup("本机通信资源关闭失败。", errors)
 
 
+class InitializationError(BaseExceptionGroup):
+    def __new__(cls, resource, errors):
+        value = super().__new__(cls, "资源初始化与关闭失败。", errors)
+        value.resource = resource
+        return value
+
+    def __init__(self, resource, errors):
+        super().__init__("资源初始化与关闭失败。", errors)
+
+    def derive(self, errors):
+        return type(self)(self.resource, errors)
+
+
 class Resource:
+    def _abort_initialization(self, error):
+        try:
+            self.close()
+        except BaseException as closing:
+            raise InitializationError(self, [error, closing]) from None
+
     def _abort(self, error):
         try:
             self.close()

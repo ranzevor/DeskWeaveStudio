@@ -206,7 +206,7 @@ def ticket(value):
     )
 
 
-def manifest_size(installation):
-    return len(dumps(manifest_header(installation))) + sum(
-        len(dumps(file_value(item))) + 1 for item in installation.components
+def manifest_size(installation, checkpoint=lambda: None):
+    return len(dumps(manifest_header(installation), checkpoint=checkpoint)) + sum(
+        len(dumps(file_value(item), checkpoint=checkpoint)) + 1 for item in installation.components
     )

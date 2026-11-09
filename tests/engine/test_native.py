@@ -164,6 +164,104 @@ class NativeCase(unittest.TestCase):
                 ProcessBinding(os.getpid(), self.installation, instance_epoch="resource")
         self.local.check()
 
+    def test_initialization_close_failure_keeps_native_reference(self):
+        from deskweave.transport.native import identity
+        from deskweave.transport.native._common import InitializationError
+
+        process_type = identity.platform.Process
+        for stage in ("snapshot", "installation"):
+            target = process_type if stage == "snapshot" else ProcessBinding
+            attribute = "snapshot" if stage == "snapshot" else "_verify_installation"
+            with (
+                self.subTest(stage=stage),
+                patch.object(
+                    target,
+                    attribute,
+                    side_effect=DeskWeaveError("AUTHENTICATION_FAILED", "initial identity"),
+                ),
+                patch.object(process_type, "close", side_effect=OSError("initial close")),
+                self.assertRaises(InitializationError) as caught,
+            ):
+                ProcessBinding(os.getpid(), self.installation, instance_epoch="failed-initial")
+            binding = caught.exception.resource
+            self.stack.callback(binding.close)
+            self.assertIsInstance(binding, ProcessBinding)
+            self.assertIsInstance(binding.process, process_type)
+            self.assertIs(binding.installation, self.installation)
+            binding.close()
+            self.error("AUTHENTICATION_FAILED", binding.process.snapshot)
+
+    def test_native_initialization_cleanup_retry_releases_reference(self):
+        from deskweave.transport.native import identity
+        from deskweave.transport.native._common import InitializationError
+
+        process_type = identity.platform.Process
+        original_close = process_type.close
+        attempts = []
+
+        def close(process):
+            attempts.append(process)
+            if len(attempts) == 1:
+                raise OSError("initial close")
+            original_close(process)
+
+        with (
+            patch.object(
+                process_type,
+                "snapshot",
+                side_effect=DeskWeaveError("AUTHENTICATION_FAILED", "initial identity"),
+            ),
+            patch.object(process_type, "close", close),
+            self.assertRaises(BaseExceptionGroup) as caught,
+        ):
+            ProcessBinding(os.getpid(), self.installation, instance_epoch="retried-initial")
+        self.assertNotIsInstance(caught.exception, InitializationError)
+        self.assertEqual(len(attempts), 2)
+        self.stack.callback(attempts[0].close)
+        self.assertIs(attempts[0], attempts[1])
+        self.error("AUTHENTICATION_FAILED", attempts[0].snapshot)
+
+    def test_continuous_identity_checks_normalize_unavailable_process(self):
+        for error in (
+            ProcessLookupError("process exited"),
+            FileNotFoundError("process image disappeared"),
+            PermissionError("process access denied"),
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(self.local.process, "snapshot", side_effect=error),
+                self.assertRaises(DeskWeaveError) as caught,
+            ):
+                self.local.check()
+            self.assertEqual(caught.exception.code, "AUTHENTICATION_FAILED")
+            self.assertIs(caught.exception.__cause__, error)
+        with patch.object(self.local.process, "snapshot", side_effect=OSError("resource failure")):
+            with self.assertRaisesRegex(OSError, "resource failure"):
+                self.local.check()
+        self.local.check()
+
+    def test_file_checks_normalize_io_failure_and_keep_cancellation(self):
+        from deskweave.transport.native.identity import digest_file
+
+        source = Path(self.directory) / "component.py"
+        source.write_bytes(b"content")
+        for target, attribute in ((Path, "open"), (os, "fstat"), (Path, "stat")):
+            for error in (FileNotFoundError("removed"), PermissionError("denied"), OSError("io")):
+                with (
+                    self.subTest(operation=attribute, error=type(error).__name__),
+                    patch.object(target, attribute, side_effect=error),
+                    self.assertRaises(DeskWeaveError) as caught,
+                ):
+                    digest_file(source)
+                self.assertEqual(caught.exception.code, "AUTHENTICATION_FAILED")
+                self.assertIs(caught.exception.__cause__, error)
+        for code in ("CANCELLED", "DEADLINE_EXCEEDED"):
+            error = DeskWeaveError(code, "interrupted")
+            with self.subTest(code=code), self.assertRaises(DeskWeaveError) as caught:
+                digest_file(source, lambda error=error: (_ for _ in ()).throw(error))
+            self.assertIs(caught.exception, error)
+        self.assertEqual(digest_file(source)[0], hashlib.sha256(b"content").hexdigest())
+
     def test_kernel_peer_and_unicode_frame(self):
         client, server, _listener = self.pair()
         self.assertEqual(server.peer.process_id, os.getpid())

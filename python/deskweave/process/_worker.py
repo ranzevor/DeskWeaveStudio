@@ -15,7 +15,7 @@ from deskweave.engine.service import Engine
 from deskweave.errors import DeskWeaveError
 from deskweave.transport.authority import ConnectionAuthority
 from deskweave.transport.native import NativeListener, ProcessBinding, serve_connection
-from deskweave.transport.native._common import Budget, cleanup
+from deskweave.transport.native._common import Budget, InitializationError, cleanup
 from deskweave.transport.protocol import ConnectionPolicy
 
 from . import _wire as wire
@@ -24,6 +24,8 @@ from . import _wire as wire
 @dataclass
 class Peer:
     binding: ProcessBinding
+    process_id: int
+    installation_digest: str
     references: int = 0
     owned: bool = True
     users: int = 0
@@ -99,7 +101,7 @@ class Registry:
                 self.closing.remove(pid)
             if peer.owned:
                 self.states -= len(peer.binding.installation.components) + 1
-            digest = peer.binding.identity.installation_digest
+            digest = peer.installation_digest
             self.installation_references[digest] -= 1
             if not self.installation_references[digest]:
                 del self.installation_references[digest]
@@ -113,7 +115,7 @@ class Registry:
         if grant is not None:
             grant.peer.references -= 1
             if not grant.peer.references:
-                self.closing.add(grant.peer.binding.identity.process_id)
+                self.closing.add(grant.peer.process_id)
         errors = self.retry_closing()
         if errors:
             raise BaseExceptionGroup("客户端进程引用关闭失败。", errors)
@@ -138,6 +140,20 @@ class Registry:
                     errors.append(error)
         return errors
 
+    def retain(self, binding, pid, digest, size, *, owned):
+        peer = Peer(binding, pid, digest, owned=owned)
+        if owned:
+            self.states += len(binding.installation.components) + 1
+        if digest not in self.installations:
+            self.bytes += size
+            self.sizes[digest] = size
+            self.installations[digest] = binding.installation
+        self.installation_references[digest] = self.installation_references.get(digest, 0) + 1
+        with self.lock:
+            self.closing.add(pid)
+            self.peers[pid] = peer
+        return peer
+
     def add(self, identity, installation, policy, lifetime, budget):
         self.prune()
         if len(self.grants) >= self.authority.max_clients:
@@ -151,59 +167,59 @@ class Registry:
             if len(self.peers) >= self.authority.max_clients:
                 raise DeskWeaveError("LIMIT_EXCEEDED", "进程登记数量已满。")
             known = self.known.get(identity.process_id)
-            if known is not None:
-                peer = Peer(known, owned=False)
-            else:
-                if len(installation.components) + 1 > self.available_states(identity):
-                    raise DeskWeaveError("LIMIT_EXCEEDED", "进程文件状态登记额度已满。")
-                peer = Peer(
-                    ProcessBinding(
+            actual = known.installation if known is not None else installation
+            digest = (
+                known.identity.installation_digest
+                if known is not None
+                else actual.calculate_digest(budget.check_time)
+            )
+            if known is None and len(actual.components) + 1 > self.available_states(identity):
+                raise DeskWeaveError("LIMIT_EXCEEDED", "进程文件状态登记额度已满。")
+            size = self.sizes.get(digest)
+            if size is None:
+                size = wire.manifest_size(actual, budget.check_time)
+                if self.bytes + size > self.max_bytes:
+                    raise DeskWeaveError("LIMIT_EXCEEDED", "安装登记元数据额度已满。")
+            binding = known
+            if binding is None:
+                try:
+                    binding = ProcessBinding(
                         identity.process_id,
-                        installation,
+                        actual,
                         instance_epoch=identity.instance_epoch,
                         timeout=max(budget.deadline - time.monotonic(), 1e-9),
                         cancel=budget.cancel,
                     )
-                )
+                except InitializationError as error:
+                    peer = self.retain(
+                        error.resource, identity.process_id, digest, size, owned=True
+                    )
+                    peer.close_failed = True
+                    raise
+            peer = self.retain(binding, identity.process_id, digest, size, owned=known is None)
         credential = None
         try:
             if peer.binding.identity != identity:
                 raise DeskWeaveError("AUTHENTICATION_FAILED", "客户端进程登记不匹配。")
-            digest = identity.installation_digest
-            size = self.sizes.get(digest)
-            if size is None:
-                size = wire.manifest_size(installation)
-                if self.bytes + size > self.max_bytes:
-                    raise DeskWeaveError("LIMIT_EXCEEDED", "安装登记元数据额度已满。")
             peer.binding.check(budget.check_time)
             credential = self.authority.authorize(policy, lifetime=lifetime)
             snapshot = self.authority.describe(credential)
-            if created:
-                with self.lock:
-                    self.peers[identity.process_id] = peer
-                if peer.owned:
-                    self.states += len(installation.components) + 1
-                if digest not in self.installations:
-                    self.bytes += size
-                    self.sizes[digest] = size
-                    self.installations[digest] = installation
-                self.installation_references[digest] = (
-                    self.installation_references.get(digest, 0) + 1
-                )
             peer.references += 1
-            self.closing.discard(identity.process_id)
+            with self.lock:
+                self.closing.discard(identity.process_id)
             self.remember(credential, peer, snapshot)
             return credential
         except BaseException as error:
-            actions = []
+            errors = []
             if credential is not None:
-                actions.append(lambda: self.authority.revoke(credential))
-            if created and not peer.references and peer.owned:
-                actions.append(peer.binding.close)
-            try:
-                cleanup(*actions)
-            except BaseException as closing:
-                raise BaseExceptionGroup("客户端登记与清理失败。", [error, closing]) from None
+                try:
+                    self.authority.revoke(credential)
+                except BaseException as closing:
+                    errors.append(closing)
+            if created and not peer.references:
+                errors.extend(self.retry_closing())
+            if errors:
+                raise BaseExceptionGroup("客户端登记与清理失败。", [error, *errors]) from None
             raise
 
     def selected(self, credential):

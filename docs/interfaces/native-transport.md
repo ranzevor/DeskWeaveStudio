@@ -64,7 +64,7 @@ with connect(address, client_binding, server_binding, timeout=10) as channel:
 
 `send`、`receive`、`connect`、`accept` 和客户端调用均使用单调时钟。帧锁等待、安装摘要分块检查、分片读写与解析共用一次操作的截止时间；握手的两次往返共用握手期限，客户端响应校验完成后再次检查期限。发送前和完整帧接收后、解析及派发前，核对安装文件内容摘要和文件身份，覆盖同长度改写及修改时间未变化的情况；扫描前后核对进程实例，安装摘要每 64KiB 检查取消与期限。空闲等待只轮询实例存活和连接授权状态；业务处理期间每 100ms 复核安装内容，提交继续检查连接授权。单次对端核验使用一次完整安装扫描；连接双方属于相同安装时共用本次组件扫描，分别复核各自运行映像及进程实例，并比较各自登记的文件身份。每次新消息重新读取安装内容。
 
-Windows 使用 overlapped I/O。取消或关闭先请求 `CancelIoEx`，等待实际 I/O 完成后释放 OVERLAPPED、缓冲、事件与管道句柄。Unix 使用非阻塞 socket 和有界等待；读写等待与关闭交错时返回连接关闭。对端断开、重置或中止连接统一返回 `TRANSPORT_CLOSED`；Windows/Linux 进程在身份快照读取期间退出时返回 `AUTHENTICATION_FAILED`；Windows 身份查询被拒绝时也返回该错误。其他原生错误和清理失败返回调用方；消息中不混入系统诊断。
+Windows 使用 overlapped I/O。取消或关闭先请求 `CancelIoEx`，等待实际 I/O 完成后释放 OVERLAPPED、缓冲、事件与管道句柄。Unix 使用非阻塞 socket 和有界等待；读写等待与关闭交错时返回连接关闭。对端断开、重置或中止连接统一返回 `TRANSPORT_CLOSED`；Windows/Linux 进程在身份快照读取期间退出时返回 `AUTHENTICATION_FAILED`；进程身份查询被拒绝、运行映像或安装组件无法读取时也返回该错误，原始系统异常保留在异常链中。其他原生错误和清理失败返回调用方；消息中不混入系统诊断。
 
 | 结果 | 调用方操作 |
 |---|---|

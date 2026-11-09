@@ -36,8 +36,8 @@ class Process(Resource):
         self._fd = os.pidfd_open(pid)
         try:
             self.initial = self.snapshot()
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            self._abort_initialization(error)
             raise
 
     def snapshot(self):

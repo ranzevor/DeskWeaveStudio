@@ -10,7 +10,7 @@ from pathlib import Path
 from deskweave.json import dumps
 from deskweave.transport.protocol import PeerIdentity
 
-from ._common import Budget, Resource, rejected
+from ._common import Budget, InitializationError, Resource, rejected
 
 if sys.platform == "win32":
     from . import _windows as platform
@@ -37,19 +37,22 @@ def stamp(info):
 
 
 def digest_file(path, checkpoint=lambda: None):
-    with path.open("rb") as stream:
-        before = stamp(os.fstat(stream.fileno()))
-        accumulator = hashlib.sha256()
-        while True:
-            checkpoint()
-            chunk = stream.read(65536)
-            if not chunk:
-                break
-            accumulator.update(chunk)
-        digest = accumulator.hexdigest()
-        after = stamp(os.fstat(stream.fileno()))
-    if before != after or after != stamp(path.stat()):
-        raise rejected()
+    try:
+        with path.open("rb") as stream:
+            before = stamp(os.fstat(stream.fileno()))
+            accumulator = hashlib.sha256()
+            while True:
+                checkpoint()
+                chunk = stream.read(65536)
+                if not chunk:
+                    break
+                accumulator.update(chunk)
+            digest = accumulator.hexdigest()
+            after = stamp(os.fstat(stream.fileno()))
+        if before != after or after != stamp(path.stat()):
+            raise rejected()
+    except OSError as error:
+        raise rejected() from error
     return digest, after
 
 
@@ -144,24 +147,26 @@ class ProcessBinding(Resource):
             self._stamps = self._verify_installation(budget.check_time)
             self._check_process(budget.check_time)
         except BaseException as error:
+            if isinstance(error, InitializationError):
+                self.process = error.resource
             unavailable = (
                 isinstance(
                     error, (ProcessLookupError, FileNotFoundError, PermissionError, OverflowError)
                 )
                 or getattr(error, "winerror", None) == 87
             )
-            failure = rejected() if unavailable else error
+            failure = error
             if unavailable:
+                failure = rejected()
                 failure.__cause__ = error
+            elif isinstance(error, InitializationError):
+                failure = BaseExceptionGroup(error.message, error.exceptions)
             if self.process is not None:
-                try:
-                    self.process.close()
-                except BaseException as closing:
-                    raise BaseExceptionGroup(
-                        "进程登记与引用关闭失败。", [failure, closing]
-                    ) from None
+                self._abort_initialization(failure)
             if unavailable:
                 raise failure from error
+            if isinstance(error, InitializationError):
+                raise failure from None
             raise
 
     def _verify_image(self, checkpoint=lambda: None):
@@ -185,7 +190,11 @@ class ProcessBinding(Resource):
 
     def _check_process(self, checkpoint=lambda: None):
         checkpoint()
-        if self.process.snapshot() != self._snapshot:
+        try:
+            snapshot = self.process.snapshot()
+        except (ProcessLookupError, FileNotFoundError, PermissionError) as error:
+            raise rejected() from error
+        if snapshot != self._snapshot:
             raise rejected()
 
     def check(self, checkpoint=lambda: None):
@@ -200,7 +209,10 @@ class ProcessBinding(Resource):
         if pid != self.identity.process_id:
             raise rejected()
         if sys.platform != "win32":
-            platform.verify_peer(self.process, credential, self.installation.macos_requirement)
+            try:
+                platform.verify_peer(self.process, credential, self.installation.macos_requirement)
+            except (ProcessLookupError, FileNotFoundError, PermissionError) as error:
+                raise rejected() from error
 
     def verify(self, raw, checkpoint=lambda: None):
         self._verify_peer(raw, checkpoint)

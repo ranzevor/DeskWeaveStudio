@@ -265,6 +265,36 @@ class ProcessCase(unittest.TestCase):
         with process.connect(replacement, self.local) as other:
             self.query(other)
 
+    def test_ticket_file_loss_does_not_drain_other_clients(self):
+        process = self.start()
+        client, _ = self.client(process)
+        before = process.status()
+        candidate = self.waiting_process()
+        source = self.directory / "ticket-component.py"
+        source.write_bytes(b"")
+        item = InstalledFile(
+            source, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        )
+        installation = replace(
+            self.launch.installation, components=(*self.launch.installation.components, item)
+        )
+        with ProcessBinding(candidate.pid, installation, instance_epoch="ticket-client") as peer:
+            credential = process.authorize(peer, ConnectionPolicy({"workflow.read"}), lifetime=60)
+            self.assertGreater(process.status()["componentStates"], before["componentStates"])
+            source.unlink()
+            self.error("AUTHENTICATION_FAILED", lambda: process.issue(credential))
+            self.query(client)
+            self.assertEqual(process.status()["clients"], before["clients"] + 1)
+            process.revoke(credential)
+        after = process.status()
+        for key in ("clients", "componentStates", "manifestBytes"):
+            self.assertEqual(after[key], before[key])
+        replacement = process.authorize(
+            self.local, ConnectionPolicy({"workflow.read"}), lifetime=60
+        )
+        with process.connect(replacement, self.local) as other:
+            self.query(other)
+
     def test_invalid_control_arguments_preserve_connection(self):
         process = self.start()
         client, credential = self.client(process)
@@ -686,6 +716,206 @@ class RegistryCase(unittest.TestCase):
         self.assertEqual(self.registry.peers, {})
         self.assertEqual(self.registry.states, 4)
 
+    def test_failed_registration_retains_binding_until_close_succeeds(self):
+        original = self.authority.describe
+        initial_bytes = self.registry.bytes
+        installation = replace(self.installation, macos_requirement="anchor retained")
+        digest = installation.digest
+        for failure in ("expired", "identity"):
+            with self.subTest(failure=failure):
+                binding = self.binding(102)
+                binding.installation = installation
+                binding.identity = replace(binding.identity, installation_digest=digest)
+                requested = (
+                    replace(
+                        binding.identity, instance_epoch="different", installation_digest="f" * 64
+                    )
+                    if failure == "identity"
+                    else binding.identity
+                )
+
+                def close():
+                    raise OSError("temporary registration close failure")
+
+                binding.close = close
+
+                def describe(value):
+                    self.assertIsNone(self.registry.get(102))
+                    self.assertIsNone(self.registry.acquire_peer(102))
+                    self.clock[0] += 2
+                    return original(value)
+
+                with (
+                    patch("deskweave.process._worker.ProcessBinding", return_value=binding),
+                    patch.object(self.authority, "describe", describe),
+                    self.assertRaises(BaseExceptionGroup) as caught,
+                ):
+                    self.registry.add(requested, installation, self.policy, 1, Budget(30))
+                self.assertEqual(
+                    caught.exception.exceptions[0].code,
+                    "ACCESS_DENIED" if failure == "expired" else "AUTHENTICATION_FAILED",
+                )
+                self.assertEqual(self.registry.grants, {})
+                self.assertEqual(self.authority._clients, {})
+                self.assertEqual(self.registry.states, 6)
+                self.assertEqual(
+                    self.registry.bytes, initial_bytes + wire.manifest_size(installation)
+                )
+                self.assertIs(self.registry.peers[102].binding, binding)
+                self.assertIn(102, self.registry.closing)
+                self.assertIsNone(self.registry.get(102))
+                self.assertIsNone(self.registry.acquire_peer(102))
+                self.assertTrue(self.registry.prune())
+                for limit, value in (("max_states", 6), ("max_bytes", self.registry.bytes)):
+                    with self.subTest(limit=limit):
+                        other = self.binding(103)
+                        other.installation = replace(
+                            self.installation, macos_requirement="anchor other"
+                        )
+                        other.identity = replace(
+                            other.identity, installation_digest=other.installation.digest
+                        )
+                        with (
+                            patch.object(self.registry, limit, value),
+                            patch("deskweave.process._worker.ProcessBinding") as factory,
+                            self.assertRaises(DeskWeaveError) as rejected,
+                        ):
+                            self.registry.add(
+                                other.identity, other.installation, self.policy, 60, Budget(30)
+                            )
+                        self.assertEqual(rejected.exception.code, "LIMIT_EXCEEDED")
+                        factory.assert_not_called()
+                with patch.object(self.authority, "max_clients", 1):
+                    with self.assertRaises(DeskWeaveError) as rejected:
+                        self.register(self.binding(103))
+                    self.assertEqual(rejected.exception.code, "LIMIT_EXCEEDED")
+                binding.close = lambda: None
+                self.assertEqual(self.registry.prune(), [])
+                self.assertEqual(self.registry.states, 4)
+                self.assertEqual(self.registry.bytes, initial_bytes)
+                self.assertNotIn(102, self.registry.peers)
+                self.assertNotIn(digest, self.registry.installations)
+                credential = self.register(binding)
+                self.registry.revoke(credential)
+                self.assertEqual(self.registry.states, 4)
+                self.assertEqual(self.registry.bytes, initial_bytes)
+
+    def test_registration_quota_precedes_binding_allocation(self):
+        binding = self.binding(102)
+        binding.installation = replace(self.installation, macos_requirement="anchor larger")
+        binding.identity = replace(
+            binding.identity, installation_digest=binding.installation.digest
+        )
+        for limit, value in (("max_states", 4), ("max_bytes", self.registry.bytes)):
+            with (
+                self.subTest(limit=limit),
+                patch.object(self.registry, limit, value),
+                patch("deskweave.process._worker.ProcessBinding") as factory,
+                self.assertRaises(DeskWeaveError) as caught,
+            ):
+                self.registry.add(
+                    binding.identity, binding.installation, self.policy, 60, Budget(30)
+                )
+            self.assertEqual(caught.exception.code, "LIMIT_EXCEEDED")
+            factory.assert_not_called()
+        self.assertEqual(self.registry.states, 4)
+        self.assertEqual(self.registry.peers, {})
+
+    def test_registration_preallocation_observes_cancel_and_deadline(self):
+        installation = replace(self.installation, macos_requirement="anchor budget")
+        identity = replace(self.binding(102).identity, installation_digest=installation.digest)
+        original = Installation.calculate_digest
+        initial_bytes = self.registry.bytes
+        for stage in ("digest", "metadata"):
+            for code in ("CANCELLED", "DEADLINE_EXCEEDED"):
+                with self.subTest(stage=stage, code=code):
+                    cancel = threading.Event()
+                    budget = Budget(30, cancel)
+
+                    def interrupt(code=code, budget=budget, cancel=cancel):
+                        if code == "CANCELLED":
+                            cancel.set()
+                        else:
+                            budget.deadline = time.monotonic() - 1
+
+                    def calculate(value, checkpoint=lambda: None, interrupt=interrupt):
+                        result = original(value, checkpoint)
+                        interrupt()
+                        return result
+
+                    if stage == "digest":
+                        interrupt()
+                    with (
+                        patch.object(
+                            Installation,
+                            "calculate_digest",
+                            calculate if stage == "metadata" else original,
+                        ),
+                        patch("deskweave.process._worker.ProcessBinding") as factory,
+                        self.assertRaises(DeskWeaveError) as caught,
+                    ):
+                        self.registry.add(identity, installation, self.policy, 60, budget)
+                    self.assertEqual(caught.exception.code, code)
+                    factory.assert_not_called()
+                    self.assertEqual(self.registry.peers, {})
+                    self.assertEqual(self.registry.states, 4)
+                    self.assertEqual(self.registry.bytes, initial_bytes)
+
+    def test_binding_initialization_failure_retains_open_process(self):
+        from deskweave.transport.native import identity as native_identity
+        from deskweave.transport.native._common import InitializationError
+
+        installation = replace(self.installation, macos_requirement="anchor initial")
+        selected = replace(self.binding(102).identity, installation_digest=installation.digest)
+        initial = (
+            selected.user_id,
+            selected.os_session_id,
+            selected.process_started,
+            installation.executable.path,
+        )
+        before_bytes = self.registry.bytes
+        for stage in ("snapshot", "installation"):
+            with self.subTest(stage=stage):
+                process = SimpleNamespace(initial=initial, snapshot=lambda: initial)
+
+                def close():
+                    raise OSError("initial reference close failure")
+
+                process.close = close
+                with (
+                    patch.object(
+                        native_identity.platform, "Process", return_value=process
+                    ) as factory,
+                    patch.object(
+                        ProcessBinding,
+                        "_verify_installation",
+                        side_effect=DeskWeaveError("AUTHENTICATION_FAILED", "changed installation"),
+                    ),
+                ):
+                    factory.platform = selected.platform
+                    if stage == "snapshot":
+                        factory.side_effect = InitializationError(
+                            process, [PermissionError("initial snapshot"), OSError("initial close")]
+                        )
+                    with self.assertRaises(InitializationError) as caught:
+                        self.registry.add(selected, installation, self.policy, 60, Budget(30))
+                binding = caught.exception.resource
+                self.assertIs(self.registry.peers[102].binding, binding)
+                self.assertEqual(hasattr(binding, "identity"), stage == "installation")
+                self.assertEqual(self.registry.states, 6)
+                self.assertEqual(
+                    self.registry.bytes, before_bytes + wire.manifest_size(installation)
+                )
+                self.assertIsNone(self.registry.get(102))
+                self.assertIsNone(self.registry.acquire_peer(102))
+                self.assertEqual(self.authority._clients, {})
+                self.assertTrue(self.registry.prune())
+                process.close = lambda: None
+                self.assertEqual(self.registry.prune(), [])
+                self.assertEqual(self.registry.peers, {})
+                self.assertEqual(self.registry.states, 4)
+                self.assertEqual(self.registry.bytes, before_bytes)
+
     def test_failed_binding_close_retains_ownership_and_quota(self):
         binding = self.binding(102)
         attempts = [0]
@@ -970,6 +1200,33 @@ class BootstrapCase(unittest.TestCase):
             total += len(data)
         self.assertEqual(count, 10000)
         self.assertGreater(total, 1048576)
+
+    def test_manifest_size_checks_budget_while_counting_components(self):
+        item = SimpleNamespace(path=Path("/component.py"), sha256="a" * 64)
+        installation = SimpleNamespace(
+            executable=item, components=(item,) * 100, macos_requirement=None
+        )
+        original = wire.file_value
+        for code in ("CANCELLED", "DEADLINE_EXCEEDED"):
+            with self.subTest(code=code):
+                cancel = threading.Event()
+                budget = Budget(30, cancel)
+                counted = []
+
+                def file_value(value, budget=budget, cancel=cancel, code=code, counted=counted):
+                    counted.append(value)
+                    if len(counted) == 3:
+                        if code == "CANCELLED":
+                            cancel.set()
+                        else:
+                            budget.deadline = time.monotonic() - 1
+                    return original(value)
+
+                with patch.object(wire, "file_value", file_value):
+                    with self.assertRaises(DeskWeaveError) as caught:
+                        wire.manifest_size(installation, budget.check_time)
+                self.assertEqual(caught.exception.code, code)
+                self.assertEqual(len(counted), 3)
 
     def test_manifest_quota_counts_resolved_alias_paths(self):
         with tempfile.TemporaryDirectory(prefix="dw-alias-") as temporary:

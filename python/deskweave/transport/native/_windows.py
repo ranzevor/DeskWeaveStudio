@@ -166,8 +166,8 @@ class Process(Resource):
         self._lock = threading.RLock()
         try:
             self.initial = self.snapshot()
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            self._abort_initialization(error)
             raise
 
     def _check_running(self):
