@@ -301,6 +301,39 @@ class NativeCase(unittest.TestCase):
             ConnectionAuthority(engine, self.local.identity, max_frame_bytes=max_frame_bytes)
         )
 
+    def test_slow_identity_checks_allow_checkpoint_progress(self):
+        _client, server, _ = self.pair()
+        authority = self.authority()
+        now = [100.0]
+        verified = []
+        cancelled = threading.Event()
+
+        def check(checkpoint):
+            now[0] += 0.25
+            checkpoint()
+            verified.append(now[0])
+
+        def accept(_peer, *, check_peer, close_transport):
+            for _ in range(100):
+                check_peer()
+            self.assertEqual(len(verified), 1)
+            now[0] = verified[-1] + 0.05
+            check_peer()
+            self.assertEqual(len(verified), 1)
+            now[0] = verified[-1] + 0.15
+            check_peer()
+            self.assertEqual(len(verified), 2)
+            cancelled.set()
+            check_peer()
+
+        with (
+            patch("time.monotonic", lambda: now[0]),
+            patch.object(server, "check", check),
+            patch.object(authority, "accept", accept),
+        ):
+            self.error("CANCELLED", lambda: serve_connection(server, authority, cancel=cancelled))
+        self.error("TRANSPORT_CLOSED", server.check)
+
     def test_service_initial_frame_limit(self):
         client, server, _ = self.pair()
         authority = self.authority(max_frame_bytes=1024)

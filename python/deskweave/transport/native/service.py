@@ -80,7 +80,7 @@ def serve_connection(channel, authority, *, timeout=30.0, cancel=None):
         now = time.monotonic()
         if now >= next_check:
             channel.check(budget.check_time)
-            next_check = now + 0.1
+            next_check = time.monotonic() + 0.1
         if connection is not None and connection.closed:
             raise closed()
 
