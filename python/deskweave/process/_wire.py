@@ -55,7 +55,10 @@ def parse_file(value):
     fields(value, ("path", "sha256"))
     if type(value["path"]) is not str or not Path(value["path"]).is_absolute():
         raise DeskWeaveError("INVALID_ARGUMENT", "安装路径无效。")
-    return InstalledFile(value["path"], value["sha256"])
+    try:
+        return InstalledFile(value["path"], value["sha256"])
+    except (OSError, RuntimeError) as error:
+        raise DeskWeaveError("AUTHENTICATION_FAILED", "安装文件路径无法解析。") from error
 
 
 def manifest_header(value: Installation):

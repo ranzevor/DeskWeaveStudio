@@ -77,6 +77,41 @@ class ProcessCase(unittest.TestCase):
         )
         return self.stack.enter_context(process.connect(credential, self.local)), credential
 
+    def waiting_process(self):
+        candidate = subprocess.Popen(
+            [
+                str(self.launch.launcher.path),
+                "-I",
+                "-S",
+                "-X",
+                "utf8",
+                "-c",
+                "import sys; print('ready', flush=True); sys.stdin.read()",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        ready = queue.Queue()
+        reader = threading.Thread(
+            target=lambda: ready.put(candidate.stdout.readline()), daemon=True
+        )
+        reader.start()
+
+        def finish():
+            if candidate.poll() is None:
+                candidate.kill()
+            candidate.wait(10)
+            reader.join(5)
+            candidate.stdin.close()
+            candidate.stdout.close()
+
+        self.stack.callback(finish)
+        self.assertEqual(ready.get(timeout=10).strip(), b"ready")
+        return candidate
+
     def error(self, code, operation):
         with self.assertRaises(DeskWeaveError) as caught:
             operation()
@@ -163,38 +198,7 @@ class ProcessCase(unittest.TestCase):
     def test_exiting_registration_does_not_drain_other_clients(self):
         process = self.start()
         client, _ = self.client(process)
-        candidate = subprocess.Popen(
-            [
-                str(self.launch.launcher.path),
-                "-I",
-                "-S",
-                "-X",
-                "utf8",
-                "-c",
-                "import sys; print('ready', flush=True); sys.stdin.read()",
-            ],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        )
-        ready = queue.Queue()
-        reader = threading.Thread(
-            target=lambda: ready.put(candidate.stdout.readline()), daemon=True
-        )
-        reader.start()
-
-        def finish():
-            if candidate.poll() is None:
-                candidate.kill()
-            candidate.wait(10)
-            reader.join(5)
-            candidate.stdin.close()
-            candidate.stdout.close()
-
-        self.stack.callback(finish)
-        self.assertEqual(ready.get(timeout=10).strip(), b"ready")
+        candidate = self.waiting_process()
         with ProcessBinding(
             candidate.pid, self.launch.installation, instance_epoch="departing-client"
         ) as peer:
@@ -220,6 +224,77 @@ class ProcessCase(unittest.TestCase):
         )
         with process.connect(replacement, self.local) as other:
             self.query(other)
+
+    def test_manifest_file_loss_does_not_drain_other_clients(self):
+        process = self.start()
+        client, _ = self.client(process)
+        before = process.status()
+        candidate = self.waiting_process()
+        source = self.directory / "extra-client-component.py"
+        source.write_bytes(b"")
+        item = InstalledFile(
+            source, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        )
+        installation = replace(
+            self.launch.installation, components=(*self.launch.installation.components, item)
+        )
+        with ProcessBinding(
+            candidate.pid, installation, instance_epoch="missing-component"
+        ) as peer:
+            original = process._exchange
+
+            def exchange(method, params, budget):
+                if method == "register.files":
+                    source.unlink(missing_ok=True)
+                return original(method, params, budget)
+
+            with patch.object(process, "_exchange", exchange):
+                self.error(
+                    "AUTHENTICATION_FAILED",
+                    lambda: process.authorize(
+                        peer, ConnectionPolicy({"workflow.read"}), lifetime=60
+                    ),
+                )
+        self.query(client)
+        after = process.status()
+        for key in ("clients", "componentStates", "manifestBytes"):
+            self.assertEqual(after[key], before[key])
+        replacement = process.authorize(
+            self.local, ConnectionPolicy({"workflow.read"}), lifetime=60
+        )
+        with process.connect(replacement, self.local) as other:
+            self.query(other)
+
+    def test_invalid_control_arguments_preserve_connection(self):
+        process = self.start()
+        client, credential = self.client(process)
+        for index, lifetime in enumerate((float("nan"), float("inf"), b"invalid")):
+            with self.subTest(lifetime=index):
+                self.error(
+                    "INVALID_ARGUMENT",
+                    lambda lifetime=lifetime: process.authorize(
+                        self.local, ConnectionPolicy({"workflow.read"}), lifetime=lifetime
+                    ),
+                )
+                self.query(client, f"invalid-control-{index}")
+                self.assertEqual(process.status()["clients"], 1)
+        self.error(
+            "INVALID_ARGUMENT",
+            lambda: process.revise(
+                credential,
+                ConnectionPolicy({"workflow.read"}),
+                expected_version=float("nan"),
+                lifetime=60,
+            ),
+        )
+        self.assertEqual(
+            process.revise(
+                credential, ConnectionPolicy({"workflow.read"}), expected_version=1, lifetime=60
+            ),
+            2,
+        )
+        with process.connect(credential, self.local) as replacement:
+            self.query(replacement)
 
     def test_client_capacity_and_same_installation_reuse(self):
         process = self.start(max_clients=1)
@@ -854,6 +929,32 @@ class BootstrapCase(unittest.TestCase):
         with self.assertRaises(DeskWeaveError) as caught:
             wire.read_frame(io.BytesIO(struct.pack("<I", 1048577)))
         self.assertEqual(caught.exception.code, "LIMIT_EXCEEDED")
+
+    def test_manifest_path_access_failures_are_authentication_errors(self):
+        with tempfile.TemporaryDirectory(prefix="dw-manifest-access-") as temporary:
+            source = Path(temporary) / "component.py"
+            source.write_bytes(b"")
+            item = InstalledFile(
+                source, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            )
+            value = wire.file_value(item)
+            self.assertEqual(wire.parse_file(value), item)
+            for error in (
+                FileNotFoundError("removed file"),
+                NotADirectoryError("replaced directory"),
+                PermissionError("denied path"),
+                OSError("unavailable path"),
+                RuntimeError("symbolic link loop"),
+            ):
+                with (
+                    self.subTest(error=type(error).__name__),
+                    patch.object(Path, "resolve", side_effect=error),
+                    self.assertRaises(DeskWeaveError) as caught,
+                ):
+                    wire.parse_file(value)
+                self.assertEqual(caught.exception.code, "AUTHENTICATION_FAILED")
+            with self.assertRaises(ValueError):
+                wire.parse_file({**value, "sha256": "invalid"})
 
     def test_large_manifest_uses_bounded_frames(self):
         item = SimpleNamespace(

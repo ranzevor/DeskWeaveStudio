@@ -286,11 +286,11 @@ class EngineProcess(Resource):
         if self._closed:
             raise closed()
         budget.check_time()
+        request = {"id": self._sequence + 1, "method": method, "params": params}
+        wire.dumps(request, checkpoint=budget.check_time)
         self._sequence += 1
         try:
-            self._control.send(
-                {"id": self._sequence, "method": method, "params": params}, budget=budget
-            )
+            self._control.send(request, budget=budget)
             value = self._control.receive(budget=budget)
             if (
                 type(value.get("id")) is not int
