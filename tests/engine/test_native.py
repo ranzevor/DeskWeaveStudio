@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import errno
 import hashlib
 import json
 import os
 import queue
+import socket
 import struct
 import subprocess
 import sys
@@ -185,6 +187,48 @@ class NativeCase(unittest.TestCase):
                         )
                     self.error("TRANSPORT_CLOSED", lambda client=client: client.send({}))
                     self.error("TRANSPORT_CLOSED", server.receive)
+
+    @unittest.skipIf(sys.platform == "win32", "Unix socket polling")
+    def test_close_during_unix_read_and_write_wait(self):
+        from deskweave.transport.native import _unix
+
+        for operation in ("read", "write"):
+            for error in (OSError(errno.EBADF, "closed descriptor"), ValueError("negative fd")):
+                with self.subTest(operation=operation, error=type(error).__name__):
+                    first, second = socket.socketpair()
+                    with _unix.Stream(first) as stream, second:
+                        if operation == "write":
+                            first.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+                            for _ in range(1024):
+                                try:
+                                    first.send(b"x" * 8192)
+                                except BlockingIOError:
+                                    break
+                            else:
+                                self.fail("socket write buffer did not fill")
+
+                        def wait(*_args, target=stream, failure=error):
+                            target.close()
+                            raise failure
+
+                        with patch.object(_unix.select, "select", wait):
+                            self.error(
+                                "TRANSPORT_CLOSED",
+                                (lambda target=stream: target.read(1, Budget(1)))
+                                if operation == "read"
+                                else (lambda target=stream: target.write(b"x", Budget(1))),
+                            )
+                        self.assertEqual(first.fileno(), -1)
+
+        first, second = socket.socketpair()
+        with _unix.Stream(first) as stream, second:
+            failure = OSError(errno.EBADF, "poll failure")
+            with patch.object(_unix.select, "select", side_effect=failure):
+                with self.assertRaises(OSError) as caught:
+                    stream.read(1, Budget(1))
+                self.assertIs(caught.exception, failure)
+            second.send(b"x")
+            self.assertEqual(stream.read(1, Budget(1)), b"x")
 
     @unittest.skipUnless(sys.platform == "linux", "Linux process snapshots")
     def test_process_exit_during_snapshot_rejects_identity(self):
