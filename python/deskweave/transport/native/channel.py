@@ -49,6 +49,12 @@ class NativeChannel(Resource):
         self._local_binding.check(checkpoint)
         self._peer_binding.verify(self._raw, checkpoint)
 
+    def _check_identity(self, checkpoint=lambda: None):
+        if self._closed:
+            raise closed()
+        self._local_binding._check_process(checkpoint)
+        self._peer_binding._check_process(checkpoint)
+
     def _exact(self, size, budget, *, prefix=False):
         data = bytearray()
         while len(data) < size:
@@ -66,11 +72,12 @@ class NativeChannel(Resource):
         try:
             budget.acquire(self._read_lock)
             acquired = True
-            self.check(budget.check_time)
+            self._check_identity(budget.check_time)
             size = struct.unpack("<I", self._exact(4, budget, prefix=True))[0]
             if not 1 <= size <= self.max_frame_bytes:
                 raise DeskWeaveError("LIMIT_EXCEEDED", "消息帧长度无效。")
             payload = self._exact(size, budget)
+            self.check(budget.check_time)
             value = loads(payload, checkpoint=budget.check)
             if type(value) is not dict:
                 raise DeskWeaveError("INVALID_ARGUMENT", "消息帧必须是 JSON 对象。")

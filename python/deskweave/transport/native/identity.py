@@ -141,7 +141,7 @@ class ProcessBinding(Resource):
                 instance_epoch,
             )
             self._stamps = self._verify_installation(budget.check_time)
-            self.check(budget.check_time)
+            self._check_process(budget.check_time)
         except BaseException:
             self.process.close()
             raise
@@ -161,21 +161,24 @@ class ProcessBinding(Resource):
             values[item.path] = state
         return values
 
-    def check(self, checkpoint=lambda: None):
+    def _check_process(self, checkpoint=lambda: None):
         checkpoint()
         if self.process.snapshot() != self._snapshot:
             raise rejected()
+
+    def check(self, checkpoint=lambda: None):
+        self._check_process(checkpoint)
         if self._verify_installation(checkpoint) != self._stamps:
             raise rejected()
+        self._check_process(checkpoint)
 
     def verify(self, raw, checkpoint=lambda: None):
-        self.check(checkpoint)
+        self._check_process(checkpoint)
         pid, credential = raw.peer()
         if pid != self.identity.process_id:
             raise rejected()
         if sys.platform != "win32":
             platform.verify_peer(self.process, credential, self.installation.macos_requirement)
-        # 重新读取防止身份采集与安装检查之间发生进程替换。
         self.check(checkpoint)
         return self.identity
 

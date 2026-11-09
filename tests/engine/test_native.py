@@ -218,6 +218,54 @@ class NativeCase(unittest.TestCase):
             self.assertEqual(source.stat().st_mtime_ns, state.st_mtime_ns)
             self.error("AUTHENTICATION_FAILED", binding.check)
 
+    def test_installation_scan_rejects_process_change_before_return(self):
+        original = self.local._verify_installation
+        snapshot = self.local._snapshot
+
+        def changed(checkpoint):
+            result = original(checkpoint)
+            self.local._snapshot = (*snapshot[:-1], "changed")
+            return result
+
+        try:
+            with patch.object(self.local, "_verify_installation", changed):
+                self.error("AUTHENTICATION_FAILED", self.local.check)
+        finally:
+            self.local._snapshot = snapshot
+        self.local.check()
+
+    def test_received_frame_rechecks_installation_after_waiting(self):
+        source = Path(self.directory) / "frame-component.py"
+        source.write_bytes(b"one")
+        selected = replace(self.installation, components=(installed(source),))
+        with ProcessBinding(os.getpid(), selected, instance_epoch="frame-wait") as local:
+            with NativeListener(local, directory=self.directory) as listener:
+                with connect(listener.address, local, local) as client:
+                    with listener.accept({os.getpid(): local}) as server:
+                        header_read = threading.Event()
+                        original = server._raw.read
+
+                        def read(size, budget):
+                            value = original(size, budget)
+                            if value:
+                                header_read.set()
+                            return value
+
+                        payload = b'{"value":1}'
+                        client._raw.write(struct.pack("<I", len(payload)), Budget(2))
+                        with patch.object(server._raw, "read", read):
+                            results, thread = self.worker(server.receive)
+                            self.assertTrue(header_read.wait(3))
+                            state = source.stat()
+                            source.write_bytes(b"two")
+                            os.utime(source, ns=(state.st_atime_ns, state.st_mtime_ns))
+                            client._raw.write(payload, Budget(2))
+                            succeeded, error = results.get(timeout=5)
+                            thread.join(5)
+                        self.assertFalse(succeeded)
+                        self.assertIsInstance(error, DeskWeaveError)
+                        self.assertEqual(error.code, "AUTHENTICATION_FAILED")
+
     def test_large_installation_manifest_digest_is_not_a_frame(self):
         import rfc8785
 
@@ -378,7 +426,8 @@ class NativeCase(unittest.TestCase):
 
         with (
             patch("time.monotonic", lambda: now[0]),
-            patch.object(server, "check", check),
+            patch.object(server, "_check_identity", check),
+            patch.object(server, "check", side_effect=AssertionError("idle installation scan")),
             patch.object(authority, "accept", accept),
         ):
             self.error("CANCELLED", lambda: serve_connection(server, authority, cancel=cancelled))
