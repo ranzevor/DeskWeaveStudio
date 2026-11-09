@@ -10,7 +10,7 @@
 - `components`：应用模块、契约、运行依赖等组成该组件的文件及预期 SHA-256，最多 10,000 项。
 - `macos_requirement`：macOS 运行映像必须满足的代码签名 requirement。
 
-发行安装策略从受信安装清单读取。Python 组件的清单覆盖解释器之外的应用代码及运行依赖；运行映像路径以操作系统加载对象为准，虚拟环境启动器路径与该映像可能不同。文件清单身份参与 `installationDigest`，双方使用相同规范 JSON 和 SHA-256 算法。
+发行安装策略从受信安装清单读取。Python 组件的清单覆盖解释器之外的应用代码及运行依赖；运行映像路径以操作系统加载对象为准，虚拟环境启动器路径与该映像可能不同。文件清单身份参与 `installationDigest`，双方使用相同规范 JSON 和 SHA-256 算法。`current_executable()` 返回操作系统提供的当前进程映像路径，供开发安装策略和诊断使用；Python 启动入口仍用于启动子进程。
 
 `ProcessBinding(pid, installation, instance_epoch=..., timeout=30, cancel=None)` 在登记时打开原生进程引用，采集创建标识并核验安装内容。`instance_epoch` 由控制面为受控组件实例分配，通过进程引用与创建标识固定。清单、epoch、授权和恢复凭据通过受保护的启动控制通道或进程内调用传递。
 
@@ -62,7 +62,7 @@ with connect(address, client_binding, server_binding, timeout=10) as channel:
 
 帧由 4 字节小端长度和 UTF-8 JSON 对象组成。接收端先检查前缀，长度必须处于 1 至当前帧上限之间；不为超限长度读取或分配载荷。服务端第一个 hello 使用 Authority 初始上限，challenge 起使用协商上限。
 
-`send`、`receive`、`connect`、`accept` 和客户端调用均使用单调时钟。帧锁等待、安装摘要分块检查、分片读写与解析共用一次操作的截止时间；握手的两次往返共用握手期限，客户端响应校验完成后再次检查期限。安装摘要每 64KiB 检查取消与期限。
+`send`、`receive`、`connect`、`accept` 和客户端调用均使用单调时钟。帧锁等待、安装摘要分块检查、分片读写与解析共用一次操作的截止时间；握手的两次往返共用握手期限，客户端响应校验完成后再次检查期限。每次身份检查重新核对文件内容摘要和文件身份，覆盖同长度改写及修改时间未变化的情况；安装摘要每 64KiB 检查取消与期限。
 
 Windows 使用 overlapped I/O。取消或关闭先请求 `CancelIoEx`，等待实际 I/O 完成后释放 OVERLAPPED、缓冲、事件与管道句柄。Unix 使用非阻塞 socket 和有界等待。原生错误和清理失败返回调用方；消息中不混入系统诊断。
 

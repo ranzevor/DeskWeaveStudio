@@ -22,6 +22,10 @@ else:
     raise ImportError("当前平台没有本机 IPC 后端。")
 
 
+def current_executable() -> Path:
+    return platform.current_executable()
+
+
 def stamp(info):
     return (
         info.st_dev,
@@ -161,14 +165,11 @@ class ProcessBinding(Resource):
         checkpoint()
         if self.process.snapshot() != self._snapshot:
             raise rejected()
-        for path, state in self._stamps.items():
-            checkpoint()
-            if stamp(path.stat()) != state:
-                raise rejected()
+        if self._verify_installation(checkpoint) != self._stamps:
+            raise rejected()
 
     def verify(self, raw, checkpoint=lambda: None):
         self.check(checkpoint)
-        self._verify_installation(checkpoint)
         pid, credential = raw.peer()
         if pid != self.identity.process_id:
             raise rejected()

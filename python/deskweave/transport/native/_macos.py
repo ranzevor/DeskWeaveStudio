@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes as c
+import os
 import select
 import socket
 import struct
@@ -59,6 +60,17 @@ class BsdInfo(c.Structure):
     _fields_ += [("seconds", c.c_uint64), ("microseconds", c.c_uint64)]
 
 
+def process_executable(pid):
+    path = c.create_string_buffer(4096)
+    if LIBPROC.proc_pidpath(pid, path, len(path)) <= 0:
+        raise rejected()
+    return Path(path.value.decode()).resolve(strict=True)
+
+
+def current_executable():
+    return process_executable(os.getpid())
+
+
 def local_session():
     first, second = socket.socketpair()
     with first, second:
@@ -101,14 +113,11 @@ class Process(Resource):
                 raise rejected()
             if len({info.uid, info.ruid, info.svuid}) != 1 or info.status == 5:
                 raise rejected()
-            path = c.create_string_buffer(4096)
-            if LIBPROC.proc_pidpath(self.pid, path, len(path)) <= 0:
-                raise rejected()
             return (
                 str(info.uid),
                 local_session(),
                 f"{info.seconds}:{info.microseconds}",
-                Path(path.value.decode()).resolve(strict=True),
+                process_executable(self.pid),
             )
 
     def close(self):

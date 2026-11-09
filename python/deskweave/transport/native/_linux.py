@@ -23,6 +23,10 @@ for name in ("libsystemd.so.0", "libelogind.so.0"):
     LOGIN_LIBRARIES.append(library)
 
 
+def current_executable():
+    return Path("/proc/self/exe").resolve(strict=True)
+
+
 class Process(Resource):
     platform = "linux"
 

@@ -63,6 +63,7 @@ class TokenStatistics(c.Structure):
     ]
 
 
+GetCurrentProcess = api(KERNEL, "GetCurrentProcess", HANDLE)
 CloseHandle = api(KERNEL, "CloseHandle", w.BOOL, HANDLE)
 OpenProcess = api(KERNEL, "OpenProcess", HANDLE, DWORD, w.BOOL, DWORD)
 GetProcessTimes = api(KERNEL, "GetProcessTimes", w.BOOL, HANDLE, PTR, PTR, PTR, PTR)
@@ -145,6 +146,17 @@ def token_identity(handle):
         checked(CloseHandle(token))
 
 
+def process_executable(handle):
+    path = c.create_unicode_buffer(32768)
+    size = DWORD(len(path))
+    checked(QueryFullProcessImageName(handle, 0, path, c.byref(size)))
+    return Path(path.value).resolve(strict=True)
+
+
+def current_executable():
+    return process_executable(GetCurrentProcess())
+
+
 class Process(Resource):
     platform = "windows"
 
@@ -164,11 +176,9 @@ class Process(Resource):
                 raise rejected()
             times = [c.c_uint64() for _ in range(4)]
             checked(GetProcessTimes(self._handle, *(c.byref(item) for item in times)))
-            path = c.create_unicode_buffer(32768)
-            size = DWORD(len(path))
-            checked(QueryFullProcessImageName(self._handle, 0, path, c.byref(size)))
+            executable = process_executable(self._handle)
             user, session, self.logon_sid = token_identity(self._handle)
-            return user, session, str(times[0].value), Path(path.value).resolve(strict=True)
+            return user, session, str(times[0].value), executable
 
     def close(self):
         with self._lock:

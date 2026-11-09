@@ -24,6 +24,7 @@ from deskweave.transport.native import (
     NativeListener,
     ProcessBinding,
     connect,
+    current_executable,
     serve_connection,
 )
 from deskweave.transport.protocol import ConnectionPolicy
@@ -34,7 +35,7 @@ def development_installation():
         path = Path(path).resolve(strict=True)
         return InstalledFile(path, hashlib.sha256(path.read_bytes()).hexdigest())
 
-    executable = entry(sys._base_executable)
+    executable = entry(current_executable())
     components = tuple(
         entry(path)
         for path in Path(deskweave.__file__).parent.rglob("*")

@@ -30,6 +30,7 @@ from deskweave.transport.native import (
     NativeListener,
     ProcessBinding,
     connect,
+    current_executable,
     serve_connection,
 )
 from deskweave.transport.native._common import Budget
@@ -42,7 +43,7 @@ def installed(path):
 
 
 def installation():
-    executable = installed(sys._base_executable)
+    executable = installed(current_executable())
     components = [
         installed(path)
         for path in Path(deskweave.__file__).parent.rglob("*")
@@ -99,6 +100,24 @@ class NativeCase(unittest.TestCase):
             function()
         self.assertEqual(caught.exception.code, code)
 
+    def test_current_executable_is_independent_of_login_session(self):
+        from deskweave.transport.native import identity
+
+        platform = identity.platform
+        if sys.platform == "linux":
+            target, attribute = platform.Process, "_session"
+        else:
+            target = platform
+            attribute = "token_identity" if sys.platform == "win32" else "local_session"
+        with patch.object(
+            target, attribute, side_effect=DeskWeaveError("AUTHENTICATION_FAILED", "session")
+        ):
+            self.assertEqual(current_executable(), self.installation.executable.path)
+            self.error(
+                "AUTHENTICATION_FAILED",
+                lambda: ProcessBinding(os.getpid(), self.installation, instance_epoch="session"),
+            )
+
     def test_kernel_peer_and_unicode_frame(self):
         client, server, _listener = self.pair()
         self.assertEqual(server.peer.process_id, os.getpid())
@@ -135,6 +154,18 @@ class NativeCase(unittest.TestCase):
         selected = replace(self.installation, components=(installed(source),))
         with ProcessBinding(os.getpid(), selected, instance_epoch="test") as binding:
             source.write_text("two", encoding="utf-8")
+            self.error("AUTHENTICATION_FAILED", binding.check)
+
+    def test_installation_same_size_rewrite_with_preserved_mtime(self):
+        source = Path(self.directory) / "component.py"
+        source.write_bytes(b"one")
+        selected = replace(self.installation, components=(installed(source),))
+        with ProcessBinding(os.getpid(), selected, instance_epoch="test") as binding:
+            state = source.stat()
+            source.write_bytes(b"two")
+            os.utime(source, ns=(state.st_atime_ns, state.st_mtime_ns))
+            self.assertEqual(source.stat().st_size, state.st_size)
+            self.assertEqual(source.stat().st_mtime_ns, state.st_mtime_ns)
             self.error("AUTHENTICATION_FAILED", binding.check)
 
     def test_large_installation_manifest_digest_is_not_a_frame(self):
