@@ -127,6 +127,56 @@ class NativeCase(unittest.TestCase):
         server.send(message)
         self.assertEqual(client.receive(), message)
 
+    def test_connection_failures_close_read_and_write_channels(self):
+        for operation in ("read", "write"):
+            for failure in (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                with self.subTest(operation=operation, failure=failure):
+                    client, server, _listener = self.pair()
+                    with patch.object(client._raw, operation, side_effect=failure("peer closed")):
+                        self.error(
+                            "TRANSPORT_CLOSED",
+                            client.receive
+                            if operation == "read"
+                            else lambda client=client: client.send({}),
+                        )
+                    self.error("TRANSPORT_CLOSED", lambda client=client: client.send({}))
+                    self.error("TRANSPORT_CLOSED", server.receive)
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux process snapshots")
+    def test_process_exit_during_snapshot_rejects_identity(self):
+        from deskweave.transport.native import _linux
+
+        with _linux.Process(os.getpid()) as process:
+            for failure in (FileNotFoundError, ProcessLookupError):
+                with (
+                    self.subTest(failure=failure),
+                    patch.object(Path, "resolve", side_effect=failure("process exited")),
+                ):
+                    self.error("AUTHENTICATION_FAILED", process.snapshot)
+            self.assertEqual(process.snapshot(), process.initial)
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows process snapshots")
+    def test_process_exit_during_windows_snapshot_rejects_identity(self):
+        import ctypes
+
+        from deskweave.transport.native import _windows
+
+        with _windows.Process(os.getpid()) as process:
+            with patch.object(_windows, "process_executable", side_effect=ctypes.WinError(5)):
+                self.error("AUTHENTICATION_FAILED", process.snapshot)
+            with patch.object(_windows, "WaitForSingleObject", side_effect=(258, 0)):
+                self.error("AUTHENTICATION_FAILED", process.snapshot)
+            with patch.object(_windows, "WaitForSingleObject", return_value=0xFFFFFFFF):
+                ctypes.set_last_error(6)
+                with self.assertRaises(OSError) as caught:
+                    process.snapshot()
+                self.assertEqual(caught.exception.winerror, 6)
+            with patch.object(_windows, "process_executable", side_effect=ctypes.WinError(8)):
+                with self.assertRaises(OSError) as caught:
+                    process.snapshot()
+                self.assertEqual(caught.exception.winerror, 8)
+            self.assertEqual(process.snapshot(), process.initial)
+
     def test_multiple_connections_keep_listener_owned(self):
         first, server, listener = self.pair()
         with connect(listener.address, self.local, self.local) as second:

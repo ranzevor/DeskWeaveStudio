@@ -64,7 +64,7 @@ with connect(address, client_binding, server_binding, timeout=10) as channel:
 
 `send`、`receive`、`connect`、`accept` 和客户端调用均使用单调时钟。帧锁等待、安装摘要分块检查、分片读写与解析共用一次操作的截止时间；握手的两次往返共用握手期限，客户端响应校验完成后再次检查期限。每次身份检查重新核对文件内容摘要和文件身份，覆盖同长度改写及修改时间未变化的情况；安装摘要每 64KiB 检查取消与期限。
 
-Windows 使用 overlapped I/O。取消或关闭先请求 `CancelIoEx`，等待实际 I/O 完成后释放 OVERLAPPED、缓冲、事件与管道句柄。Unix 使用非阻塞 socket 和有界等待。原生错误和清理失败返回调用方；消息中不混入系统诊断。
+Windows 使用 overlapped I/O。取消或关闭先请求 `CancelIoEx`，等待实际 I/O 完成后释放 OVERLAPPED、缓冲、事件与管道句柄。Unix 使用非阻塞 socket 和有界等待。对端断开、重置或中止连接统一返回 `TRANSPORT_CLOSED`；进程在身份快照读取期间退出或查询权限失效时返回 `AUTHENTICATION_FAILED`。其他原生错误和清理失败返回调用方；消息中不混入系统诊断。
 
 | 结果 | 调用方操作 |
 |---|---|

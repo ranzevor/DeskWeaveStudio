@@ -76,6 +76,11 @@ class NativeChannel(Resource):
                 raise DeskWeaveError("INVALID_ARGUMENT", "消息帧必须是 JSON 对象。")
             budget.check()
             return value
+        except ConnectionError as error:
+            failure = closed()
+            failure.__cause__ = error
+            self._abort(failure)
+            raise failure from error
         except BaseException as error:
             self._abort(error)
             raise
@@ -99,6 +104,11 @@ class NativeChannel(Resource):
                     raise closed()
                 offset += count
             budget.check()
+        except ConnectionError as error:
+            failure = closed()
+            failure.__cause__ = error
+            self._abort(failure)
+            raise failure from error
         except BaseException as error:
             self._abort(error)
             raise
