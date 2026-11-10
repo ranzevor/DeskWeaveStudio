@@ -95,7 +95,7 @@ flow.repeat 在运行时把 count 解析为 0～10,000 的整数，按顺序调�
 
 ## 条件循环与控制信号
 
-flow.loop 的 mode=while 在每次调用前检查 condition，首次为 false 时执行零次；mode=until 在一次调用结束后检查，首次至少执行一次。maxIterations 与 timeoutMs 始终有效，取值不能扩大父运行预算。达到上限仍未满足条件时报告 LOOP_LIMIT，不当作条件完成。
+flow.loop 的 mode=while 在每次调用前检查 condition，首次为 false 时执行零次；mode=until 在一次调用结束后检查，首次至少执行一次。maxIterations 与 timeoutMs 始终有效，取值不能扩大父运行预算。达到上限仍未满足条件时报告 LOOP_LIMIT，错误 details 的 reason 为 limit，iterations 为实际完成次数。正常输出包含 iterations、lastOutput 和 reason，reason 为 condition 或 break。
 
 条件和 inputs 在所属调用中重新求值，可读取 runtime.loop.index、runtime.loop.lastOutput 和运行共享变量。首次 lastOutput 为 null；每轮结束后更新为该轮的显式输出。flow.repeat 保留固定次数行为，并使用相同的控制信号与预算处理。
 

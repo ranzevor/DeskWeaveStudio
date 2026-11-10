@@ -69,8 +69,69 @@ def _shape(value: object, checkpoint: Callable[[], None] = lambda: None) -> None
                 stack.extend((child, depth + 1, (*path, key)) for key, child in item.items())
 
 
+class _DynamicLiteral(Exception):
+    pass
+
+
+def _static_raw(value, checkpoint):
+    checkpoint()
+    if type(value) is list:
+        return [_static_raw(item, checkpoint) for item in value]
+    if type(value) is dict:
+        if "$literal" in value:
+            return value["$literal"]
+        if "$expr" in value:
+            raise _DynamicLiteral()
+        return {key: _static_raw(item, checkpoint) for key, item in value.items()}
+    return value
+
+
+def _can_fail(value, *, missing_handled=False, checkpoint=lambda: None, inspect_path=None):
+    checkpoint()
+    if value is None or type(value) in (bool, int, float):
+        return False
+    if type(value) is dict and "$expr" in value:
+        expression = value["$expr"]
+        if expression["op"] == "path":
+            if not missing_handled:
+                return True
+            path = expression["path"]
+            if path[0] == "calls":
+                return len(path) == 1
+            if inspect_path is None:
+                return True
+            try:
+                return not inspect_path(path)
+            except PathMissing:
+                return False
+        if expression["op"] == "coalesce":
+            return any(
+                _can_fail(
+                    item, missing_handled=True, checkpoint=checkpoint, inspect_path=inspect_path
+                )
+                for item in expression["args"]
+            )
+        return True
+    try:
+        raw = _static_raw(value, checkpoint)
+        dumps(raw, max_bytes=MAX_FRAME, max_text_bytes=262_144, checkpoint=checkpoint)
+        validate("urn:deskweave:values:1#/$defs/raw", raw, checkpoint=checkpoint)
+    except _DynamicLiteral:
+        return True
+    except DeskWeaveError as error:
+        if error.code in {"LIMIT_EXCEEDED", "INVALID_ARGUMENT"}:
+            return True
+        raise
+    return False
+
+
 def evaluate_value(
-    value, resolve, *, checkpoint=lambda: None, observe_control=lambda sensitive: None
+    value,
+    resolve,
+    *,
+    checkpoint=lambda: None,
+    observe_control=lambda sensitive: None,
+    inspect_path=None,
 ):
     observed = False
 
@@ -116,6 +177,10 @@ def evaluate_value(
         if op == "coalesce":
             control = False
             for index, argument in enumerate(args):
+                if control and _can_fail(
+                    argument, missing_handled=True, checkpoint=checkpoint, inspect_path=inspect_path
+                ):
+                    observe_control(True)
                 prior, observed = observed, False
                 try:
                     result = visit(argument, (*path, "$expr", "args", index))
@@ -126,12 +191,25 @@ def evaluate_value(
                     observed |= prior
                 control |= result.sensitive
                 if result.data is not None:
+                    if control and any(
+                        _can_fail(
+                            item,
+                            missing_handled=True,
+                            checkpoint=checkpoint,
+                            inspect_path=inspect_path,
+                        )
+                        for item in args[index + 1 :]
+                    ):
+                        observe_control(True)
                     return result.marked(control, conditional=True)
             return Value.build(None, control)
         first_path, second_path = (*path, "$expr", "args", 0), (*path, "$expr", "args", 1)
         first = visit(args[0], first_path)
         if op in {"and", "or"}:
             value = boolean(first, first_path)
+            right_literal = args[1].get("$literal") if type(args[1]) is dict else args[1]
+            if type(right_literal) is not bool:
+                observe_control(first.sensitive)
             if (op == "and" and not value) or (op == "or" and value):
                 return Value.build(value, first.sensitive)
             second = visit(args[1], second_path)

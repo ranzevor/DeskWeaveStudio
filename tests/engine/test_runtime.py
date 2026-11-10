@@ -355,7 +355,7 @@ class RuntimeTests(EngineCase):
         )
         self.assertEqual(
             self.result(run)["output"]["value"]["result"],
-            {"iterations": 1, "lastOutput": {"found": True}},
+            {"iterations": 1, "lastOutput": {"found": True}, "reason": "break"},
         )
 
     def test_shared_version_conflict_can_be_handled(self):
@@ -1933,3 +1933,353 @@ class RuntimeTests(EngineCase):
             {"child": child},
         )
         self.assertEqual(self.result(run)["output"]["value"], {"handled": True})
+
+    def test_sensitive_short_circuit_taints_skipped_error_writes(self):
+        for op, choices in (("and", (False, True)), ("or", (True, False)), ("coalesce", (1, None))):
+            for index, secret in enumerate(choices):
+                source = (
+                    path("inputs", "secret", "value")
+                    if op == "coalesce"
+                    else path("inputs", "secret")
+                )
+                remaining = (
+                    operation("divide", 1, 0) if op == "coalesce" else path("vars", "missing")
+                )
+                expression = operation(op, source, remaining)
+                run = self.start(
+                    flow(
+                        f"short{op}{index}",
+                        [
+                            node(
+                                "assign",
+                                "data.assign",
+                                {"name": "x", "value": expression},
+                                next="done",
+                                error="write",
+                            ),
+                            node("write", "data.assign", {"name": "y", "value": 1}, next="done"),
+                            node("done", "flow.return", {"values": {"y": path("vars", "y")}}),
+                        ],
+                        parameters={
+                            "secret": {
+                                "type": "object" if op == "coalesce" else "boolean",
+                                "required": True,
+                                "sensitive": True,
+                            }
+                        },
+                        variables={"y": 0, "public": 9},
+                    ),
+                    inputs={"secret": {"value": secret} if op == "coalesce" else secret},
+                )
+                self.assertEqual(self.result(run)["output"]["visibility"], "redacted")
+                self.assertEqual(
+                    self.runtime.read_value(run, "local", "public", access=self.access)["value"], 9
+                )
+
+    def test_deep_sensitive_values_round_trip_without_storage_failure(self):
+        expression = path("inputs", "secret")
+        expected = True
+        for _ in range(31):
+            expression = {"child": expression}
+            expected = {"child": expected}
+        run = self.start(
+            flow(
+                "deepLabels",
+                [
+                    node(
+                        "assign", "data.assign", {"name": "deep", "value": expression}, next="done"
+                    ),
+                    node("done", "flow.return", {"values": {"ok": True}}),
+                ],
+                parameters={"secret": {"type": "boolean", "required": True, "sensitive": True}},
+            ),
+            inputs={"secret": True},
+        )
+        self.assertEqual(self.result(run)["state"], "succeeded")
+        frame = self.planner.store.read(run)["rootFrameId"]
+        stored = self.runtime.store.value(run, frame, "local", "deep")
+        self.assertEqual(stored.raw(), expected)
+        self.assertTrue(stored.sensitive)
+        self.assertEqual(
+            self.runtime.read_value(run, "local", "deep", access=self.access)["visibility"],
+            "redacted",
+        )
+
+    def test_loop_reports_condition_break_and_limit_reasons(self):
+        normal = self.child(
+            flow("normalBody", [node("done", "flow.return", {"values": {"ok": True}})])
+        )
+        breaking = self.child(
+            flow(
+                "breakBody",
+                [node("break", "flow.break", {"values": {"ok": True}})],
+                kind="loopBody",
+            )
+        )
+        for identity, mode, condition, child, reason in (
+            ("while", "while", False, normal, "condition"),
+            ("until", "until", True, normal, "condition"),
+            ("break", "while", True, breaking, "break"),
+            ("limit", "until", False, normal, "limit"),
+        ):
+            loop = node(
+                "loop",
+                "flow.loop",
+                {
+                    "workflow": "body",
+                    "inputs": {},
+                    "mode": mode,
+                    "condition": condition,
+                    "maxIterations": 1,
+                    "timeoutMs": 1000,
+                },
+                next="done",
+                error="error",
+            )
+            loop["store"] = "loopResult"
+            run = self.start(
+                flow(
+                    "reason" + identity,
+                    [
+                        loop,
+                        node(
+                            "done",
+                            "flow.return",
+                            {
+                                "values": {
+                                    "reason": path("prev", "reason"),
+                                    "stored": path("vars", "loopResult", "reason"),
+                                }
+                            },
+                        ),
+                        node(
+                            "error",
+                            "flow.return",
+                            {
+                                "values": {
+                                    "reason": path("prev", "error", "details", "reason"),
+                                    "count": path("prev", "error", "details", "iterations"),
+                                }
+                            },
+                        ),
+                    ],
+                    resources={"body": {"kind": "workflow"}},
+                ),
+                {"body": child},
+            )
+            output = self.result(run)["output"]["value"]
+            self.assertEqual(output["reason"], reason)
+            if reason == "limit":
+                self.assertEqual(output["count"], 1)
+            else:
+                self.assertEqual(output["stored"], reason)
+
+    def test_loop_timeout_reports_limit_after_child_cleanup(self):
+        child = self.child(flow("slowBody", [node("wait", "time.wait", {"durationMs": 1000})]))
+        run = self.start(
+            flow(
+                "loopTimeoutReason",
+                [
+                    node(
+                        "loop",
+                        "flow.loop",
+                        {
+                            "workflow": "body",
+                            "inputs": {},
+                            "mode": "while",
+                            "condition": True,
+                            "maxIterations": 3,
+                            "timeoutMs": 10,
+                        },
+                        error="recover",
+                    ),
+                    node(
+                        "recover",
+                        "flow.return",
+                        {
+                            "values": {
+                                "reason": path("prev", "error", "details", "reason"),
+                                "count": path("prev", "error", "details", "iterations"),
+                            }
+                        },
+                    ),
+                ],
+                resources={"body": {"kind": "workflow"}},
+            ),
+            {"body": child},
+        )
+        self.runtime.pump()
+        self.elapsed[0] += 0.011
+        self.assertEqual(self.result(run)["output"]["value"], {"reason": "limit", "count": 0})
+
+    def test_loop_timeout_counts_already_completed_iteration_once(self):
+        child = self.child(
+            flow("completedBody", [node("done", "flow.return", {"values": {"x": 1}})])
+        )
+        run = self.start(
+            flow(
+                "completedAtDeadline",
+                [
+                    node(
+                        "loop",
+                        "flow.loop",
+                        {
+                            "workflow": "body",
+                            "inputs": {},
+                            "mode": "until",
+                            "condition": False,
+                            "maxIterations": 10,
+                            "timeoutMs": 1,
+                        },
+                        error="recover",
+                    ),
+                    node(
+                        "recover",
+                        "flow.return",
+                        {"values": {"count": path("prev", "error", "details", "iterations")}},
+                    ),
+                ],
+                resources={"body": {"kind": "workflow"}},
+            ),
+            {"body": child},
+        )
+        for _ in range(3):
+            self.runtime.tick()
+        with self.workspace.transaction() as connection:
+            self.assertEqual(
+                connection.execute(
+                    "SELECT COUNT(*) FROM frame WHERE run_id=? AND "
+                    "parent_id IS NOT NULL AND state='succeeded'",
+                    (run,),
+                ).fetchone()[0],
+                1,
+            )
+        self.elapsed[0] = 0.002
+        self.assertEqual(self.result(run)["output"]["value"], {"count": 1})
+
+    def test_total_boolean_short_circuit_allows_public_overwrite(self):
+        run = self.start(
+            flow(
+                "totalBoolean",
+                [
+                    node(
+                        "assign",
+                        "data.assign",
+                        {"name": "x", "value": operation("and", path("inputs", "secret"), True)},
+                        next="clear",
+                    ),
+                    node("clear", "data.assign", {"name": "x", "value": 0}, next="done"),
+                    node("done", "flow.return", {"values": {"x": path("vars", "x")}}),
+                ],
+                parameters={"secret": {"type": "boolean", "required": True, "sensitive": True}},
+            ),
+            inputs={"secret": False},
+        )
+        self.assertEqual(self.result(run)["output"]["value"], {"x": 0})
+
+    def test_sensitive_coalesce_accounts_for_skipped_result_size(self):
+        child = self.child(
+            flow("sizeResult", [node("done", "flow.return", {"values": {"x": "x" * 200000}})])
+        )
+        for index, secret in enumerate((1, None)):
+            run = self.start(
+                flow(
+                    f"skippedSize{index}",
+                    [
+                        node(
+                            "c0",
+                            "flow.call",
+                            {"workflow": "child", "inputs": {}, "mode": "wait"},
+                            next="assign",
+                        ),
+                        node(
+                            "assign",
+                            "data.assign",
+                            {
+                                "name": "x",
+                                "value": operation(
+                                    "coalesce",
+                                    path("inputs", "secret", "value"),
+                                    {f"v{i}": path("calls", "c0") for i in range(6)},
+                                ),
+                            },
+                            next="done",
+                            error="write",
+                        ),
+                        node("write", "data.assign", {"name": "y", "value": 1}, next="done"),
+                        node("done", "flow.return", {"values": {"y": path("vars", "y")}}),
+                    ],
+                    parameters={"secret": {"type": "object", "required": True, "sensitive": True}},
+                    resources={"child": {"kind": "workflow"}},
+                    variables={"y": 0},
+                ),
+                {"child": child},
+                inputs={"secret": {"value": secret}},
+            )
+            self.assertEqual(self.result(run)["output"]["visibility"], "redacted")
+
+    def test_short_circuit_checks_large_initial_value_metadata(self):
+        large = {f"v{i}": "x" * 200000 for i in range(6)}
+        definition = flow(
+            "largeInitial",
+            [
+                node(
+                    "assign",
+                    "data.assign",
+                    {
+                        "name": "x",
+                        "value": operation(
+                            "coalesce", path("inputs", "secret", "value"), path("vars", "large")
+                        ),
+                    },
+                    next="done",
+                    error="write",
+                ),
+                node("write", "data.assign", {"name": "y", "value": 1}, next="done"),
+                node("done", "flow.return", {"values": {"y": path("vars", "y")}}),
+            ],
+            parameters={"secret": {"type": "object", "required": True, "sensitive": True}},
+            variables={"large": large, "y": 0},
+        )
+        saved = self.workspace.save(
+            "fixture",
+            "largeInitial",
+            {
+                "workflowId": definition["id"],
+                "draftVersion": 1,
+                "baseRevision": None,
+                "definition": definition,
+                "dependencies": {},
+            },
+            request_params={"workflowId": definition["id"]},
+        )
+        for index, secret in enumerate((1, None)):
+            accepted = self.planner.accept(
+                self.access,
+                f"large{index}",
+                {
+                    "workflowId": definition["id"],
+                    "revision": saved["revision"],
+                    "inputs": {"secret": {"value": secret}},
+                    "targets": {},
+                    "detached": False,
+                },
+            )
+            run = accepted["runId"]
+            self.runtime.attach(run, self.access)
+            state = self.runtime._active[run]
+            self.assertEqual(state.frames[state.root].variables.data["large"].raw(), large)
+            self.assertFalse(state.frames[state.root].variables.data["large"].result_safe)
+            self.assertEqual(self.result(run)["output"]["visibility"], "redacted")
+
+    def test_value_budget_metadata_matches_canonical_encoding(self):
+        from deskweave.json import dumps
+
+        raw = {"text": "汉\n\t\u0000", "items": [True, None, -2, 1.25, {}]}
+        value = Value.freeze(raw)
+        self.assertEqual(value.json_size, len(dumps(raw)))
+        changed = value.updated(["items", 1], Value.freeze("替换\n"))
+        self.assertEqual(changed.json_size, len(dumps(changed.raw())))
+        self.assertIs(changed.data["text"], value.data["text"])
+        self.assertTrue(changed.result_safe)
+        self.assertFalse(Value.freeze("汉" * 90000).result_safe)

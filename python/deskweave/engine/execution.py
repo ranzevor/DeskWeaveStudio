@@ -218,6 +218,7 @@ class Kernel:
             ),
             checkpoint=self.checkpoint,
             observe_control=lambda sensitive: self._guard(change, frame, sensitive),
+            inspect_path=lambda path: context.lookup(path).result_safe,
         )
         self._observed |= result.sensitive
         self._guard(
@@ -471,7 +472,20 @@ class Kernel:
         self._observed |= phase["sensitive"]
         child = phase.get("child")
         if now >= phase["deadline"]:
-            error = fault("LOOP_LIMIT", "循环执行时间超过限制。", frame.sensitive)
+            if child and child not in change.run.frames:
+                completed = self.store.outcome(change.run.id, child)
+                if completed["state"] == "succeeded":
+                    phase["iterations"] += 1
+                    phase["child"] = None
+                    phase["sensitive"] |= completed["metadata"].get("outcomeSensitive", False)
+                    frame.iteration_result = completed["output"]
+                    change.value(frame.id, "runtime", "iterationResult", frame.iteration_result)
+            error = fault(
+                "LOOP_LIMIT",
+                "循环执行时间超过限制。",
+                frame.sensitive,
+                {"reason": "limit", "iterations": phase["iterations"]},
+            )
             if child in change.run.frames:
                 self._cancel_tree(change, child, error)
                 frame.phase = {"kind": "cancel", "child": child, "error": error}
@@ -498,7 +512,7 @@ class Kernel:
                     self._collect(change, frame, "succeeded", frame.iteration_result)
                     return
                 if signal == "break":
-                    self._loop_done(change, frame, node)
+                    self._loop_done(change, frame, node, "break")
                     return
             if phase["mode"] == "until":
                 condition = self._value(
@@ -525,7 +539,14 @@ class Kernel:
                 return
         if phase["index"] >= phase["limit"]:
             self._error(
-                change, frame, fault("LOOP_LIMIT", "循环次数超过限制。", phase["sensitive"])
+                change,
+                frame,
+                fault(
+                    "LOOP_LIMIT",
+                    "循环次数超过限制。",
+                    phase["sensitive"],
+                    {"reason": "limit", "iterations": phase["iterations"]},
+                ),
             )
             return
         inputs = self._object(change, frame, params["inputs"], loop=phase["index"])
@@ -534,14 +555,15 @@ class Kernel:
         phase["child"] = child
         frame.state = "joining"
 
-    def _loop_done(self, change, frame, node):
+    def _loop_done(self, change, frame, node, reason="condition"):
         self._guard(change, frame, frame.phase["sensitive"])
-        value = Value.build(
-            {
-                "iterations": Value.freeze(frame.phase["iterations"]),
-                "lastOutput": frame.iteration_result,
-            }
-        ).marked(frame.phase["sensitive"])
+        fields = {
+            "iterations": Value.freeze(frame.phase["iterations"]),
+            "lastOutput": frame.iteration_result,
+        }
+        if node["action"] == "flow.loop":
+            fields["reason"] = Value.freeze(reason)
+        value = Value.build(fields).marked(frame.phase["sensitive"])
         self._complete(change, frame, node, value)
 
     def _cycle(self, change, source, target):

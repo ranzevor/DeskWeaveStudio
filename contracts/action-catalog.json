@@ -197,7 +197,7 @@
       "effect": "delegated",
       "nodeSchema": "urn:deskweave:actions:1#/$defs/flow.loop",
       "parameterSchema": "urn:deskweave:actions:1#/$defs/flow.loop/properties/params",
-      "outputs": "对象：iterations、lastOutput、reason；reason 为 condition、break 或 limit。"
+      "outputs": "对象：iterations、lastOutput、reason；正常结束 reason 为 condition 或 break。达到上限报告 LOOP_LIMIT，错误 details 包含 reason=limit 和 iterations。"
     },
     {
       "id": "flow.break",
