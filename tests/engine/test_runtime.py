@@ -1808,3 +1808,128 @@ class RuntimeTests(EngineCase):
         result = self.runtime.result(run, access=self.access)
         self.assertEqual(result["state"], "cancelled")
         self.assertEqual(result["controlVersion"], version + 1)
+
+    def test_distinct_completed_calls_keep_only_active_frame_values(self):
+        from collections.abc import Mapping
+        from dataclasses import fields
+
+        from deskweave.domain.execution import Frame
+
+        payload = "indexed-call-result-" + "x" * 65536
+        child = self.child(
+            flow("largeResult", [node("done", "flow.return", {"values": {"payload": payload}})])
+        )
+        for count in (4, 8):
+            calls = [
+                node(
+                    f"c{index}",
+                    "flow.call",
+                    {"workflow": "child", "inputs": {}, "mode": "wait"},
+                    next=f"c{index + 1}" if index + 1 < count else "hold",
+                )
+                for index in range(count)
+            ]
+            run = self.start(
+                flow(
+                    f"indexed{count}",
+                    calls
+                    + [
+                        node("hold", "time.wait", {"durationMs": 1000}, next="done"),
+                        node(
+                            "done",
+                            "flow.return",
+                            {
+                                "values": {
+                                    "first": path("calls", "c0", "payload"),
+                                    "last": path("calls", f"c{count - 1}", "payload"),
+                                }
+                            },
+                        ),
+                    ],
+                    resources={"child": {"kind": "workflow"}},
+                ),
+                {"child": child},
+            )
+            self.runtime.pump()
+            active = self.runtime._active[run]
+            self.assertEqual(len(active.frames), 1)
+            pending, visited, retained = list(active.frames.values()), set(), set()
+            while pending:
+                value = pending.pop()
+                if id(value) in visited:
+                    continue
+                visited.add(id(value))
+                if isinstance(value, str):
+                    if value.startswith("indexed-call-result-"):
+                        retained.add(id(value))
+                elif isinstance(value, Value):
+                    pending.append(value.data)
+                elif isinstance(value, Frame):
+                    pending.extend(getattr(value, field.name) for field in fields(value))
+                elif isinstance(value, Mapping):
+                    pending.extend(value.values())
+                elif isinstance(value, (list, tuple)):
+                    pending.extend(value)
+            self.assertLessEqual(len(retained), 1)
+            self.elapsed[0] += 1.01
+            self.assertEqual(
+                self.result(run)["output"]["value"], {"first": payload, "last": payload}
+            )
+
+    def test_calls_collection_reads_multiple_name_pages(self):
+        child = self.child(flow("smallResult", [node("done", "flow.return", {"values": {"x": 1}})]))
+        count = 65
+        calls = [
+            node(
+                f"c{index}",
+                "flow.call",
+                {"workflow": "child", "inputs": {}, "mode": "wait"},
+                next=f"c{index + 1}" if index + 1 < count else "done",
+            )
+            for index in range(count)
+        ]
+        run = self.start(
+            flow(
+                "collection",
+                calls + [node("done", "flow.return", {"values": {"calls": path("calls")}})],
+                resources={"child": {"kind": "workflow"}},
+            ),
+            {"child": child},
+        )
+        values = self.result(run)["output"]["value"]["calls"]
+        self.assertEqual(len(values), count)
+        self.assertEqual(values["c0"], {"x": 1})
+        self.assertEqual(values["c64"], {"x": 1})
+
+    def test_oversized_calls_collection_uses_error_path(self):
+        child = self.child(
+            flow(
+                "largeCollectionItem",
+                [node("done", "flow.return", {"values": {"x": "x" * 200000}})],
+            )
+        )
+        count = 6
+        calls = [
+            node(
+                f"c{index}",
+                "flow.call",
+                {"workflow": "child", "inputs": {}, "mode": "wait"},
+                next=f"c{index + 1}" if index + 1 < count else "read",
+            )
+            for index in range(count)
+        ]
+        run = self.start(
+            flow(
+                "largeCollection",
+                calls
+                + [
+                    node(
+                        "read", "flow.return", {"values": {"calls": path("calls")}}, error="recover"
+                    ),
+                    node("recover", "flow.return", {"values": {"handled": True}}),
+                ],
+                resources={"child": {"kind": "workflow"}},
+            ),
+            {"child": child},
+        )
+        self.assertEqual(self.result(run)["output"]["value"], {"handled": True})

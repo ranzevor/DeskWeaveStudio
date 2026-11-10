@@ -183,7 +183,6 @@ class Frame:
     variables: Value = EMPTY
     previous: Value = NULL
     outputs: Value = NULL
-    calls: Value = EMPTY
     iteration_result: Value = NULL
     state: str = "ready"
     targets: dict = field(default_factory=dict)

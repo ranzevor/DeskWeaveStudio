@@ -183,7 +183,7 @@ def evaluate_value(
     try:
         return visit(value)
     except DeskWeaveError as error:
-        error.sensitive = observed
+        error.sensitive = observed or getattr(error, "sensitive", False)
         raise
 
 

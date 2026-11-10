@@ -278,6 +278,18 @@ class ExecutionStore:
             self.workspace._read_object(row[0]), self.workspace._read_object(row[1])
         )
 
+    def value_names(self, run_id, frame_id, scope, version, *, after=None, page_size=64):
+        if type(page_size) is not int or not 1 <= page_size <= 100:
+            raise ValueError("变量名称页大小应为 1～100。")
+        with self.workspace.transaction() as connection:
+            rows = connection.execute(
+                "SELECT name FROM execution_value WHERE run_id=? AND frame_id=? AND scope=? "
+                "AND version<=? AND (valid_until IS NULL OR valid_until>?) "
+                "AND name>? ORDER BY name LIMIT ?",
+                (run_id, frame_id, scope, version, version, after or "", page_size),
+            ).fetchall()
+        return [row[0] for row in rows]
+
     def outcome(self, run_id, frame_id):
         with self.workspace.transaction() as connection:
             row = connection.execute(

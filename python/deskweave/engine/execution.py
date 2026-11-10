@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import replace
+from heapq import merge
 
 from deskweave.adapters.execution import Change
 from deskweave.domain.execution import Frame
-from deskweave.domain.frozen import EMPTY, NULL, Value
+from deskweave.domain.frozen import EMPTY, NULL, PathMissing, Value
 from deskweave.domain.values import evaluate_value, matches_type, validate_result
 from deskweave.engine.actions import LOGIC_PORTS
 from deskweave.errors import DeskWeaveError
+from deskweave.json import MAX_FRAME, dumps
 
 
 def fault(code, message, sensitive=False, details=None):
@@ -53,10 +55,71 @@ class Kernel:
                 "vars": frame.variables,
                 "run": change.run.shared,
                 "prev": frame.previous,
-                "calls": frame.calls,
                 "runtime": Value.build(runtime),
             }
         )
+
+    def _call_value(self, change, frame, name):
+        key = frame.id, "calls", name
+        if key in change.values:
+            return change.values[key]
+        return self.store.value(
+            change.run.id, frame.id, "calls", name, version=change.run.data_version
+        )
+
+    def _call_names(self, change, frame):
+        after = None
+        while True:
+            self.checkpoint()
+            page = self.store.value_names(
+                change.run.id, frame.id, "calls", change.run.data_version, after=after
+            )
+            if not page:
+                return
+            yield from page
+            after = page[-1]
+
+    def _resolve_calls(self, change, frame, path):
+        if len(path) > 1:
+            if type(path[1]) is not str:
+                raise PathMissing(1)
+            value = self._call_value(change, frame, path[1])
+            if value is None or not value.present:
+                raise PathMissing(1, value.sensitive if value is not None else False)
+            try:
+                return value.lookup(path[2:])
+            except PathMissing as error:
+                raise PathMissing(error.index + 2, error.sensitive) from error
+        names = sorted(
+            name
+            for (identity, scope, name) in change.values
+            if identity == frame.id and scope == "calls"
+        )
+        data, absent, previous, size, sensitive = {}, set(), None, 2, False
+        for name in merge(self._call_names(change, frame), names):
+            self.checkpoint()
+            if name == previous:
+                continue
+            previous = name
+            value = self._call_value(change, frame, name)
+            if value is None:
+                continue
+            sensitive |= value.sensitive
+            if not value.present:
+                absent.add(name)
+                continue
+            size += (
+                len(dumps(name))
+                + len(dumps(value.raw(), checkpoint=self.checkpoint))
+                + 1
+                + bool(data)
+            )
+            if len(data) >= 1000 or size > MAX_FRAME:
+                error = DeskWeaveError("LIMIT_EXCEEDED", "调用结果集合超过表达式结果限制。")
+                error.sensitive = sensitive
+                raise error
+            data[name] = value
+        return Value.build(data, absent=frozenset(absent))
 
     def _taint_region(self, change, frame, join):
         identity = frame.id, frame.node, join
@@ -106,7 +169,14 @@ class Kernel:
             elif local and local_effects and action == "flow.join":
                 effects.setdefault(("calls", node_id), set()).add(())
             pending.extend((workflow, target, local) for target in node["on"].values())
-        roots = {"local": frame.variables, "calls": frame.calls, "shared": change.run.shared}
+        for scope, name in effects:
+            if scope != "calls":
+                continue
+            self.checkpoint()
+            value = self._call_value(change, frame, name)
+            value = Value.build(None, True, present=False) if value is None else value.tainted(())
+            change.value(frame.id, "calls", name, value)
+        roots = {"local": frame.variables, "shared": change.run.shared}
         for scope, root in roots.items():
             selected = [(name, paths) for (kind, name), paths in effects.items() if kind == scope]
             if not selected:
@@ -126,10 +196,8 @@ class Kernel:
             updated = Value.build(data, root.label, absent=frozenset(absent))
             if scope == "shared":
                 change.run.shared = updated
-            elif scope == "local":
-                frame.variables = updated
             else:
-                frame.calls = updated
+                frame.variables = updated
 
     def _guard(self, change, frame, sensitive):
         if sensitive:
@@ -140,9 +208,14 @@ class Kernel:
 
     def _value(self, change, frame, expression, expected="any", *, loop=None):
         change.run.access.revalidate()
+        context = self._context(change, frame, loop=loop)
         result = evaluate_value(
             expression,
-            self._context(change, frame, loop=loop).lookup,
+            lambda path: (
+                self._resolve_calls(change, frame, path)
+                if path and path[0] == "calls"
+                else context.lookup(path)
+            ),
             checkpoint=self.checkpoint,
             observe_control=lambda sensitive: self._guard(change, frame, sensitive),
         )
@@ -196,7 +269,6 @@ class Kernel:
         if "store" in node:
             self._variable(change, frame, node["store"], value)
         if node["action"] in {"flow.call", "flow.join", "flow.repeat", "flow.loop"}:
-            frame.calls = frame.calls.updated([node["id"]], value)
             change.value(frame.id, "calls", node["id"], value)
         frame.phase = {}
         frame.state = "ready"
