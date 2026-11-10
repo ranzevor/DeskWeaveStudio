@@ -75,3 +75,7 @@
 uv run --frozen python examples/engine/coordination.py
 uv run --frozen python tools/test_engine.py tests.engine.test_coordination tests.engine.test_coordination_state -v
 ```
+
+## 并发读取与发现记录替换
+
+Windows 使用 FileRenameInformationEx 的 REPLACE_IF_EXISTS 与 POSIX_SEMANTICS 原子替换发现记录；已有读取句柄继续指向原文件，新打开操作读取新记录，与 Unix 的替换行为一致。目录身份、相对目录句柄和实例匹配清理继续约束操作对象。标志语义见微软的 [FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)。

@@ -110,10 +110,7 @@
               "$ref": "urn:deskweave:workflow:1"
             },
             "dependencies": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "urn:deskweave:values:1#/$defs/raw"
-              }
+              "$ref": "urn:deskweave:dependencies:1"
             },
             "definitionHash": {
               "type": "string",
@@ -287,10 +284,7 @@
               "$ref": "urn:deskweave:workflow:1"
             },
             "dependencies": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "urn:deskweave:values:1#/$defs/raw"
-              }
+              "$ref": "urn:deskweave:dependencies:1"
             },
             "modelRef": {
               "$ref": "urn:deskweave:content:1#/$defs/contentRef"
@@ -1644,7 +1638,8 @@
             "offset",
             "length"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "offset/length 选择原始资产字节区间，最多 4MiB；返回区间资源。"
         },
         "result": {
           "type": "object",
@@ -1681,7 +1676,8 @@
             "sha256",
             "expiresAt"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "length/sha256 对应所选区间；resource.read 从区间内部偏移 0 开始读取，媒体类型沿用原始资产。"
         }
       },
       "required": [

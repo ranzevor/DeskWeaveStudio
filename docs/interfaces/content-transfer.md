@@ -46,3 +46,9 @@ Python 文档检查使用固定版本 rfc8785；JavaScript 独立使用严格解
 Q45 覆盖 1MiB 边界、合法大模型、分块乱序/重发、缺块、篡改、到期、跨用途、取消与原子保存。Q46 覆盖 RFC 数值表、整值浮点、负零、指数、Unicode 键、重复键及三语言实现阶段的共同字节；当前工具验证 Python 与 JavaScript，Rust 在组件实现后接入。
 
 官方规范：[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html)。
+
+## 正式资产范围
+
+asset.read 的 offset/length 选择资产原始文件的字节区间，单次最多 4MiB；到达文件尾时返回剩余部分，offset 等于总长返回空资源，超过总长返回 INVALID_ARGUMENT。返回描述的 length 和 sha256 对应所选区间，resource.read 使用从 0 开始的区间内部偏移。媒体类型沿用原始资产，完整文件摘要取正式资产绑定的 sha256。
+
+此方法要求 asset.read 和 contentRefsV1，输出沿用资源化结果的会话隔离、60 秒期限和容量池。资产读取与流程模型读取使用不同的用途及权限，不能互换为 workflow.save 的 modelRef。具体存储与依赖规则见[资产版本与流程依赖](../development/assets.md)。

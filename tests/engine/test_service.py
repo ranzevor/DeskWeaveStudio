@@ -121,7 +121,7 @@ class ServiceTests(EngineCase):
             first["revision"],
         )
 
-    def test_resource_bound_copy_is_rejected_without_writing(self):
+    def test_missing_resource_bound_copy_is_rejected_without_writing(self):
         baseline = self.save()
         model = json.loads(
             (ROOT / "examples/authoring/workflow-model-dependencies.json").read_text(
@@ -139,9 +139,12 @@ class ServiceTests(EngineCase):
                 **model,
             },
             request_id="resource-bound-copy",
+            session=self.engine.open_session(
+                "copy", {"workflow.read", "workflow.write", "asset.read"}
+            ),
         )
         self.assertFalse(response["ok"])
-        self.assertEqual(response["error"]["code"], "METHOD_UNAVAILABLE")
+        self.assertEqual(response["error"]["code"], "RESOURCE_NOT_FOUND")
         self.assertEqual(
             self.success("request.status", {"requestId": "resource-bound-copy"})["state"],
             "notReceived",

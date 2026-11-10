@@ -10,7 +10,9 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from deskweave.adapters.assets import Assets
 from deskweave.adapters.content import MAX_CONTENT, Content, ContentStore
+from deskweave.adapters.dependencies import Dependencies
 from deskweave.adapters.workspace import Workspace, utc_time
 from deskweave.contracts import method_schema, schema_contents, validate
 from deskweave.domain.values import evaluate
@@ -96,6 +98,7 @@ class Engine:
         self.register("content.seal", self._content_seal, set())
         self.register("content.discard", self._content_discard, set())
         self.register("resource.read", self._resource_read, set())
+        self.register("asset.read", self._asset_read, {"asset.read"})
 
     @property
     def methods(self) -> tuple[str, ...]:
@@ -362,10 +365,15 @@ class Engine:
         )
         if diagnostics:
             raise DeskWeaveError("INVALID_WORKFLOW", "流程存在结构或连接错误，请先校验流程。")
-        if params["definition"]["resources"] or params["dependencies"]:
-            raise DeskWeaveError("METHOD_UNAVAILABLE", "资源版本绑定服务尚未实现。")
         return self.workspace.save(
-            session.client_id, request_id, params, request_params=request_params
+            session.client_id,
+            request_id,
+            params,
+            request_params=request_params,
+            authorize_workflow=lambda identity: self._authorize_dependency_workflow(
+                session, identity
+            ),
+            authorize_asset=lambda: self._authorize_asset(session),
         )
 
     def _read(self, session, params, _request_id):
@@ -373,6 +381,11 @@ class Engine:
         if mode == "resource":
             self._require_content(session)
         result = self.workspace.read(params["workflowId"], params["revision"])
+        Dependencies(
+            self.workspace,
+            lambda identity: self._authorize_dependency_workflow(session, identity),
+            lambda: self._authorize_asset(session),
+        ).bind(result["definition"], result["dependencies"])
         if mode == "inline" or "contentRefsV1" not in session.capabilities:
             return result
         model = {key: result[key] for key in ("definition", "dependencies")}
@@ -383,6 +396,31 @@ class Engine:
         return {key: result[key] for key in ("workflowId", "revision", "definitionHash")} | {
             "modelResource": resource
         }
+
+    def _authorize_dependency_workflow(self, session, identity):
+        if "workflow.read" not in session.permissions:
+            raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有子流程读取权限。")
+        self._authorize_workflow(session, identity)
+
+    @staticmethod
+    def _authorize_asset(session):
+        if "asset.read" not in session.permissions:
+            raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有资产读取权限。")
+
+    def _asset_read(self, session, params, _request_id):
+        self._require_content(session)
+        row, data = Assets(self.workspace).read_range(
+            params["assetVersion"], int(params["offset"]), int(params["length"])
+        )
+        return self.contents.export(
+            session.id,
+            None,
+            data,
+            permission="asset.read",
+            purpose="asset",
+            media_type=row["media_type"],
+            asset_version=params["assetVersion"],
+        )
 
     @staticmethod
     def _require_content(session: Session) -> None:
@@ -532,18 +570,21 @@ class Engine:
         )
 
     def _catalog(self, session, params, _request_id):
-        if params["kind"] != "workflow":
+        if params["kind"] not in {"workflow", "asset"}:
             raise DeskWeaveError("METHOD_UNAVAILABLE", "此对象目录服务尚未实现。")
-        if "workflow.read" not in session.permissions:
-            raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有流程读取权限。")
+        permission = "asset.read" if params["kind"] == "asset" else "workflow.read"
+        if permission not in session.permissions:
+            raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此目录的读取权限。")
         params["nameContains"] = unicodedata.normalize("NFC", params["nameContains"]).casefold()
         binding = digest({"method": "workspace.catalog", **params, "cursor": None})
 
         def factory(connection):
+            table = "asset_version" if params["kind"] == "asset" else "revision"
             watermark = connection.execute(
-                "SELECT COALESCE(MAX(sequence),0) FROM revision"
+                f"SELECT COALESCE(MAX(sequence),0) FROM {table}"
             ).fetchone()[0]
             return {
+                "kind": params["kind"],
                 "watermark": watermark,
                 "order": params["order"],
                 "nameContains": params["nameContains"],

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:dependencies:1",
+  "title": "流程固定版本依赖",
+  "type": "object",
+  "maxProperties": 10000,
+  "propertyNames": {
+    "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+  },
+  "additionalProperties": {
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "image",
+              "trajectory"
+            ]
+          },
+          "assetId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "assetVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "kind",
+          "assetId",
+          "assetVersion",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "workflow"
+          },
+          "workflowId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "definition": {
+            "$ref": "urn:deskweave:workflow:1"
+          },
+          "dependencies": {
+            "$ref": "urn:deskweave:dependencies:1"
+          }
+        },
+        "required": [
+          "kind",
+          "workflowId",
+          "revision"
+        ],
+        "dependentRequired": {
+          "definition": [
+            "dependencies"
+          ],
+          "dependencies": [
+            "definition"
+          ]
+        },
+        "additionalProperties": false
+      }
+    ]
+  },
+  "description": "逻辑键准确覆盖 resources；内嵌子流程仅作为版本内容校验输入，正式保存和读取返回固定版本引用。"
+}

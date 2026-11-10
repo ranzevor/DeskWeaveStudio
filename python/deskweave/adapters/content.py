@@ -34,6 +34,8 @@ class Content:
     resource_id: str
     upload_id: str | None = None
     workflow_id: str | None = None
+    asset_version: str | None = None
+    media_type: str = "application/json"
     received: int = 0
     boundaries: bytearray | None = None
     sealed: bool = False
@@ -239,7 +241,7 @@ class ContentStore:
     def descriptor(item: Content) -> dict:
         return {
             "resourceId": item.resource_id,
-            "mediaType": "application/json",
+            "mediaType": item.media_type,
             "length": item.length,
             "sha256": item.sha256,
             "expiresAt": item.expires_at,
@@ -266,7 +268,17 @@ class ContentStore:
         self.checkpoint()
         return value
 
-    def export(self, owner: str, workflow_id: str, data: bytes) -> dict:
+    def export(
+        self,
+        owner: str,
+        workflow_id: str | None,
+        data: bytes,
+        *,
+        permission="workflow.read",
+        purpose="workflowModel",
+        media_type="application/json",
+        asset_version=None,
+    ) -> dict:
         self.expire()
         sha256 = hashlib.sha256(data).hexdigest()
         outputs = [item for item in self.resources.values() if item.upload_id is None]
@@ -274,6 +286,10 @@ class ContentStore:
             if (
                 item.owner == owner
                 and item.workflow_id == workflow_id
+                and item.asset_version == asset_version
+                and item.permission == permission
+                and item.purpose == purpose
+                and item.media_type == media_type
                 and item.sha256 == sha256
                 and item.length == len(data)
             ):
@@ -281,11 +297,13 @@ class ContentStore:
         self._capacity(outputs, len(data))
         item = self._new(
             owner,
-            "workflowModel",
-            "workflow.read",
+            purpose,
+            permission,
             len(data),
             sha256,
             workflow_id=workflow_id,
+            asset_version=asset_version,
+            media_type=media_type,
             sealed=True,
         )
         try:
@@ -314,7 +332,7 @@ class ContentStore:
             raise DeskWeaveError("CONTENT_INCOMPLETE", "内容读取不完整，请重新取得内容。")
         return {
             "resourceId": item.resource_id,
-            "mediaType": "application/json",
+            "mediaType": item.media_type,
             "offset": offset,
             "length": len(data),
             "totalLength": item.length,

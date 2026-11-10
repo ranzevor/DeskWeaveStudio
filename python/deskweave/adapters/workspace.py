@@ -116,7 +116,7 @@ class Workspace:
             self._connection = connection
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys=ON")
-            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2):
+            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2, 3):
                 raise DeskWeaveError("SCHEMA_UNSUPPORTED", "工作空间数据库版本不受支持。")
             connection.execute("PRAGMA synchronous=FULL")
             self._initialize_storage()
@@ -181,15 +181,49 @@ class Workspace:
                 " TEXT NOT NULL REFERENCES query_snapshot(id) ON DELETE "
                 "CASCADE, position TEXT NOT NULL, UNIQUE(snapshot_id, "
                 "position))",
-                "PRAGMA user_version=2",
+                "CREATE TABLE IF NOT EXISTS asset (id TEXT PRIMARY KEY, kind TEXT NOT NULL "
+                "CHECK(kind IN ('image','trajectory')), name TEXT NOT NULL, "
+                "current_version TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS asset_name_claim (namespace TEXT NOT NULL, "
+                "name_nfc TEXT NOT NULL, asset_id TEXT NOT NULL REFERENCES asset(id), "
+                "PRIMARY KEY(namespace,name_nfc), UNIQUE(asset_id))",
+                "CREATE TABLE IF NOT EXISTS asset_version (sequence INTEGER PRIMARY KEY "
+                "AUTOINCREMENT, id TEXT UNIQUE NOT NULL, asset_id TEXT NOT NULL REFERENCES "
+                "asset(id), content_hash TEXT NOT NULL, byte_length INTEGER NOT NULL, "
+                "media_type TEXT NOT NULL, metadata TEXT NOT NULL, name TEXT NOT NULL, "
+                "name_key TEXT NOT NULL, created_at TEXT NOT NULL, valid_until INTEGER)",
+                "CREATE INDEX IF NOT EXISTS asset_version_asset ON "
+                "asset_version(asset_id,sequence)",
+                "CREATE INDEX IF NOT EXISTS asset_catalog_name_asc ON "
+                "asset_version(name_key ASC,asset_id ASC,sequence DESC)",
+                "CREATE INDEX IF NOT EXISTS asset_catalog_name_desc ON "
+                "asset_version(name_key DESC,asset_id ASC,sequence DESC)",
+                "CREATE TABLE IF NOT EXISTS revision_asset_ref (revision_id TEXT NOT NULL "
+                "REFERENCES revision(id), asset_version TEXT NOT NULL "
+                "REFERENCES asset_version(id), "
+                "PRIMARY KEY(revision_id,asset_version))",
+                "CREATE INDEX IF NOT EXISTS asset_ref_target ON revision_asset_ref(asset_version)",
+                "CREATE TABLE IF NOT EXISTS revision_workflow_ref (revision_id TEXT NOT NULL "
+                "REFERENCES revision(id), target_revision TEXT NOT NULL REFERENCES revision(id), "
+                "PRIMARY KEY(revision_id,target_revision))",
+                "CREATE INDEX IF NOT EXISTS workflow_ref_target ON "
+                "revision_workflow_ref(target_revision)",
+                "CREATE TABLE IF NOT EXISTS blob_chunk (content_hash TEXT NOT NULL, "
+                "position INTEGER NOT NULL, sha256 TEXT NOT NULL, "
+                "PRIMARY KEY(content_hash,position))",
+                "PRAGMA user_version=3",
             ):
                 connection.execute(statement)
 
     @staticmethod
     def catalog_rows(connection, source, position, limit):
+        asset = source.get("kind") == "asset"
+        table = "asset_version" if asset else "revision"
+        identity = "asset_id" if asset else "workflow_id"
+        index_prefix = "asset_catalog" if asset else "revision_catalog"
         where = ["sequence<=?", "(valid_until IS NULL OR valid_until>?)", "instr(name_key,?)>0"]
         arguments = [source["watermark"], source["watermark"], source["nameContains"]]
-        if source["workflowIds"] is not None:
+        if not asset and source["workflowIds"] is not None:
             where.append("workflow_id IN (SELECT value FROM json_each(?))")
             arguments.append(dumps(source["workflowIds"]).decode())
         index = ""
@@ -199,19 +233,19 @@ class Workspace:
                 where.append("sequence<?")
                 arguments.append(position)
         elif source["order"] == "nameAsc":
-            index = " INDEXED BY revision_catalog_name_asc"
-            order = "name_key ASC, workflow_id ASC"
+            index = f" INDEXED BY {index_prefix}_name_asc"
+            order = f"name_key ASC, {identity} ASC"
             if position is not None:
-                where.append("(name_key,workflow_id)>(?,?)")
+                where.append(f"(name_key,{identity})>(?,?)")
                 arguments.extend(position)
         else:
-            index = " INDEXED BY revision_catalog_name_desc"
-            order = "name_key DESC, workflow_id ASC"
+            index = f" INDEXED BY {index_prefix}_name_desc"
+            order = f"name_key DESC, {identity} ASC"
             if position is not None:
-                where.append("name_key<=? AND (name_key<? OR workflow_id>?)")
+                where.append(f"name_key<=? AND (name_key<? OR {identity}>?)")
                 arguments.extend((position[0], position[0], position[1]))
         rows = connection.execute(
-            "SELECT sequence,workflow_id,name,id,name_key FROM revision"
+            f"SELECT sequence,{identity},name,id,name_key FROM {table}"
             + index
             + " WHERE "
             + " AND ".join(where)
@@ -224,9 +258,9 @@ class Workspace:
             key = (
                 row["sequence"]
                 if source["order"] == "updatedDesc"
-                else [row["name_key"], row["workflow_id"]]
+                else [row["name_key"], row[identity]]
             )
-            yield key, {"id": row["workflow_id"], "name": row["name"], "version": row["id"]}
+            yield key, {"id": row[identity], "name": row["name"], "version": row["id"]}
 
     @staticmethod
     def revision_rows(connection, source, position, limit):
@@ -427,7 +461,14 @@ class Workspace:
             return loads(row["result"], checkpoint=self.check_deadline)
 
     def save(
-        self, client: str, request_id: str, params: dict, *, request_params: dict | None = None
+        self,
+        client: str,
+        request_id: str,
+        params: dict,
+        *,
+        request_params: dict | None = None,
+        authorize_workflow=lambda _identity: None,
+        authorize_asset=lambda: None,
     ) -> dict:
         payload_hash = digest(
             {
@@ -456,8 +497,13 @@ class Workspace:
                         "流程已更新，请读取当前版本后保存。",
                         retry="afterQuery",
                     )
+            from deskweave.adapters.dependencies import Dependencies
+
+            dependencies = Dependencies(self, authorize_workflow, authorize_asset).bind(
+                params["definition"], params["dependencies"]
+            )
             definition_hash = self._put_object(params["definition"])
-            dependencies_hash = self._put_object(params["dependencies"])
+            dependencies_hash = self._put_object(dependencies)
             revision, created = uuid.uuid4().hex, utc_time()
             result = {
                 "workflowId": params["workflowId"],
@@ -480,6 +526,17 @@ class Workspace:
                         unicodedata.normalize("NFC", params["definition"]["name"]).casefold(),
                     ),
                 )
+                for binding in dependencies.values():
+                    if binding["kind"] == "workflow":
+                        connection.execute(
+                            "INSERT OR IGNORE INTO revision_workflow_ref VALUES(?,?)",
+                            (revision, binding["revision"]),
+                        )
+                    else:
+                        connection.execute(
+                            "INSERT OR IGNORE INTO revision_asset_ref VALUES(?,?)",
+                            (revision, binding["assetVersion"]),
+                        )
                 if head is not None:
                     connection.execute(
                         "UPDATE revision SET valid_until=? WHERE id=?", (row.lastrowid, head)

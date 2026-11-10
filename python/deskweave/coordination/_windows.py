@@ -53,7 +53,7 @@ class FileTag(c.Structure):
 
 
 class Rename(c.Structure):
-    _fields_ = [("replace", DWORD), ("root", HANDLE), ("length", DWORD), ("name", w.WCHAR * 1)]
+    _fields_ = [("flags", DWORD), ("root", HANDLE), ("length", DWORD), ("name", w.WCHAR * 1)]
 
 
 class Acl(c.Structure):
@@ -243,7 +243,8 @@ class Directory(Resource):
         encoded = target.encode("utf-16-le")
         data = c.create_string_buffer(max(c.sizeof(Rename), Rename.name.offset + len(encoded)))
         value = Rename.from_buffer(data)
-        value.replace, value.root, value.length = 1, self.handle, len(encoded)
+        # REPLACE_IF_EXISTS | POSIX_SEMANTICS preserves readers of the previous file.
+        value.flags, value.root, value.length = 3, self.handle, len(encoded)
         c.memmove(c.addressof(data) + Rename.name.offset, encoded, len(encoded))
         status = IoStatus()
         result = NtSetInformationFile(
@@ -251,7 +252,7 @@ class Directory(Resource):
             c.byref(status),
             data,
             Rename.name.offset + len(encoded),
-            10,
+            65,
         )
         if result < 0:
             raise c.WinError(NtStatusError(result))
