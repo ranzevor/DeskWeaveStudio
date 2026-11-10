@@ -117,7 +117,7 @@ class Workspace:
             self._connection = connection
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys=ON")
-            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2, 3, 4):
+            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2, 3, 4, 5):
                 raise DeskWeaveError("SCHEMA_UNSUPPORTED", "工作空间数据库版本不受支持。")
             connection.execute("PRAGMA synchronous=FULL")
             self._initialize_storage()
@@ -236,7 +236,10 @@ class Workspace:
             from deskweave.adapters.runs import initialize_run_storage
 
             initialize_run_storage(connection)
-            connection.execute("PRAGMA user_version=4")
+            from deskweave.adapters.execution import initialize_execution_storage
+
+            initialize_execution_storage(connection)
+            connection.execute("PRAGMA user_version=5")
 
     @staticmethod
     def catalog_rows(connection, source, position, limit):

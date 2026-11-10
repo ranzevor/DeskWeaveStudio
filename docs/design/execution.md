@@ -34,7 +34,7 @@ stateDiagram-v2
     stopping --> interrupted
 ```
 
-succeeded 要求主流程、子流程和输入清理全部成功。failed 记录节点错误与清理结果；cancelled 要求停止和释放已确认。进程中断后的活动运行标为 interrupted，不自动继续到下一个节点。
+succeeded 要求主流程成功、全部子任务已收拢、子调用错误已由显式错误路径处理，且输入清理成功。同步调用或 join 的失败经过父流程 on.error 成功处理后，允许整次运行成功；未处理的后台失败使所属调用失败。failed 记录节点错误与清理结果；cancelled 要求停止和释放已确认。进程中断后的活动运行标为 interrupted，不自动继续到下一个节点。
 
 ## 租约与输入段
 
@@ -142,3 +142,7 @@ planHash 对 runId、controlVersion、pauseId、agentEpoch、generation、checkp
 运行准备按[平台能力](../architecture/platforms.md)检查每个输入节点、轨迹版本、文本字符、目标激活和急停条件；实际发送前再次检查当前权限与会话代次。Windows 提升、macOS 隐私授权、Wayland Portal 授权分别走其本地控制入口。
 
 暂停位置和恢复位置保留原来的全局物理或 displayId 屏内表达；恢复时使用当前已核对的逐屏变换。不同后端、相对量单位或权限状态不能通过继续计划自动替换。跨平台资源可以打开和编辑，原生执行仍使用当前目标、实际能力和明确的显示映射。
+
+## 纯逻辑执行
+
+固定计划、显式调用帧、协作调度、敏感标签与格式 5 增量存储见[纯逻辑执行内核](../development/execution-core.md)。
