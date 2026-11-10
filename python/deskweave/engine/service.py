@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from deskweave.adapters.assets import Assets
 from deskweave.adapters.content import MAX_CONTENT, Content, ContentStore
 from deskweave.adapters.dependencies import Dependencies
+from deskweave.adapters.receipts import find_receipt
 from deskweave.adapters.workspace import Workspace, utc_time
 from deskweave.contracts import method_schema, schema_contents, validate
 from deskweave.domain.values import evaluate
@@ -702,12 +703,11 @@ class Engine:
 
     def _request_status(self, session, params, _request_id):
         with self.workspace.transaction() as connection:
-            row = connection.execute(
-                "SELECT * FROM command_receipt WHERE client_id=? AND request_id=?",
-                (session.client_id, params["requestId"]),
-            ).fetchone()
+            row = find_receipt(connection, session.client_id, params["requestId"])
         if row is not None:
-            self._authorize_workflow(session, row["workflow_id"])
+            if row["subject_kind"] != "workflow" or row["method"] != "workflow.save":
+                raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此请求的访问权限。")
+            self._authorize_workflow(session, row["subject_id"])
             if "workflow.write" not in session.permissions:
                 raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此请求的访问权限。")
         return {

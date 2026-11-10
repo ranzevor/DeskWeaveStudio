@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deskweave:run-plan:1",
+  "title": "内部持久化运行计划 1.0",
+  "type": "object",
+  "properties": {
+    "formatVersion": {
+      "const": "1.0"
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "root": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "workflowId",
+        "revision",
+        "entry"
+      ],
+      "additionalProperties": false
+    },
+    "workflows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "properties": {
+          "workflowId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "definitionHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "definitionLength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 33554432
+          },
+          "dependenciesHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "dependenciesLength": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 33554432
+          }
+        },
+        "required": [
+          "workflowId",
+          "revision",
+          "definitionHash",
+          "definitionLength",
+          "dependenciesHash",
+          "dependenciesLength"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "assets": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "assetVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "kind": {
+            "enum": [
+              "image",
+              "trajectory"
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "length": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1073741824
+          },
+          "mediaType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "assetId",
+          "assetVersion",
+          "kind",
+          "sha256",
+          "length",
+          "mediaType"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "initialState": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "maxProperties": 100,
+          "additionalProperties": {
+            "$ref": "urn:deskweave:values:1#/$defs/raw"
+          }
+        },
+        "variables": {
+          "$ref": "urn:deskweave:workflow:1#/properties/variables"
+        },
+        "runVariables": {
+          "$ref": "urn:deskweave:workflow:1#/properties/runVariables"
+        },
+        "sensitiveInputs": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "required": [
+        "inputs",
+        "variables",
+        "runVariables",
+        "sensitiveInputs"
+      ],
+      "additionalProperties": false
+    },
+    "targets": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "limits": {
+      "$ref": "urn:deskweave:workflow:1#/properties/limits"
+    },
+    "detached": {
+      "type": "boolean"
+    },
+    "interruptPolicy": {
+      "enum": [
+        "pause",
+        "ignore"
+      ]
+    },
+    "requiredPermissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "clientId",
+        "ref",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "targetKinds": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {
+        "enum": [
+          "window",
+          "display",
+          "region",
+          "desktop"
+        ]
+      }
+    }
+  },
+  "required": [
+    "formatVersion",
+    "workspaceId",
+    "name",
+    "root",
+    "workflows",
+    "assets",
+    "initialState",
+    "targets",
+    "limits",
+    "detached",
+    "interruptPolicy",
+    "requiredPermissions",
+    "authorization",
+    "targetKinds"
+  ],
+  "additionalProperties": false
+}

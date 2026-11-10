@@ -9,7 +9,7 @@
 | 对象 | 键、约束与索引 |
 |---|---|
 | operation | id 为主键；按 owner_client_id/created_at 和 state/created_at 查询；method 与 params_hash 在准入后不变 |
-| command_receipt | (client_id, request_id) 唯一；绑定 method、authorization_ref、payload_hash 与 operation_id，按 retain_until 清理 |
+| command_receipt | (client_id, request_id) 唯一；绑定 method、subject_kind/subject_id、authorization_ref、authorization_version 与 payload_hash；作业回执通过 subject_kind/subject_id 关联 operation，按 retain_until 清理 |
 | object_event | (scope, object_id, seq) 唯一；同对象状态和事件在一个事务提交 |
 | template_candidate_set | id 主键；按 (state, expires_at) 回收；固定来源、区域、选项和候选清单摘要 |
 | template_name_proposal | id 主键；外键引用候选集；candidate_version、选集、策略、实际名称和预览摘要共同固定 |

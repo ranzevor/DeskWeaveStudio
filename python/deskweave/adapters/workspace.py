@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from deskweave.adapters.receipts import find_receipt, replay_receipt, write_receipt
 from deskweave.errors import DeskWeaveError
 from deskweave.json import digest, dumps, loads
 
@@ -116,7 +117,7 @@ class Workspace:
             self._connection = connection
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys=ON")
-            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2, 3):
+            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2, 3, 4):
                 raise DeskWeaveError("SCHEMA_UNSUPPORTED", "工作空间数据库版本不受支持。")
             connection.execute("PRAGMA synchronous=FULL")
             self._initialize_storage()
@@ -145,8 +146,10 @@ class Workspace:
                 "CREATE INDEX IF NOT EXISTS revision_workflow ON revision(workflow_id, sequence)",
                 "CREATE TABLE IF NOT EXISTS command_receipt (client_id TEXT NOT"
                 " NULL, request_id TEXT NOT NULL, method TEXT NOT NULL, "
-                "workflow_id TEXT NOT NULL, payload_hash TEXT NOT NULL, result "
-                "TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY "
+                "subject_id TEXT NOT NULL, subject_kind TEXT NOT NULL DEFAULT 'workflow', "
+                "authorization_ref TEXT, authorization_version INTEGER, "
+                "payload_hash TEXT NOT NULL, result TEXT NOT NULL, "
+                "created_at TEXT NOT NULL, PRIMARY "
                 "KEY(client_id, request_id))",
             ]
             for statement in statements:
@@ -211,9 +214,29 @@ class Workspace:
                 "CREATE TABLE IF NOT EXISTS blob_chunk (content_hash TEXT NOT NULL, "
                 "position INTEGER NOT NULL, sha256 TEXT NOT NULL, "
                 "PRIMARY KEY(content_hash,position))",
-                "PRAGMA user_version=3",
             ):
                 connection.execute(statement)
+
+            receipt_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(command_receipt)")
+            }
+            if "workflow_id" in receipt_columns:
+                connection.execute(
+                    "ALTER TABLE command_receipt RENAME COLUMN workflow_id TO subject_id"
+                )
+            for name, definition in (
+                ("subject_kind", "TEXT NOT NULL DEFAULT 'workflow'"),
+                ("authorization_ref", "TEXT"),
+                ("authorization_version", "INTEGER"),
+            ):
+                if name not in receipt_columns:
+                    connection.execute(
+                        f"ALTER TABLE command_receipt ADD COLUMN {name} {definition}"
+                    )
+            from deskweave.adapters.runs import initialize_run_storage
+
+            initialize_run_storage(connection)
+            connection.execute("PRAGMA user_version=4")
 
     @staticmethod
     def catalog_rows(connection, source, position, limit):
@@ -449,16 +472,12 @@ class Workspace:
             {"method": "workflow.save", "params": params}, checkpoint=self.check_deadline
         )
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT payload_hash,result FROM command_receipt "
-                "WHERE client_id=? AND request_id=?",
-                (client, request_id),
-            ).fetchone()
-            if row is None:
-                return None
-            if row["payload_hash"] != payload_hash:
-                raise DeskWeaveError("REQUEST_CONFLICT", "请求标识已用于另一项修改。")
-            return loads(row["result"], checkpoint=self.check_deadline)
+            return replay_receipt(
+                find_receipt(connection, client, request_id),
+                "workflow.save",
+                payload_hash,
+                self.check_deadline,
+            )
 
     def save(
         self,
@@ -479,14 +498,14 @@ class Workspace:
         )
         with self._mutex:
             with self.transaction() as connection:
-                receipt = connection.execute(
-                    "SELECT * FROM command_receipt WHERE client_id=? AND request_id=?",
-                    (client, request_id),
-                ).fetchone()
-                if receipt:
-                    if receipt["payload_hash"] != payload_hash:
-                        raise DeskWeaveError("REQUEST_CONFLICT", "请求标识已用于另一项修改。")
-                    return loads(receipt["result"], checkpoint=self.check_deadline)
+                result = replay_receipt(
+                    find_receipt(connection, client, request_id),
+                    "workflow.save",
+                    payload_hash,
+                    self.check_deadline,
+                )
+                if result is not None:
+                    return result
                 current = connection.execute(
                     "SELECT head_revision FROM workflow WHERE id=?", (params["workflowId"],)
                 ).fetchone()
@@ -553,17 +572,16 @@ class Workspace:
                         row.lastrowid,
                     ),
                 )
-                connection.execute(
-                    "INSERT INTO command_receipt VALUES(?,?,?,?,?,?,?)",
-                    (
-                        client,
-                        request_id,
-                        "workflow.save",
-                        params["workflowId"],
-                        payload_hash,
-                        dumps(result).decode(),
-                        created,
-                    ),
+                write_receipt(
+                    connection,
+                    client_id=client,
+                    request_id=request_id,
+                    method="workflow.save",
+                    subject_kind="workflow",
+                    subject_id=params["workflowId"],
+                    payload_hash=payload_hash,
+                    result=result,
+                    created_at=created,
                 )
             return result
 

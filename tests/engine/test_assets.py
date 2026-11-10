@@ -89,7 +89,7 @@ class AssetsTests(EngineCase):
             self.assertEqual(json.loads(data), trajectory(x))
             self.assertEqual(row["content_hash"], hashlib.sha256(data).hexdigest())
         with self.workspace.transaction() as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
             self.assertEqual(
                 connection.execute("SELECT COUNT(*) FROM asset_version").fetchone()[0], 2
             )
@@ -435,7 +435,7 @@ class AssetsTests(EngineCase):
         )
         self.asset()
         with self.workspace.transaction() as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
 
     def test_asset_commit_deadline_rolls_back_registration(self):
         checkpoint = self.workspace.check_deadline
