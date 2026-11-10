@@ -349,14 +349,14 @@ class ContentTests(ContentCase):
         _, reference = self.upload(definition)
         self.assertEqual(
             self.request("workflow.save", self.save_params(reference))["error"]["code"],
-            "METHOD_UNAVAILABLE",
+            "DEPENDENCY_MISMATCH",
         )
 
     def test_reference_business_rejections_leave_no_version_on_replay(self):
         original = self.save()
         for code in (
             "INVALID_WORKFLOW",
-            "METHOD_UNAVAILABLE",
+            "DEPENDENCY_MISMATCH",
             "CONTENT_REFERENCE_INVALID",
             "CONTENT_HASH_MISMATCH",
             "CONTENT_INCOMPLETE",
@@ -365,7 +365,7 @@ class ContentTests(ContentCase):
                 definition = workflow()
                 if code == "INVALID_WORKFLOW":
                     definition["entry"] = "missing"
-                if code == "METHOD_UNAVAILABLE":
+                if code == "DEPENDENCY_MISMATCH":
                     definition["resources"] = {"image": {"kind": "image"}}
                 _, reference = self.upload(definition)
                 params = self.save_params(reference, base=original["revision"])

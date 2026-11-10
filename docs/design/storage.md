@@ -25,9 +25,12 @@ workspace.json 保存格式版本、工作空间身份和创建信息，不保�
 | draft | editor_id、workflow_id、owner_principal、base_revision、edit_version、source_hash、model_hash、model_edit_version、validation_state、diagnostics_hash、saved_at；editor_id+workflow_id 唯一 |
 | draft_tombstone | editor_id、workflow_id、discarded_version、request_key、discarded_at、retain_until；防止旧写入复活已放弃草稿 |
 | editor_layout | editor_id、workflow_id、layout_version、layout_hash、updated_at；包含节点位置、视口和折叠状态 |
-| asset | id、kind、display_name、current_version、deleted_at |
+| asset | id、kind、name、current_version |
 | asset_name_claim | namespace、name_nfc、asset_id；前两项唯一，登记与资产同事务 |
-| asset_version | id、asset_id、content_hash、media_type、metadata；轨迹 source 随内容保存，用于坐标编辑与回放 |
+| asset_version | id、asset_id、content_hash、byte_length、media_type、metadata、name、name_key、sequence、valid_until；轨迹 source 随内容保存 |
+| blob_chunk | content_hash、position、sha256；前两项唯一，用于范围读取的完整性校验 |
+| revision_asset_ref | revision_id、asset_version；唯一直接引用，外键保护版本 |
+| revision_workflow_ref | revision_id、target_revision；唯一直接引用，外键保护版本 |
 | recording_session | id、owner_client_id、source_hash、topology_version、state、control_version、event_count、duration_us、partial、reason；控制录制与分段收尾 |
 | object_ref | owner_kind、owner_id、content_hash；受引用对象不回收 |
 | run | id、snapshot_hash、status、owner_session、active_ms、wall_deadline、cleanup_result |

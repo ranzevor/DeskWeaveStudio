@@ -42,14 +42,15 @@ uv build
 | workflow.read | 读取指定版本；支持 auto、inline 和 resource，协商后大于 256KiB 的模型默认资源化 |
 | workflow.validate | 校验格式、节点、出口、入口、可达性、图环、目标槽、资源类型和参数默认值 |
 | workflow.revisions | 固定快照中的历史版本分页 |
-| workspace.catalog | 流程目录的名称查询、排序和分页 |
+| workspace.catalog | 流程与资产目录的名称查询、排序和分页 |
 | query.read / query.close | 诊断筛选、稳定序号、总数、快照和诊断集合释放 |
 | request.status | 查询当前客户端已提交的保存请求；按当前权限读取结果 |
 | content.begin / content.write / content.seal | 预留容量、顺序分块上传、校验编码与摘要、按用途封存 JSON |
 | content.discard | 按 uploadId 或 resourceId 释放当前会话的临时内容；参数互斥、重复释放幂等 |
+| asset.read | 固定资产版本的范围读取，返回带摘要和期限的私有资源 |
 | resource.read | 按偏移读取最多 192KiB；返回整段资源摘要与实际块长度 |
 
-`workflow.save` 在资源声明或依赖绑定非空时返回 `METHOD_UNAVAILABLE`。`trajectoryEdit` 的处理结果为通过结构校验的封存内容引用；资产提交和依赖版本绑定未实现。M1 后续组件包括正式资产与依赖绑定、运行调度和原生输入，见[路线图](../../ROADMAP.md)。方法与参数见[本机协议](../interfaces/local-protocol.md)。
+`workflow.save` 固定图像、轨迹和子流程的正式版本，核对依赖内容与完整授权范围；存储接口、复制规则和容量见[资产版本与流程依赖](assets.md)。`trajectoryEdit` 封存完整轨迹 JSON，由资产编辑应用服务进行时长与正式版本提交。方法与参数见[本机协议](../interfaces/local-protocol.md)。
 
 ## 服务调用
 
@@ -77,7 +78,7 @@ uv build
 
 表达式预览的完整参数和结果各限 256KiB，目录、版本和诊断查询的完整结果也限 256KiB。预算从方法 Schema 的 `x-maxUtf8Bytes` 读取，保留 `$ref` 同层注解。分页在达到字节上限前结束本页，游标从最后返回项之后继续；单项放不入页面时返回 `QUERY_ITEM_TOO_LARGE`。实际游标位置合计最多一百万条。
 
-工作空间数据库格式为 2；打开格式 1 时在单次事务中补齐目录名称键、版本有效区间和索引，已有版本、内容与保存回执保持。初始化失败回滚后可重新打开；临时查询在 Engine 重启后失效。
+工作空间数据库格式为 3；打开格式 1/2 时在单次事务中补齐目录索引、资产版本和依赖引用表，已有版本、内容与保存回执保持。初始化失败回滚后可重新打开；临时查询在 Engine 重启后失效。
 
 表达式计算错误统一为 `INVALID_ARGUMENT`，具体原因与相对 Value AST 的路径段分别位于 `details.reason`、`details.expressionPath`；容量错误为 `LIMIT_EXCEEDED`，时间耗尽为 `DEADLINE_EXCEEDED`。位置字段保留含斜线、波浪线和 Unicode 的对象键；客户端不按错误消息文本识别类型。
 
