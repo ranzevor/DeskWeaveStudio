@@ -1,14 +1,71 @@
 from __future__ import annotations
 
+import hashlib
 from collections import deque
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 
 from deskweave.adapters.assets import Assets
 from deskweave.contracts import validate
 from deskweave.errors import DeskWeaveError
-from deskweave.json import digest
+from deskweave.json import digest, dumps
 
 MAX_VERSIONS = 10_000
 MAX_BINDINGS = 100_000
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowVersion:
+    workflow_id: str
+    revision: str
+    definition_hash: str
+    definition_length: int
+    dependencies_hash: str
+    dependencies_length: int
+
+    def manifest(self):
+        return {
+            "workflowId": self.workflow_id,
+            "revision": self.revision,
+            "definitionHash": self.definition_hash,
+            "definitionLength": self.definition_length,
+            "dependenciesHash": self.dependencies_hash,
+            "dependenciesLength": self.dependencies_length,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssetVersion:
+    asset_id: str
+    version: str
+    kind: str
+    sha256: str
+    length: int
+    media_type: str
+
+    def manifest(self):
+        return {
+            "assetId": self.asset_id,
+            "assetVersion": self.version,
+            "kind": self.kind,
+            "sha256": self.sha256,
+            "length": self.length,
+            "mediaType": self.media_type,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedGraph:
+    root: tuple[str, str]
+    workflows: Mapping[tuple[str, str], WorkflowVersion]
+    assets: Mapping[str, AssetVersion]
+
+    def manifest(self):
+        return {
+            "workflows": [self.workflows[key].manifest() for key in sorted(self.workflows)],
+            "assets": [self.assets[key].manifest() for key in sorted(self.assets)],
+        }
 
 
 class Dependencies:
@@ -17,6 +74,11 @@ class Dependencies:
         self.authorize_workflow = authorize_workflow
         self.authorize_asset = authorize_asset
         self.assets = Assets(workspace)
+        self._reset()
+
+    def _reset(self, visitor=None):
+        self.visitor = visitor
+        self.captured = {}
         self.records = {}
         self.versions = {}
         self.checked_blobs = set()
@@ -38,6 +100,26 @@ class Dependencies:
                 "definitionHash": record["definitionHash"],
                 "dependencies": record["dependencies"],
             }
+            if self.visitor is not None:
+                definition = dumps(
+                    record["definition"],
+                    max_bytes=33_554_432,
+                    checkpoint=self.workspace.check_deadline,
+                )
+                dependencies = dumps(
+                    record["dependencies"],
+                    max_bytes=33_554_432,
+                    checkpoint=self.workspace.check_deadline,
+                )
+                self.captured[key] = WorkflowVersion(
+                    identity,
+                    revision,
+                    record["definitionHash"],
+                    len(definition),
+                    hashlib.sha256(dependencies).hexdigest(),
+                    len(dependencies),
+                )
+                self.visitor(identity, revision, record["definition"])
             self.pending.append(key)
         return self.records[key]
 
@@ -91,10 +173,37 @@ class Dependencies:
         return result
 
     def bind(self, definition, dependencies):
+        self._reset()
         validate(
             "urn:deskweave:dependencies:1", dependencies, checkpoint=self.workspace.check_deadline
         )
         result = self._normalize(definition["resources"], dependencies)
+        self._finish()
+        return result
+
+    def resolve(self, identity, revision, *, visitor=lambda *_args: None):
+        with self.workspace.budget(None):
+            self._reset(visitor)
+            self._workflow(identity, revision)
+            self._finish()
+            assets = {
+                version: AssetVersion(
+                    row["asset_id"],
+                    version,
+                    row["kind"],
+                    row["content_hash"],
+                    row["byte_length"],
+                    row["media_type"],
+                )
+                for version, row in self.versions.items()
+            }
+            return ResolvedGraph(
+                (identity, revision),
+                MappingProxyType(dict(self.captured)),
+                MappingProxyType(assets),
+            )
+
+    def _finish(self):
         while self.pending:
             self.workspace.check_deadline()
             record = self.records[self.pending.popleft()]
@@ -126,4 +235,3 @@ class Dependencies:
                         ready.append(child)
         if visited != len(degrees):
             raise DeskWeaveError("DEPENDENCY_CYCLE", "流程版本依赖存在循环。")
-        return result

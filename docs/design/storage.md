@@ -33,10 +33,11 @@ workspace.json 保存格式版本、工作空间身份和创建信息，不保�
 | revision_workflow_ref | revision_id、target_revision；唯一直接引用，外键保护版本 |
 | recording_session | id、owner_client_id、source_hash、topology_version、state、control_version、event_count、duration_us、partial、reason；控制录制与分段收尾 |
 | object_ref | owner_kind、owner_id、content_hash；受引用对象不回收 |
-| run | id、snapshot_hash、status、owner_session、active_ms、wall_deadline、cleanup_result |
-| frame | id、run_id、parent_id、workflow_revision、state、cursor、outputs_hash |
+| run | id、workflow_id、revision_id、snapshot_hash、owner_client_id、authorization_ref、authorization_version、state、control_version、data_version、last_seq、root_frame_id、detached、active_ms、wall_deadline、cleanup |
+| frame | id、run_id、parent_id、workflow_id、revision_id、state、node_id、state_hash、outputs_hash；根调用与父调用均限定在同一运行 |
+| run_workflow_ref / run_asset_ref | run_id 与具体流程或资产版本；唯一强引用与反向索引 |
 | run_event | run_id、seq、kind、occurred_at、payload_hash；run_id+seq 唯一 |
-| command_receipt | client_id、request_id、method、authorization_ref、payload_hash、operation_id、state、result_hash、retain_until；前两项唯一 |
+| command_receipt | client_id、request_id、method、subject_kind、subject_id、authorization_ref、authorization_version、payload_hash、result、created_at、retain_until；前两项唯一，subject_kind/subject_id 绑定流程、运行或作业 |
 | operation | id、method、owner_client_id、authorization_ref、params_hash、state、state_version、effect_stage、checkpoint_hash、result_hash、error_hash、cancel_requested_at、created_at、finished_at |
 | object_event | scope、object_id、seq、kind、payload_hash、occurred_at；scope+object_id+seq 唯一 |
 | effect_intent | segment_id、run_id、node_id、attempt、target_version、state、agent_receipt |

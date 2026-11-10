@@ -586,7 +586,7 @@ class BoundaryTests(EngineCase):
             self.success("request.status", {"requestId": "first-save"})["result"], first
         )
         with self.workspace.transaction() as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
             rows = connection.execute(
                 "SELECT sequence,name_key,valid_until FROM revision ORDER BY sequence"
             ).fetchall()
