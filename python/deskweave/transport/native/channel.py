@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME, dumps, loads
 
-from ._common import Budget, Resource, closed, rejected
+from ._common import Budget, InitializationError, Resource, closed, rejected
 from .identity import ProcessBinding
 
 if sys.platform == "win32":
@@ -32,6 +32,8 @@ class NativeChannel(Resource):
         self._local_binding, self._peer_binding = local, peer
         self._read_lock, self._write_lock = threading.Lock(), threading.Lock()
         self._closed = False
+        self._close_lock = threading.RLock()
+        self._release = None
         self.max_frame_bytes = MAX_FRAME
         if (
             type(local) is not ProcessBinding
@@ -140,8 +142,12 @@ class NativeChannel(Resource):
                 self._write_lock.release()
 
     def close(self):
-        self._closed = True
-        self._raw.close()
+        with self._close_lock:
+            self._closed = True
+            self._raw.close()
+            if self._release is not None:
+                self._release()
+                self._release = None
 
 
 class NativeListener(Resource):
@@ -167,8 +173,11 @@ class NativeListener(Resource):
             channel = NativeChannel(raw, self.local, peer, budget=budget)
             budget.check()
             return channel
-        except BaseException:
-            raw.close()
+        except BaseException as error:
+            try:
+                raw.close()
+            except BaseException as closing:
+                raise InitializationError(raw, [error, closing]) from None
             raise
 
     def close(self):
@@ -188,6 +197,9 @@ def connect(
         channel = NativeChannel(raw, local, peer, budget=budget)
         budget.check()
         return channel
-    except BaseException:
-        raw.close()
+    except BaseException as error:
+        try:
+            raw.close()
+        except BaseException as closing:
+            raise InitializationError(raw, [error, closing]) from None
         raise

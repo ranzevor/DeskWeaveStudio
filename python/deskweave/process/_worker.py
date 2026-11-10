@@ -47,6 +47,9 @@ class Registry:
         self.expirations = []
         self.closing = set()
         self.retry_authority = False
+        self.active_users = 0
+        self.accepting = True
+        self.on_forget = lambda _client: None
         self.lock = threading.RLock()
         self.known = {binding.identity.process_id: binding for binding in bindings}
         self.installations = {
@@ -86,9 +89,10 @@ class Registry:
     def retry_closing(self):
         errors = []
         for pid in tuple(self.closing):
-            peer = self.peers[pid]
-            if peer.users or self.retry_authority:
-                continue
+            with self.lock:
+                peer = self.peers[pid]
+                if peer.users or self.retry_authority:
+                    continue
             try:
                 if peer.owned:
                     peer.binding.close()
@@ -113,16 +117,23 @@ class Registry:
     def forget(self, client):
         grant = self.grants.pop(client, None)
         if grant is not None:
-            grant.peer.references -= 1
-            if not grant.peer.references:
-                self.closing.add(grant.peer.process_id)
+            with self.lock:
+                grant.peer.references -= 1
+                if not grant.peer.references:
+                    self.closing.add(grant.peer.process_id)
+            self.on_forget(client)
         errors = self.retry_closing()
         if errors:
             raise BaseExceptionGroup("客户端进程引用关闭失败。", errors)
 
     def prune(self):
         now = self.authority.now()
-        if self.retry_authority or self.expirations and self.expirations[0][0] <= now:
+        if (
+            self.retry_authority
+            or self.authority._closing_snapshot()
+            or self.expirations
+            and self.expirations[0][0] <= now
+        ):
             try:
                 self.authority.sweep()
                 self.retry_authority = False
@@ -154,7 +165,8 @@ class Registry:
             self.peers[pid] = peer
         return peer
 
-    def add(self, identity, installation, policy, lifetime, budget):
+    def add(self, identity, installation, policy, lifetime, budget, *, not_after=None):
+        self.authority._peer(identity)
         self.prune()
         if len(self.grants) >= self.authority.max_clients:
             raise DeskWeaveError("LIMIT_EXCEEDED", "客户端登记数量已满。")
@@ -167,12 +179,15 @@ class Registry:
             if len(self.peers) >= self.authority.max_clients:
                 raise DeskWeaveError("LIMIT_EXCEEDED", "进程登记数量已满。")
             known = self.known.get(identity.process_id)
+            if known is not None and known.identity != identity:
+                known = None
             actual = known.installation if known is not None else installation
             digest = (
                 known.identity.installation_digest
                 if known is not None
                 else actual.calculate_digest(budget.check_time)
             )
+            actual = self.installations.get(digest, actual)
             if known is None and len(actual.components) + 1 > self.available_states(identity):
                 raise DeskWeaveError("LIMIT_EXCEEDED", "进程文件状态登记额度已满。")
             size = self.sizes.get(digest)
@@ -202,7 +217,7 @@ class Registry:
             if peer.binding.identity != identity:
                 raise DeskWeaveError("AUTHENTICATION_FAILED", "客户端进程登记不匹配。")
             peer.binding.check(budget.check_time)
-            credential = self.authority.authorize(policy, lifetime=lifetime)
+            credential = self.authority.authorize(policy, lifetime=lifetime, not_after=not_after)
             snapshot = self.authority.describe(credential)
             peer.references += 1
             with self.lock:
@@ -229,12 +244,16 @@ class Registry:
             raise DeskWeaveError("ACCESS_DENIED", "客户端登记已结束。")
         return grant
 
-    def revise(self, credential, policy, expected_version, lifetime):
+    def revise(self, credential, policy, expected_version, lifetime, *, not_after=None):
         grant = self.selected(credential)
         failure = None
         try:
             version = self.authority.revise(
-                credential, policy, expected_version=expected_version, lifetime=lifetime
+                credential,
+                policy,
+                expected_version=expected_version,
+                lifetime=lifetime,
+                not_after=not_after,
             )
         except BaseExceptionGroup as error:
             self.retry_authority = True
@@ -258,14 +277,34 @@ class Registry:
         return version
 
     def revoke(self, credential):
+        return self._revoke(credential.client_id, lambda: self.authority.revoke(credential))
+
+    def revoke_clients(self, clients):
+        selected = tuple(clients)
         failure = None
         try:
-            self.authority.revoke(credential)
+            self.authority.revoke_clients(selected)
         except BaseExceptionGroup as error:
             self.retry_authority = True
             failure = error
         try:
-            self.forget(credential.client_id)
+            cleanup(*(lambda client=client: self.forget(client) for client in selected))
+        except BaseException as error:
+            if failure is not None:
+                raise BaseExceptionGroup("授权撤销与登记清理失败。", [failure, error]) from None
+            raise
+        if failure is not None:
+            raise failure
+
+    def _revoke(self, client, revoke):
+        failure = None
+        try:
+            revoke()
+        except BaseExceptionGroup as error:
+            self.retry_authority = True
+            failure = error
+        try:
+            self.forget(client)
         except BaseException as error:
             if failure is not None:
                 raise BaseExceptionGroup("授权撤销与登记清理失败。", [failure, error]) from None
@@ -276,14 +315,23 @@ class Registry:
     def acquire_peer(self, pid):
         with self.lock:
             peer = self.peers.get(pid)
-            if peer is None or pid in self.closing:
+            if peer is None or pid in self.closing or not self.accepting:
                 return None
             peer.users += 1
+            self.active_users += 1
             return peer
 
     def release_peer(self, peer):
         with self.lock:
             peer.users -= 1
+            self.active_users -= 1
+
+    def stop_when_idle(self):
+        with self.lock:
+            if self.active_users:
+                return False
+            self.accepting = False
+            return True
 
     def close(self):
         self.retry_authority = False
@@ -325,6 +373,7 @@ class Runtime:
         self.cancel = threading.Event()
         self.condition = threading.Condition()
         self.workers = set()
+        self.failed_channels = {}
         self.capacity = threading.BoundedSemaphore(authority.max_connections)
         self.failures = 0
         self.pending = None
@@ -343,17 +392,40 @@ class Runtime:
         except BaseException as error:
             self.record_failure(error)
         finally:
-            admission.close()
+            for error in self.finish_connection(channel, admission):
+                self.record_failure(error)
             with self.condition:
                 self.workers.discard(threading.current_thread())
                 self.condition.notify_all()
-            self.capacity.release()
+
+    def finish_connection(self, channel, admission):
+        if channel is not None:
+            try:
+                channel.close()
+            except BaseException as error:
+                with self.condition:
+                    self.failed_channels[channel] = admission
+                return [error]
+        with self.condition:
+            self.failed_channels.pop(channel, None)
+        admission.close()
+        self.capacity.release()
+        return []
+
+    def retry_connections(self):
+        with self.condition:
+            pending = tuple(self.failed_channels.items())
+        errors = []
+        for channel, admission in pending:
+            errors.extend(self.finish_connection(channel, admission))
+        return errors
 
     def accept(self):
         while not self.cancel.is_set():
             if not self.capacity.acquire(timeout=0.1):
                 continue
             transferred = False
+            channel = None
             admission = Admission(self.registry)
             try:
                 channel = self.listener.accept(admission, cancel=self.cancel)
@@ -378,18 +450,22 @@ class Runtime:
                     "TRANSPORT_CLOSED",
                 }:
                     self.record_failure(error)
+            except InitializationError as error:
+                channel = error.resource
+                self.record_failure(error)
             except BaseException as error:
                 if not self.cancel.is_set():
                     self.record_failure(error)
                     self.cancel.set()
             finally:
                 if not transferred:
-                    admission.close()
-                    self.capacity.release()
+                    for error in self.finish_connection(channel, admission):
+                        self.record_failure(error)
 
-    def dispatch(self, method, params, budget):
+    def dispatch(self, method, params, budget, state=None):
+        state = self if state is None else state
         self.registry.prune()
-        if self.pending is not None and method not in {"register.files", "register.commit"}:
+        if state.pending is not None and method not in {"register.files", "register.commit"}:
             raise DeskWeaveError("INVALID_ARGUMENT", "客户端登记分块尚未结束。")
         if method == "ping":
             wire.fields(params, ())
@@ -419,7 +495,9 @@ class Runtime:
                 raise DeskWeaveError("RESOURCE_CLOSE_FAILED", "客户端进程引用正在释放。")
             record = self.registry.peers.get(identity.process_id)
             existing = record.binding if record is not None else None
-            if existing is None and count + 1 > self.registry.available_states(identity):
+            if existing is None and count + 1 > self.registry.available_states(identity) - getattr(
+                state, "other_states", 0
+            ):
                 raise DeskWeaveError("LIMIT_EXCEEDED", "进程文件状态登记额度已满。")
             if existing is not None:
                 if existing.identity != identity:
@@ -431,7 +509,9 @@ class Runtime:
                 reader = (
                     wire.ManifestReader(
                         params["installation"],
-                        byte_limit=self.registry.max_bytes - self.registry.bytes,
+                        byte_limit=self.registry.max_bytes
+                        - self.registry.bytes
+                        - getattr(state, "other_manifest_bytes", 0),
                     )
                     if installation is None
                     else None
@@ -440,24 +520,31 @@ class Runtime:
                 installation
             ):
                 raise DeskWeaveError("INVALID_ARGUMENT", "安装清单头与已登记内容不一致。")
-            self.pending = (identity, reader, installation, selected_policy, params["lifetime"])
+            state.pending = (identity, reader, installation, selected_policy, params["lifetime"])
             return {"needFiles": reader is not None}
         if method == "register.files":
             wire.fields(params, ("files",))
-            if self.pending is None or self.pending[1] is None:
+            if state.pending is None or state.pending[1] is None:
                 raise DeskWeaveError("INVALID_ARGUMENT", "客户端登记没有等待安装分块。")
-            self.pending[1].append(params["files"], budget.check_time)
+            state.pending[1].append(params["files"], budget.check_time)
             return {}
         if method == "register.commit":
             wire.fields(params, ())
-            if self.pending is None:
+            if state.pending is None:
                 raise DeskWeaveError("INVALID_ARGUMENT", "客户端登记尚未开始。")
-            identity, reader, installation, selected_policy, lifetime = self.pending
-            self.pending = None
+            identity, reader, installation, selected_policy, lifetime = state.pending
+            state.pending = None
             if reader is not None:
                 installation = reader.finish()
             return wire.credential_value(
-                self.registry.add(identity, installation, selected_policy, lifetime, budget)
+                self.registry.add(
+                    identity,
+                    installation,
+                    selected_policy,
+                    lifetime,
+                    budget,
+                    not_after=getattr(state, "not_after", None),
+                )
             )
         if method == "ticket":
             wire.fields(params, ("credential",))
@@ -474,7 +561,11 @@ class Runtime:
             wire.fields(params, ("credential", "policy", "version", "lifetime"))
             credential = wire.credential(params["credential"])
             version = self.registry.revise(
-                credential, policy(params["policy"]), params["version"], params["lifetime"]
+                credential,
+                policy(params["policy"]),
+                params["version"],
+                params["lifetime"],
+                not_after=getattr(state, "not_after", None),
             )
             return {"authorizationVersion": version}
         raise DeskWeaveError("METHOD_UNAVAILABLE", "未知进程控制方法。")
@@ -484,51 +575,61 @@ class Runtime:
             self.acceptor = threading.Thread(target=self.accept, name="deskweave-accept")
             self.acceptor.start()
 
-    def run(self, control):
-        self.start()
+    def clear_state(self, state):
+        state.pending = None
+
+    def control_messages(self, control, state, dispatch):
         previous = 0
         transaction = None
+        while not self.cancel.is_set():
+            budget = transaction or Budget(30)
+            request = control.receive(budget=budget)
+            if self.cancel.is_set():
+                break
+            wire.fields(request, ("id", "method", "params"))
+            identity = request["id"]
+            if type(identity) is not int or identity != previous + 1:
+                raise DeskWeaveError("INVALID_ARGUMENT", "进程控制请求顺序无效。")
+            previous = identity
+            try:
+                if type(request["method"]) is not str or type(request["params"]) is not dict:
+                    raise DeskWeaveError("INVALID_ARGUMENT", "进程控制方法或参数无效。")
+                result = dispatch(request["method"], request["params"], budget)
+                response = {"id": identity, "ok": True, "result": result}
+            except DeskWeaveError as error:
+                self.clear_state(state)
+                response = {"id": identity, "ok": False, "error": error.as_dict()}
+            except BaseExceptionGroup:
+                self.clear_state(state)
+                response = {
+                    "id": identity,
+                    "ok": False,
+                    "error": {
+                        "code": "RESOURCE_CLOSE_FAILED",
+                        "message": "进程引用释放失败，可重试释放。",
+                        "retry": "safe",
+                    },
+                }
+            except (ValueError, TypeError, KeyError):
+                self.clear_state(state)
+                response = {
+                    "id": identity,
+                    "ok": False,
+                    "error": {
+                        "code": "INVALID_ARGUMENT",
+                        "message": "进程控制参数无效。",
+                        "retry": "never",
+                    },
+                }
+            control.send(response, budget=budget)
+            transaction = budget if state.pending is not None else None
+            if getattr(state, "stop", False):
+                break
+
+    def run(self, control):
+        self.start()
         try:
-            while not self.cancel.is_set():
-                budget = transaction or Budget(30)
-                request = control.receive(budget=budget)
-                if self.cancel.is_set():
-                    break
-                wire.fields(request, ("id", "method", "params"))
-                identity = request["id"]
-                if type(identity) is not int or identity != previous + 1:
-                    raise DeskWeaveError("INVALID_ARGUMENT", "进程控制请求顺序无效。")
-                previous = identity
-                try:
-                    result = self.dispatch(request["method"], request["params"], budget)
-                    response = {"id": identity, "ok": True, "result": result}
-                except DeskWeaveError as error:
-                    self.pending = None
-                    response = {"id": identity, "ok": False, "error": error.as_dict()}
-                except BaseExceptionGroup:
-                    self.pending = None
-                    response = {
-                        "id": identity,
-                        "ok": False,
-                        "error": {
-                            "code": "RESOURCE_CLOSE_FAILED",
-                            "message": "进程引用释放失败，可重试释放。",
-                            "retry": "safe",
-                        },
-                    }
-                except (ValueError, TypeError, KeyError):
-                    self.pending = None
-                    response = {
-                        "id": identity,
-                        "ok": False,
-                        "error": {
-                            "code": "INVALID_ARGUMENT",
-                            "message": "进程控制参数无效。",
-                            "retry": "never",
-                        },
-                    }
-                control.send(response, budget=budget)
-                transaction = budget if self.pending is not None else None
+            self.control_messages(control, self, self.dispatch)
         except DeskWeaveError as error:
             if error.code not in {"TRANSPORT_CLOSED", "TRANSPORT_TRUNCATED", "DEADLINE_EXCEEDED"}:
                 self.record_failure(error)
@@ -556,8 +657,11 @@ class Runtime:
                 except BaseException as error:
                     if failure is None:
                         failure = error
+            errors = self.retry_connections()
             if failure is not None:
-                raise failure from None
+                errors.insert(0, failure)
+            if errors:
+                raise BaseExceptionGroup("业务连接排空失败。", errors)
 
         cleanup(
             self.listener.close,
@@ -567,6 +671,20 @@ class Runtime:
             self.registry.close,
             self.listener.close,
         )
+
+
+class ParentExit:
+    def __init__(self, parent):
+        self.parent = parent
+
+    def is_set(self):
+        try:
+            self.parent._check_process()
+        except DeskWeaveError as error:
+            if error.code != "AUTHENTICATION_FAILED":
+                raise
+            return True
+        return False
 
 
 def main(config, engine_files, parent_files):
@@ -588,7 +706,8 @@ def main(config, engine_files, parent_files):
                 "maxClients",
                 "maxComponentStates",
                 "maxManifestBytes",
-            ),
+            )
+            + (("coordination",) if "coordination" in config else ()),
         )
         if config["version"] != wire.VERSION:
             raise DeskWeaveError("PROTOCOL_UNSUPPORTED", "启动协议版本不兼容。")
@@ -626,7 +745,42 @@ def main(config, engine_files, parent_files):
             )
             if parent.identity != parent_identity:
                 raise DeskWeaveError("AUTHENTICATION_FAILED", "启动器身份不匹配。")
-            engine = Engine(Workspace(Path(config["workspace"]), create=config["create"]))
+            coordination = config.get("coordination")
+            if coordination is not None:
+                from deskweave.coordination.directory import Directory, WorkspaceIdentity
+                from deskweave.coordination.server import SharedRuntime
+                from deskweave.coordination.startup import read_plan
+
+                selected_identity = stack.enter_context(
+                    WorkspaceIdentity(Path(config["workspace"]), create=config["create"])
+                )
+                if list(selected_identity.object) != coordination[
+                    "directory"
+                ] or selected_identity.workspace not in (None, coordination["workspace"]):
+                    raise DeskWeaveError("AUTHENTICATION_FAILED", "工作空间启动对象已改变。")
+                runtime_directory = stack.enter_context(
+                    Directory(coordination["runtimePath"], principal=local)
+                )
+                if list(runtime_directory.identity) != coordination["runtimeDirectory"]:
+                    raise DeskWeaveError("AUTHENTICATION_FAILED", "运行目录对象已改变。")
+                budget = Budget(max(coordination["deadline"] - time.monotonic(), 1e-9))
+                plan = read_plan(
+                    source,
+                    coordination,
+                    (engine_install, parent_install),
+                    config["maxManifestBytes"],
+                    budget,
+                )
+                if plan.engine_installation != local.identity.installation_digest:
+                    raise DeskWeaveError("AUTHENTICATION_FAILED", "启动计划与执行服务安装不匹配。")
+                selected_identity.check()
+            engine = Engine(
+                Workspace(
+                    Path(config["workspace"]),
+                    create=config["create"],
+                    _identity=coordination["workspace"] if coordination is not None else None,
+                )
+            )
             stack.callback(engine.close)
             authority = stack.enter_context(
                 ConnectionAuthority(
@@ -638,13 +792,27 @@ def main(config, engine_files, parent_files):
             )
             business = stack.enter_context(NativeListener(local, directory=config["directory"]))
             listener = stack.enter_context(NativeListener(local, directory=config["directory"]))
-            runtime = Runtime(
-                business,
-                authority,
-                parent,
-                max_states=config["maxComponentStates"],
-                max_bytes=config["maxManifestBytes"],
-            )
+            if coordination is None:
+                runtime = Runtime(
+                    business,
+                    authority,
+                    parent,
+                    max_states=config["maxComponentStates"],
+                    max_bytes=config["maxManifestBytes"],
+                )
+            else:
+                selected_identity.check(engine.workspace.id)
+                runtime = SharedRuntime(
+                    business,
+                    authority,
+                    parent,
+                    max_states=config["maxComponentStates"],
+                    max_bytes=config["maxManifestBytes"],
+                    identity=selected_identity,
+                    runtime_directory=runtime_directory,
+                    plan=plan,
+                    config=coordination,
+                )
             stack.callback(runtime.close)
             runtime.start()
             wire.write_frame(
@@ -662,13 +830,19 @@ def main(config, engine_files, parent_files):
             source.close()
             sink.close()
             deadline = time.monotonic() + 30
+            if coordination is not None:
+                deadline = min(deadline, coordination["deadline"])
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise DeskWeaveError("DEADLINE_EXCEEDED", "启动控制连接已超时。")
+                if coordination is not None:
+                    parent._check_process()
                 try:
                     control = listener.accept(
-                        {parent.identity.process_id: parent}, timeout=remaining
+                        {parent.identity.process_id: parent},
+                        timeout=remaining,
+                        cancel=ParentExit(parent) if coordination is not None else None,
                     )
                     break
                 except DeskWeaveError as error:
@@ -678,7 +852,12 @@ def main(config, engine_files, parent_files):
                 hello = control.receive(timeout=10)
                 if hello != {"id": 0, "method": "hello", "params": {"version": wire.VERSION}}:
                     raise DeskWeaveError("PROTOCOL_UNSUPPORTED", "启动控制协议不兼容。")
-                control.send({"id": 0, "ok": True, "result": {"workspace": engine.workspace.id}})
+                response = (
+                    {"workspace": engine.workspace.id}
+                    if coordination is None
+                    else runtime.root_response()
+                )
+                control.send({"id": 0, "ok": True, "result": response})
                 listener.close()
                 return runtime.run(control)
     except BaseException as error:

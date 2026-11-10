@@ -23,7 +23,16 @@ def utc_time(timestamp: float | None = None) -> str:
 
 
 class Workspace:
-    def __init__(self, path: Path, *, create: bool = False, name: str = "工作空间"):
+    def __init__(
+        self,
+        path: Path,
+        *,
+        create: bool = False,
+        name: str = "工作空间",
+        _identity: str | None = None,
+    ):
+        if _identity is not None and (type(_identity) is not str or not 1 <= len(_identity) <= 128):
+            raise ValueError("工作空间身份无效。")
         self.path = path.resolve()
         self._mutex = threading.RLock()
         self._closed = False
@@ -63,7 +72,10 @@ class Workspace:
                     "WORKSPACE_BUSY", "工作空间已由另一个 Engine 打开。"
                 ) from error
             if not descriptor.exists():
-                if any(item.name != ".engine.lock" for item in self.path.iterdir()):
+                if any(
+                    item.name not in {".engine.lock", ".engine-start.lock"}
+                    for item in self.path.iterdir()
+                ):
                     raise DeskWeaveError("INVALID_ARGUMENT", "新工作空间需要空目录。")
                 if not 1 <= len(name.strip()) <= 120:
                     raise DeskWeaveError("INVALID_ARGUMENT", "工作空间名称长度应为 1～120。")
@@ -72,7 +84,7 @@ class Workspace:
                     dumps(
                         {
                             "formatVersion": "1.0",
-                            "id": uuid.uuid4().hex,
+                            "id": _identity or uuid.uuid4().hex,
                             "name": name.strip(),
                             "createdAt": utc_time(),
                         }
@@ -86,6 +98,8 @@ class Workspace:
             if type(metadata.get("id")) is not str or not 1 <= len(metadata["id"]) <= 128:
                 raise DeskWeaveError("INVALID_ARGUMENT", "工作空间身份无效。")
             self.id = metadata["id"]
+            if _identity is not None and self.id != _identity:
+                raise DeskWeaveError("RESOURCE_DENIED", "工作空间身份已改变。")
             for directory in ("data", "objects/sha256", "staging", "recovery", "exports"):
                 location = self.path / directory
                 if not location.resolve().is_relative_to(self.path):

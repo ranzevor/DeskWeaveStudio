@@ -97,9 +97,16 @@ class ConnectionAuthority:
     def now(self) -> float:
         return self.engine.monotonic()
 
-    def _expiry(self, lifetime: float) -> float:
+    def _expiry(self, lifetime: float, not_after: float | None = None) -> float:
         self._lifetime(lifetime)
-        expiry = self.now() + lifetime
+        now = self.now()
+        expiry = now + lifetime
+        if not_after is not None:
+            if type(not_after) not in (int, float) or not math.isfinite(not_after):
+                raise ValueError("授权截止上限必须为有限时间。")
+            if not_after <= now:
+                raise DeskWeaveError("ACCESS_DENIED", "上级授权已到期。")
+            expiry = min(expiry, not_after)
         if not math.isfinite(expiry):
             raise ValueError("授权到期时间超出范围。")
         return expiry
@@ -176,7 +183,9 @@ class ConnectionAuthority:
                 self._closing.add(connection)
         self._close_all(list(set(selected) | self._closing_snapshot()))
 
-    def authorize(self, policy: ConnectionPolicy, *, lifetime: float) -> ClientCredential:
+    def authorize(
+        self, policy: ConnectionPolicy, *, lifetime: float, not_after: float | None = None
+    ) -> ClientCredential:
         if type(policy) is not ConnectionPolicy:
             raise TypeError("授权登记需要完整的连接策略。")
         self._lifetime(lifetime)
@@ -190,7 +199,9 @@ class ConnectionAuthority:
                 client_id = secrets.token_urlsafe(24)
             credential = ClientCredential(client_id, secrets.token_bytes(32))
             self._clients[client_id] = _Grant(
-                hashlib.sha256(credential.secret).digest(), policy, self._expiry(lifetime)
+                hashlib.sha256(credential.secret).digest(),
+                policy,
+                self._expiry(lifetime, not_after),
             )
             return credential
 
@@ -212,6 +223,7 @@ class ConnectionAuthority:
         *,
         expected_version: int,
         lifetime: float,
+        not_after: float | None = None,
     ) -> int:
         if type(policy) is not ConnectionPolicy:
             raise TypeError("授权登记需要完整的连接策略。")
@@ -224,7 +236,7 @@ class ConnectionAuthority:
                 raise DeskWeaveError("AUTHORIZATION_CONFLICT", "连接授权已更新。")
             if grant.version == 9007199254740991:
                 raise DeskWeaveError("LIMIT_EXCEEDED", "连接授权版本已达到上限。")
-            grant.policy, grant.expires_at = policy, self._expiry(lifetime)
+            grant.policy, grant.expires_at = policy, self._expiry(lifetime, not_after)
             grant.version += 1
             version = grant.version
             self._tickets = {
@@ -248,13 +260,35 @@ class ConnectionAuthority:
                 grant.credential_digest, hashlib.sha256(credential.secret).digest()
             ):
                 raise DeskWeaveError("ACCESS_DENIED", "身份恢复凭据无效。")
-            del self._clients[credential.client_id]
+            selected = self._revoke_client_locked(credential.client_id)
+        self._close_all(selected)
+
+    def _revoke_client_locked(self, client_id):
+        self._clients.pop(client_id, None)
+        self._tickets = {
+            key: value for key, value in self._tickets.items() if value.value.client_id != client_id
+        }
+        return self._remove_client_connections_locked(client_id)
+
+    def revoke_clients(self, clients) -> None:
+        identities = frozenset(clients)
+        with self._lock:
+            self._open_locked()
+            for identity in identities:
+                self._clients.pop(identity, None)
             self._tickets = {
                 key: value
                 for key, value in self._tickets.items()
-                if value.value.client_id != credential.client_id
+                if value.value.client_id not in identities
             }
-            selected = self._remove_client_connections_locked(credential.client_id)
+            selected = [
+                connection
+                for connection, registration in self._connections.items()
+                if registration.client_id in identities
+            ]
+            for connection in selected:
+                del self._connections[connection]
+                self._closing.add(connection)
         self._close_all(selected)
 
     def issue(self, credential: ClientCredential, peer: PeerIdentity) -> ConnectionTicket:

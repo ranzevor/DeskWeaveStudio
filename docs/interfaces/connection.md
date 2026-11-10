@@ -18,7 +18,7 @@
 
 ## 授权与票据
 
-`ConnectionAuthority` 绑定一个 Engine、工作空间和服务端身份。可信控制面通过 `authorize(policy, lifetime=...)` 登记权限、流程范围及本地编辑权限，取得 `ClientCredential`。客户端身份由服务端随机生成，恢复密钥为 32 字节；登记表只保存恢复密钥的 SHA-256。
+`ConnectionAuthority` 绑定一个 Engine、工作空间和服务端身份。可信控制面通过 `authorize(policy, lifetime=..., not_after=...)` 登记权限、流程范围及本地编辑权限，取得 `ClientCredential`。客户端身份由服务端随机生成，恢复密钥为 32 字节；登记表只保存恢复密钥的 SHA-256。可选的 `not_after` 是同一系统单调时钟上的绝对截止；创建和修订在授权锁内检查，实际到期取它与本次有效期的较小值。共享宿主的派生客户端使用宿主到期时间作为上限。
 
 `issue(credential, peer)` 每次生成独立的票据身份和 32 字节密钥，并绑定：
 
@@ -72,7 +72,7 @@ ready proof:  role="ready",  value={transcript, clientProof, ready: readyBody}
 
 `ServerConnection.receive` 直接调用 `Engine.dispatch`，将连接授权检查作为可信回调传入。参数解析、Schema 校验、表达式计算、内容处理、SQLite 查询、事务提交检查和响应编码都使用该检查。SQLite 进度中断恢复为原始授权或超时错误；事务回滚期间关闭进度中断，完成收尾后恢复外层预算。
 
-`revise` 使用 expectedVersion 比较后更新策略并递增版本，旧票据和旧连接立即失效；版本冲突返回 `AUTHORIZATION_CONFLICT`。`revoke` 撤销授权和票据，并关闭关联连接；重复撤销幂等。登记失效在授权锁内完成，连接和 Engine 资源关闭在锁外执行，避免与在途请求互相等待。
+`revise` 使用 expectedVersion 比较后更新策略并递增版本，旧票据和旧连接立即失效；版本冲突返回 `AUTHORIZATION_CONFLICT`。`revoke` 撤销授权和票据，并关闭关联连接；重复撤销幂等。登记失效在授权锁内完成，连接和 Engine 资源关闭在锁外执行，避免与在途请求互相等待。可信控制面的 `revoke_clients` 批量撤销一组已登记客户端：全部权限和票据在同一锁内失效，再关闭对应连接。宿主及其派生宿主的撤销复用这一边界。
 
 撤权在提交检查前生效时，事务回滚；已通过提交检查并完成提交的保存保留结果和回执。连接中断后，恢复连接按当前权限查询原请求，不能依据传输失败直接判断保存结果。
 
