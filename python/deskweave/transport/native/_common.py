@@ -16,6 +16,19 @@ def closed() -> DeskWeaveError:
     return DeskWeaveError("TRANSPORT_CLOSED", "本机连接已关闭。")
 
 
+class Cancellation:
+    def __init__(self, caller, stopped):
+        self.caller, self.stopped = caller, stopped
+
+    def is_set(self):
+        return self.stopped.is_set() or self.caller is not None and self.caller.is_set()
+
+    def wait(self, timeout):
+        if not self.is_set():
+            self.stopped.wait(timeout)
+        return self.is_set()
+
+
 class Budget:
     def __init__(
         self,

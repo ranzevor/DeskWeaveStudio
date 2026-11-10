@@ -49,6 +49,7 @@
 | [文档检查](quality/document-validation.md) | 文档、契约和示例的检查入口 |
 | [原型检查](quality/prototype-validation.md) | 画板覆盖、浏览器交互与视觉检查 |
 | [需求追踪](quality/traceability.md) | 需求到设计、接口、验收用例与里程碑的对应 |
+| [工作空间启动协调](development/workspace-coordination.md) | 实例发现、并发首启、宿主委托与空闲退出 |
 | [独立 Engine 进程](development/engine-process.md) | 受控启动、进程就绪、客户端登记、共享连接与排空 |
 | [Engine 开发](development/engine.md) | 共享服务库的安装、方法范围、会话与测试 |
 | [工程实施](development/engineering.md) | 代码组织、工具链、依赖与审查方式 |

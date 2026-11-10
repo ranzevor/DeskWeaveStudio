@@ -13,6 +13,7 @@ def main():
     examples = {
         "--example": "examples/engine/native_connection.py",
         "--process-example": "examples/engine/process.py",
+        "--coordination-example": "examples/engine/coordination.py",
     }
     command = (
         [sys.executable, examples[arguments[0]]]

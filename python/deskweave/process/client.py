@@ -5,28 +5,18 @@ import queue
 import secrets
 import subprocess
 import threading
-import time
 from pathlib import Path
 
 from deskweave.errors import DeskWeaveError
-from deskweave.transport.native import NativeClient, ProcessBinding, connect
-from deskweave.transport.native._common import Budget, Resource, cleanup, closed
-from deskweave.transport.protocol import ClientCredential, ConnectionPolicy
+from deskweave.transport.native import ProcessBinding, connect
+from deskweave.transport.native._common import Budget, cleanup
 
 from . import _wire as wire
+from .control import ControlSession, remaining
 from .launch import ENTRY, PythonLaunch
 
 
-class RemoteFailure(DeskWeaveError):
-    pass
-
-
-def remaining(budget):
-    budget.check_time()
-    return max(budget.deadline - time.monotonic(), 1e-9)
-
-
-class EngineProcess(Resource):
+class EngineProcess(ControlSession):
     def __init__(
         self,
         launch: PythonLaunch,
@@ -41,6 +31,7 @@ class EngineProcess(Resource):
         max_manifest_bytes=16777216,
         timeout=30.0,
         cancel=None,
+        _coordination=None,
     ):
         if type(launch) is not PythonLaunch or type(local) is not ProcessBinding:
             raise TypeError("执行进程需要受信启动配置与启动器登记。")
@@ -58,6 +49,7 @@ class EngineProcess(Resource):
                 raise ValueError("进程服务容量无效。")
         self.launch, self.local = launch, local
         self._lock = threading.Lock()
+        self._initialize_connections()
         self._stopped = threading.Event()
         self._exited = threading.Event()
         self._diagnostic_lock = threading.Lock()
@@ -125,6 +117,17 @@ class EngineProcess(Resource):
                 "maxManifestBytes": max_manifest_bytes,
             }
 
+            if _coordination is not None:
+                from deskweave.coordination.startup import header, write_plan
+
+                configuration["coordination"] = header(
+                    _coordination.plan,
+                    _coordination.identity,
+                    _coordination.runtime,
+                    _coordination.idle_grace,
+                    budget,
+                )
+
             def send():
                 try:
                     wire.write_frame(
@@ -136,6 +139,13 @@ class EngineProcess(Resource):
                         for chunk in wire.chunks(installation.components):
                             budget.check_time()
                             wire.write_frame(self._process.stdin, chunk)
+                    if _coordination is not None:
+                        write_plan(
+                            self._process.stdin,
+                            _coordination.plan,
+                            (launch.installation, local.installation),
+                            budget,
+                        )
                 except BaseException as error:
                     with self._diagnostic_lock:
                         self._startup_write_error = error
@@ -176,8 +186,17 @@ class EngineProcess(Resource):
                 value["control"], local, self._peer, timeout=remaining(budget), cancel=cancel
             )
             response = self._exchange("hello", {"version": wire.VERSION}, budget)
-            if response != {"workspace": self.workspace}:
-                raise DeskWeaveError("AUTHENTICATION_FAILED", "执行服务工作空间不匹配。")
+            if _coordination is None:
+                if response != {"workspace": self.workspace}:
+                    raise DeskWeaveError("AUTHENTICATION_FAILED", "执行服务工作空间不匹配。")
+            else:
+                wire.fields(response, ("workspace", "control", "authority"))
+                if (
+                    response["workspace"] != self.workspace
+                    or response["authority"] != _coordination.plan.authority
+                ):
+                    raise DeskWeaveError("AUTHENTICATION_FAILED", "执行服务工作空间不匹配。")
+                self.host_address = response["control"]
             for thread in startup_threads:
                 thread.join(remaining(budget))
                 if thread.is_alive():
@@ -242,23 +261,6 @@ class EngineProcess(Resource):
         except (OSError, ValueError):
             pass
 
-    def _keep_alive(self):
-        while not self._stopped.wait(5):
-            if not self._lock.acquire(blocking=False):
-                continue
-            try:
-                self._exchange("ping", {}, Budget(10))
-            except BaseException as error:
-                if not self._stopped.is_set():
-                    self._failures.append(error)
-                try:
-                    self.close()
-                except BaseException as closing:
-                    self._failures.append(closing)
-                return
-            finally:
-                self._lock.release()
-
     def _reap(self):
         try:
             self._process.wait()
@@ -274,144 +276,6 @@ class EngineProcess(Resource):
         finally:
             self._exited.set()
 
-    @staticmethod
-    def _remote_error(value):
-        if type(value) is not dict or not {"code", "message", "retry"} <= value.keys():
-            raise DeskWeaveError("INVALID_ARGUMENT", "进程控制错误响应无效。")
-        raise RemoteFailure(
-            value["code"], value["message"], retry=value["retry"], details=value.get("details")
-        )
-
-    def _exchange(self, method, params, budget):
-        if self._closed:
-            raise closed()
-        budget.check_time()
-        request = {"id": self._sequence + 1, "method": method, "params": params}
-        wire.dumps(request, checkpoint=budget.check_time)
-        self._sequence += 1
-        try:
-            self._control.send(request, budget=budget)
-            value = self._control.receive(budget=budget)
-            if (
-                type(value.get("id")) is not int
-                or value["id"] != self._sequence
-                or type(value.get("ok")) is not bool
-            ):
-                raise DeskWeaveError("INVALID_ARGUMENT", "进程控制响应不匹配。")
-            wire.fields(value, ("id", "ok", "result") if value["ok"] else ("id", "ok", "error"))
-        except BaseException:
-            self.close()
-            raise
-        if not value["ok"]:
-            self._remote_error(value["error"])
-        return value["result"]
-
-    def _call(self, method, params, *, timeout=30.0, cancel=None):
-        budget = Budget(timeout, cancel)
-        budget.acquire(self._lock)
-        try:
-            return self._exchange(method, params, budget)
-        finally:
-            self._lock.release()
-
-    def authorize(
-        self,
-        peer: ProcessBinding,
-        policy: ConnectionPolicy,
-        *,
-        lifetime: float,
-        timeout=30.0,
-        cancel=None,
-    ) -> ClientCredential:
-        if type(peer) is not ProcessBinding or type(policy) is not ConnectionPolicy:
-            raise TypeError("客户端授权需要受控进程登记和连接策略。")
-        budget = Budget(timeout, cancel)
-        budget.acquire(self._lock)
-        begun = False
-        try:
-            peer.check(budget.check_time)
-            result = self._exchange(
-                "register.begin",
-                {
-                    "peer": peer.identity.as_dict(),
-                    "installation": wire.manifest_header(peer.installation),
-                    "policy": policy.as_dict(),
-                    "lifetime": lifetime,
-                },
-                budget,
-            )
-            begun = True
-            wire.fields(result, ("needFiles",))
-            if type(result["needFiles"]) is not bool:
-                raise DeskWeaveError("INVALID_ARGUMENT", "客户端登记响应无效。")
-            if result["needFiles"]:
-                for batch in wire.chunks(peer.installation.components):
-                    self._exchange("register.files", {"files": batch}, budget)
-            return wire.credential(self._exchange("register.commit", {}, budget))
-        except RemoteFailure:
-            raise
-        except BaseException:
-            if begun:
-                self.close()
-            raise
-        finally:
-            self._lock.release()
-
-    def issue(self, credential: ClientCredential, *, timeout=30.0, cancel=None):
-        return wire.ticket(
-            self._call(
-                "ticket",
-                {"credential": wire.credential_value(credential)},
-                timeout=timeout,
-                cancel=cancel,
-            )
-        )
-
-    def connect(
-        self, credential: ClientCredential, local: ProcessBinding, *, timeout=30.0, cancel=None
-    ):
-        budget = Budget(timeout, cancel)
-        ticket = self.issue(credential, timeout=remaining(budget), cancel=cancel)
-        channel = connect(self.address, local, self._peer, timeout=remaining(budget), cancel=cancel)
-        try:
-            return NativeClient(channel, ticket, timeout=remaining(budget), cancel=cancel)
-        except BaseException as error:
-            channel._abort(error)
-            raise
-
-    def revoke(self, credential: ClientCredential, *, timeout=30.0, cancel=None):
-        self._call(
-            "revoke",
-            {"credential": wire.credential_value(credential)},
-            timeout=timeout,
-            cancel=cancel,
-        )
-
-    def revise(
-        self,
-        credential: ClientCredential,
-        policy: ConnectionPolicy,
-        *,
-        expected_version: int,
-        lifetime: float,
-        timeout=30.0,
-        cancel=None,
-    ):
-        return self._call(
-            "revise",
-            {
-                "credential": wire.credential_value(credential),
-                "policy": policy.as_dict(),
-                "version": expected_version,
-                "lifetime": lifetime,
-            },
-            timeout=timeout,
-            cancel=cancel,
-        )["authorizationVersion"]
-
-    def status(self, *, timeout=30.0):
-        return self._call("status", {}, timeout=timeout)
-
     def poll(self):
         return self._process.poll()
 
@@ -422,9 +286,3 @@ class EngineProcess(Resource):
         if self._failures:
             raise BaseExceptionGroup("执行进程控制或回收失败。", list(self._failures))
         return self._process.returncode
-
-    def close(self):
-        self._closed = True
-        self._stopped.set()
-        if self._control is not None:
-            self._control.close()

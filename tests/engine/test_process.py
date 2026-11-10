@@ -372,7 +372,7 @@ class ProcessCase(unittest.TestCase):
     def test_native_channel_closes_if_budget_expires_before_transfer(self):
         process = self.start()
         credential = process.authorize(self.local, ConnectionPolicy({"workflow.read"}), lifetime=60)
-        from deskweave.process import client as module
+        from deskweave.process import control as module
 
         original_connect, original_remaining = module.connect, module.remaining
         channels = []
