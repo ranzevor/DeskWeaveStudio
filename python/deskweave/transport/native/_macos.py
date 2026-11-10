@@ -95,8 +95,8 @@ class Process(Resource):
             )
             self._queue.control([event], 0, 0)
             self.initial = self.snapshot()
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            self._abort_initialization(error)
             raise
 
     def snapshot(self):

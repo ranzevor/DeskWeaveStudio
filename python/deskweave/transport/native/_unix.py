@@ -48,7 +48,7 @@ class Stream(Resource):
                     return self.sock.recv(size)
                 except BlockingIOError:
                     pass
-            select.select([self.sock], [], [], delay)
+            self._wait(True, delay)
 
     def write(self, data, budget):
         while True:
@@ -60,7 +60,18 @@ class Stream(Resource):
                     return self.sock.send(data)
                 except BlockingIOError:
                     pass
-            select.select([], [self.sock], [], delay)
+            self._wait(False, delay)
+
+    def _wait(self, readable, delay):
+        try:
+            select.select(
+                [self.sock] if readable else [], [] if readable else [self.sock], [], delay
+            )
+        except (OSError, ValueError) as error:
+            with self._lock:
+                if self._closed:
+                    raise closed() from error
+            raise
 
     def peer(self):
         with self._lock:

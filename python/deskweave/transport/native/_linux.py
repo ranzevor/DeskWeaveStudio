@@ -36,28 +36,33 @@ class Process(Resource):
         self._fd = os.pidfd_open(pid)
         try:
             self.initial = self.snapshot()
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            self._abort_initialization(error)
             raise
 
     def snapshot(self):
         with self._lock:
             if self._fd is None or select.select([self._fd], [], [], 0)[0]:
                 raise rejected()
-            root = Path(f"/proc/{self.pid}")
-            fields = (root / "stat").read_text().rsplit(")", 1)[1].split()
-            if fields[0] in {"Z", "X"}:
-                raise rejected()
-            uid = (root / "status").read_text().split("Uid:", 1)[1].splitlines()[0].split()
-            if len(set(uid)) != 1:
-                raise rejected()
-            session = self._session(root)
-            start = Path("/proc/sys/kernel/random/boot_id").read_text().strip() + ":" + fields[19]
-            executable = (root / "exe").resolve(strict=True)
-            image = tuple(fields[index] for index in (23, 24, 25, 45, 46))
-            if select.select([self._fd], [], [], 0)[0]:
-                raise rejected()
-            return uid[0], session, start, executable, image
+            try:
+                root = Path(f"/proc/{self.pid}")
+                fields = (root / "stat").read_text().rsplit(")", 1)[1].split()
+                if fields[0] in {"Z", "X"}:
+                    raise rejected()
+                uid = (root / "status").read_text().split("Uid:", 1)[1].splitlines()[0].split()
+                if len(set(uid)) != 1:
+                    raise rejected()
+                session = self._session(root)
+                start = (
+                    Path("/proc/sys/kernel/random/boot_id").read_text().strip() + ":" + fields[19]
+                )
+                executable = (root / "exe").resolve(strict=True)
+                image = tuple(fields[index] for index in (23, 24, 25, 45, 46))
+                if select.select([self._fd], [], [], 0)[0]:
+                    raise rejected()
+                return uid[0], session, start, executable, image
+            except (FileNotFoundError, ProcessLookupError) as error:
+                raise rejected() from error
 
     def _session(self, root):
         audit = root / "sessionid"

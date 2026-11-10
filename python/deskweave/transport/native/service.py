@@ -67,6 +67,7 @@ def serve_connection(channel, authority, *, timeout=30.0, cancel=None):
     channel.max_frame_bytes = authority.profile.max_frame_bytes
     budget = Budget(authority.handshake_lifetime, cancel)
     next_check = 0.0
+    processing = False
     connection = None
     stopped = threading.Event()
     failures = queue.Queue()
@@ -79,7 +80,10 @@ def serve_connection(channel, authority, *, timeout=30.0, cancel=None):
             raise closed()
         now = time.monotonic()
         if now >= next_check:
-            channel.check(budget.check_time)
+            if processing:
+                channel.check(budget.check_time)
+            else:
+                channel._check_identity(budget.check_time)
             next_check = time.monotonic() + 0.1
         if connection is not None and connection.closed:
             raise closed()
@@ -95,6 +99,18 @@ def serve_connection(channel, authority, *, timeout=30.0, cancel=None):
             except BaseException as closing:
                 failures.put(closing)
 
+    def exchange():
+        nonlocal next_check, processing
+        value = channel.receive(budget=budget)
+        processing = True
+        next_check = time.monotonic() + 0.1
+        try:
+            response = connection.receive(value)
+            channel.max_frame_bytes = connection.selected["limits"]["maxFrameBytes"]
+            channel.send(response, budget=budget)
+        finally:
+            processing = False
+
     budget.checkpoint = checkpoint
     errors = []
     try:
@@ -106,13 +122,10 @@ def serve_connection(channel, authority, *, timeout=30.0, cancel=None):
             maintenance.start()
             maintenance_started = True
             for _ in range(2):
-                response = connection.receive(channel.receive(budget=budget))
-                channel.max_frame_bytes = connection.selected["limits"]["maxFrameBytes"]
-                channel.send(response, budget=budget)
+                exchange()
             while True:
                 budget = Budget(timeout, cancel, checkpoint)
-                response = connection.receive(channel.receive(budget=budget))
-                channel.send(response, budget=budget)
+                exchange()
     except BaseException as error:
         errors.append(error)
     finally:

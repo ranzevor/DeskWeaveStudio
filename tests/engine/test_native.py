@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import errno
 import hashlib
 import json
 import os
 import queue
+import socket
 import struct
 import subprocess
 import sys
@@ -118,6 +120,148 @@ class NativeCase(unittest.TestCase):
                 lambda: ProcessBinding(os.getpid(), self.installation, instance_epoch="session"),
             )
 
+    def test_binding_creation_normalizes_unavailable_process(self):
+        from deskweave.transport.native import identity
+
+        missing_windows_pid = OSError("invalid process parameter")
+        missing_windows_pid.winerror = 87
+        for error in (
+            ProcessLookupError("process exited"),
+            FileNotFoundError("process image disappeared"),
+            PermissionError("process access denied"),
+            OverflowError("process id outside native range"),
+            missing_windows_pid,
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(identity.platform, "Process", side_effect=error),
+            ):
+                self.error(
+                    "AUTHENTICATION_FAILED",
+                    lambda: ProcessBinding(
+                        os.getpid(), self.installation, instance_epoch="unavailable"
+                    ),
+                )
+        process_type = identity.platform.Process
+        opened = process_type(os.getpid())
+        self.stack.callback(opened.close)
+        with (
+            patch.object(identity.platform, "Process", return_value=opened) as factory,
+            patch.object(
+                ProcessBinding,
+                "_verify_installation",
+                side_effect=FileNotFoundError("process image disappeared"),
+            ),
+        ):
+            factory.platform = process_type.platform
+            self.error(
+                "AUTHENTICATION_FAILED",
+                lambda: ProcessBinding(os.getpid(), self.installation, instance_epoch="exited"),
+            )
+        self.error("AUTHENTICATION_FAILED", opened.snapshot)
+        with patch.object(identity.platform, "Process", side_effect=OSError("resource failure")):
+            with self.assertRaisesRegex(OSError, "resource failure"):
+                ProcessBinding(os.getpid(), self.installation, instance_epoch="resource")
+        self.local.check()
+
+    def test_initialization_close_failure_keeps_native_reference(self):
+        from deskweave.transport.native import identity
+        from deskweave.transport.native._common import InitializationError
+
+        process_type = identity.platform.Process
+        for stage in ("snapshot", "installation"):
+            target = process_type if stage == "snapshot" else ProcessBinding
+            attribute = "snapshot" if stage == "snapshot" else "_verify_installation"
+            with (
+                self.subTest(stage=stage),
+                patch.object(
+                    target,
+                    attribute,
+                    side_effect=DeskWeaveError("AUTHENTICATION_FAILED", "initial identity"),
+                ),
+                patch.object(process_type, "close", side_effect=OSError("initial close")),
+                self.assertRaises(InitializationError) as caught,
+            ):
+                ProcessBinding(os.getpid(), self.installation, instance_epoch="failed-initial")
+            binding = caught.exception.resource
+            self.stack.callback(binding.close)
+            self.assertIsInstance(binding, ProcessBinding)
+            self.assertIsInstance(binding.process, process_type)
+            self.assertIs(binding.installation, self.installation)
+            binding.close()
+            self.error("AUTHENTICATION_FAILED", binding.process.snapshot)
+
+    def test_native_initialization_cleanup_retry_releases_reference(self):
+        from deskweave.transport.native import identity
+        from deskweave.transport.native._common import InitializationError
+
+        process_type = identity.platform.Process
+        original_close = process_type.close
+        attempts = []
+
+        def close(process):
+            attempts.append(process)
+            if len(attempts) == 1:
+                raise OSError("initial close")
+            original_close(process)
+
+        with (
+            patch.object(
+                process_type,
+                "snapshot",
+                side_effect=DeskWeaveError("AUTHENTICATION_FAILED", "initial identity"),
+            ),
+            patch.object(process_type, "close", close),
+            self.assertRaises(BaseExceptionGroup) as caught,
+        ):
+            ProcessBinding(os.getpid(), self.installation, instance_epoch="retried-initial")
+        self.assertNotIsInstance(caught.exception, InitializationError)
+        self.assertEqual(len(attempts), 2)
+        self.stack.callback(attempts[0].close)
+        self.assertIs(attempts[0], attempts[1])
+        self.error("AUTHENTICATION_FAILED", attempts[0].snapshot)
+
+    def test_continuous_identity_checks_normalize_unavailable_process(self):
+        for error in (
+            ProcessLookupError("process exited"),
+            FileNotFoundError("process image disappeared"),
+            PermissionError("process access denied"),
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(self.local.process, "snapshot", side_effect=error),
+                self.assertRaises(DeskWeaveError) as caught,
+            ):
+                self.local.check()
+            self.assertEqual(caught.exception.code, "AUTHENTICATION_FAILED")
+            self.assertIs(caught.exception.__cause__, error)
+        with patch.object(self.local.process, "snapshot", side_effect=OSError("resource failure")):
+            with self.assertRaisesRegex(OSError, "resource failure"):
+                self.local.check()
+        self.local.check()
+
+    def test_file_checks_normalize_io_failure_and_keep_cancellation(self):
+        from deskweave.transport.native.identity import digest_file
+
+        source = Path(self.directory) / "component.py"
+        source.write_bytes(b"content")
+        for target, attribute in ((Path, "open"), (os, "fstat"), (Path, "stat")):
+            for error in (FileNotFoundError("removed"), PermissionError("denied"), OSError("io")):
+                with (
+                    self.subTest(operation=attribute, error=type(error).__name__),
+                    patch.object(target, attribute, side_effect=error),
+                    self.assertRaises(DeskWeaveError) as caught,
+                ):
+                    digest_file(source)
+                self.assertEqual(caught.exception.code, "AUTHENTICATION_FAILED")
+                self.assertIs(caught.exception.__cause__, error)
+        for code in ("CANCELLED", "DEADLINE_EXCEEDED"):
+            error = DeskWeaveError(code, "interrupted")
+            with self.subTest(code=code), self.assertRaises(DeskWeaveError) as caught:
+                digest_file(source, lambda error=error: (_ for _ in ()).throw(error))
+            self.assertIs(caught.exception, error)
+        self.assertEqual(digest_file(source)[0], hashlib.sha256(b"content").hexdigest())
+
     def test_kernel_peer_and_unicode_frame(self):
         client, server, _listener = self.pair()
         self.assertEqual(server.peer.process_id, os.getpid())
@@ -126,6 +270,98 @@ class NativeCase(unittest.TestCase):
         self.assertEqual(server.receive(), message)
         server.send(message)
         self.assertEqual(client.receive(), message)
+
+    def test_connection_failures_close_read_and_write_channels(self):
+        for operation in ("read", "write"):
+            for failure in (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                with self.subTest(operation=operation, failure=failure):
+                    client, server, _listener = self.pair()
+                    with patch.object(client._raw, operation, side_effect=failure("peer closed")):
+                        self.error(
+                            "TRANSPORT_CLOSED",
+                            client.receive
+                            if operation == "read"
+                            else lambda client=client: client.send({}),
+                        )
+                    self.error("TRANSPORT_CLOSED", lambda client=client: client.send({}))
+                    self.error("TRANSPORT_CLOSED", server.receive)
+
+    @unittest.skipIf(sys.platform == "win32", "Unix socket polling")
+    def test_close_during_unix_read_and_write_wait(self):
+        from deskweave.transport.native import _unix
+
+        for operation in ("read", "write"):
+            for error in (OSError(errno.EBADF, "closed descriptor"), ValueError("negative fd")):
+                with self.subTest(operation=operation, error=type(error).__name__):
+                    first, second = socket.socketpair()
+                    with _unix.Stream(first) as stream, second:
+                        if operation == "write":
+                            first.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+                            for _ in range(1024):
+                                try:
+                                    first.send(b"x" * 8192)
+                                except BlockingIOError:
+                                    break
+                            else:
+                                self.fail("socket write buffer did not fill")
+
+                        def wait(*_args, target=stream, failure=error):
+                            target.close()
+                            raise failure
+
+                        with patch.object(_unix.select, "select", wait):
+                            self.error(
+                                "TRANSPORT_CLOSED",
+                                (lambda target=stream: target.read(1, Budget(1)))
+                                if operation == "read"
+                                else (lambda target=stream: target.write(b"x", Budget(1))),
+                            )
+                        self.assertEqual(first.fileno(), -1)
+
+        first, second = socket.socketpair()
+        with _unix.Stream(first) as stream, second:
+            failure = OSError(errno.EBADF, "poll failure")
+            with patch.object(_unix.select, "select", side_effect=failure):
+                with self.assertRaises(OSError) as caught:
+                    stream.read(1, Budget(1))
+                self.assertIs(caught.exception, failure)
+            second.send(b"x")
+            self.assertEqual(stream.read(1, Budget(1)), b"x")
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux process snapshots")
+    def test_process_exit_during_snapshot_rejects_identity(self):
+        from deskweave.transport.native import _linux
+
+        with _linux.Process(os.getpid()) as process:
+            for failure in (FileNotFoundError, ProcessLookupError):
+                with (
+                    self.subTest(failure=failure),
+                    patch.object(Path, "resolve", side_effect=failure("process exited")),
+                ):
+                    self.error("AUTHENTICATION_FAILED", process.snapshot)
+            self.assertEqual(process.snapshot(), process.initial)
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows process snapshots")
+    def test_process_exit_during_windows_snapshot_rejects_identity(self):
+        import ctypes
+
+        from deskweave.transport.native import _windows
+
+        with _windows.Process(os.getpid()) as process:
+            with patch.object(_windows, "process_executable", side_effect=ctypes.WinError(5)):
+                self.error("AUTHENTICATION_FAILED", process.snapshot)
+            with patch.object(_windows, "WaitForSingleObject", side_effect=(258, 0)):
+                self.error("AUTHENTICATION_FAILED", process.snapshot)
+            with patch.object(_windows, "WaitForSingleObject", return_value=0xFFFFFFFF):
+                ctypes.set_last_error(6)
+                with self.assertRaises(OSError) as caught:
+                    process.snapshot()
+                self.assertEqual(caught.exception.winerror, 6)
+            with patch.object(_windows, "process_executable", side_effect=ctypes.WinError(8)):
+                with self.assertRaises(OSError) as caught:
+                    process.snapshot()
+                self.assertEqual(caught.exception.winerror, 8)
+            self.assertEqual(process.snapshot(), process.initial)
 
     def test_multiple_connections_keep_listener_owned(self):
         first, server, listener = self.pair()
@@ -167,6 +403,117 @@ class NativeCase(unittest.TestCase):
             self.assertEqual(source.stat().st_size, state.st_size)
             self.assertEqual(source.stat().st_mtime_ns, state.st_mtime_ns)
             self.error("AUTHENTICATION_FAILED", binding.check)
+
+    def test_installation_scan_rejects_process_change_before_return(self):
+        original = self.local._verify_installation
+        snapshot = self.local._snapshot
+
+        def changed(checkpoint):
+            result = original(checkpoint)
+            self.local._snapshot = (*snapshot[:-1], "changed")
+            return result
+
+        try:
+            with patch.object(self.local, "_verify_installation", changed):
+                self.error("AUTHENTICATION_FAILED", self.local.check)
+        finally:
+            self.local._snapshot = snapshot
+        self.local.check()
+
+    def test_received_frame_rechecks_installation_after_waiting(self):
+        source = Path(self.directory) / "frame-component.py"
+        source.write_bytes(b"one")
+        selected = replace(self.installation, components=(installed(source),))
+        with ProcessBinding(os.getpid(), selected, instance_epoch="frame-wait") as local:
+            with NativeListener(local, directory=self.directory) as listener:
+                with connect(listener.address, local, local) as client:
+                    with listener.accept({os.getpid(): local}) as server:
+                        header_read = threading.Event()
+                        original = server._raw.read
+
+                        def read(size, budget):
+                            value = original(size, budget)
+                            if value:
+                                header_read.set()
+                            return value
+
+                        payload = b'{"value":1}'
+                        client._raw.write(struct.pack("<I", len(payload)), Budget(2))
+                        with patch.object(server._raw, "read", read):
+                            results, thread = self.worker(server.receive)
+                            self.assertTrue(header_read.wait(3))
+                            state = source.stat()
+                            source.write_bytes(b"two")
+                            os.utime(source, ns=(state.st_atime_ns, state.st_mtime_ns))
+                            client._raw.write(payload, Budget(2))
+                            succeeded, error = results.get(timeout=5)
+                            thread.join(5)
+                        self.assertFalse(succeeded)
+                        self.assertIsInstance(error, DeskWeaveError)
+                        self.assertEqual(error.code, "AUTHENTICATION_FAILED")
+
+    def test_shared_installation_reads_components_once_per_check(self):
+        alias = Path(self.directory) / "alias"
+        alias.mkdir()
+        source = alias / ".." / "shared-component.py"
+        source.write_bytes(b"one")
+        selected = replace(self.installation, components=(installed(source),))
+        actual = selected.components[0].path
+        with (
+            ProcessBinding(os.getpid(), selected, instance_epoch="shared-local") as local,
+            ProcessBinding(os.getpid(), selected, instance_epoch="shared-peer") as peer,
+            NativeListener(peer, directory=self.directory) as listener,
+            connect(listener.address, local, peer) as client,
+            listener.accept({os.getpid(): local}) as server,
+        ):
+            reads = []
+            original = Path.open
+
+            def opened(path, *args, **kwargs):
+                if path == actual:
+                    reads.append(path)
+                return original(path, *args, **kwargs)
+
+            with patch.object(Path, "open", opened):
+                client.check()
+                self.assertEqual(len(reads), 1)
+                client.check()
+                self.assertEqual(len(reads), 2)
+            state = source.stat()
+            source.write_bytes(b"two")
+            os.utime(source, ns=(state.st_atime_ns, state.st_mtime_ns))
+            self.error("AUTHENTICATION_FAILED", client.check)
+            self.error("AUTHENTICATION_FAILED", server.check)
+
+    def test_shared_installation_checks_each_running_image(self):
+        with (
+            ProcessBinding(os.getpid(), self.installation, instance_epoch="image-peer") as peer,
+            NativeListener(peer, directory=self.directory) as listener,
+            connect(listener.address, self.local, peer) as client,
+            listener.accept({os.getpid(): self.local}),
+        ):
+            source = Path(self.directory) / "different-image"
+            source.write_bytes(b"different image")
+            with patch.object(peer.process, "image_path", return_value=source, create=True):
+                self.error("AUTHENTICATION_FAILED", client.check)
+            client.check()
+
+    def test_distinct_installations_are_checked_independently(self):
+        source = Path(self.directory) / "peer-component.py"
+        source.write_bytes(b"one")
+        selected = replace(
+            self.installation, components=(*self.installation.components, installed(source))
+        )
+        with (
+            ProcessBinding(os.getpid(), selected, instance_epoch="distinct-peer") as peer,
+            NativeListener(peer, directory=self.directory) as listener,
+            connect(listener.address, self.local, peer) as client,
+            listener.accept({os.getpid(): self.local}),
+        ):
+            client.check()
+            source.write_bytes(b"two")
+            self.local.check()
+            self.error("AUTHENTICATION_FAILED", client.check)
 
     def test_large_installation_manifest_digest_is_not_a_frame(self):
         import rfc8785
@@ -328,7 +675,8 @@ class NativeCase(unittest.TestCase):
 
         with (
             patch("time.monotonic", lambda: now[0]),
-            patch.object(server, "check", check),
+            patch.object(server, "_check_identity", check),
+            patch.object(server, "check", side_effect=AssertionError("idle installation scan")),
             patch.object(authority, "accept", accept),
         ):
             self.error("CANCELLED", lambda: serve_connection(server, authority, cancel=cancelled))

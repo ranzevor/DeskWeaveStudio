@@ -12,9 +12,10 @@ uv run --frozen python examples/engine/workspace.py
 uv run --frozen python examples/engine/content_transfer.py
 uv run --frozen python examples/engine/connection.py
 uv run --frozen python examples/engine/native_connection.py
+uv run --frozen python examples/engine/process.py
 ```
 
-示例均使用临时工作空间。`workspace.py` 完成流程保存、读取、校验和表达式预览；`content_transfer.py` 上传超过 1MiB 的合成模型，通过引用保存，再分块读取并校验完整模型。`connection.py` 使用合成对端身份，完成字节帧握手、流程保存和重连后的原请求查询。`native_connection.py` 使用实际本机端点，完成认证、保存和重连查询。原生接口、安装策略及登录会话要求见[原生本机通道](../interfaces/native-transport.md)。示例退出时关闭资源并删除临时数据。
+示例均使用临时工作空间。`workspace.py` 完成流程保存、读取、校验和表达式预览；`content_transfer.py` 上传超过 1MiB 的合成模型，通过引用保存，再分块读取并校验完整模型。`connection.py` 使用合成对端身份，完成字节帧握手、流程保存和重连后的原请求查询。`native_connection.py` 使用实际本机端点，完成认证、保存和重连查询。`process.py` 在独立 Engine 进程中完成相同业务链路，接口见[独立进程](engine-process.md)。原生接口、安装策略及登录会话要求见[原生本机通道](../interfaces/native-transport.md)。示例退出时关闭资源并删除临时数据。
 
 ```bash
 uv run --frozen ruff check python tests examples/engine
@@ -47,7 +48,7 @@ uv build
 | content.discard | 按 uploadId 或 resourceId 释放当前会话的临时内容；参数互斥、重复释放幂等 |
 | resource.read | 按偏移读取最多 192KiB；返回整段资源摘要与实际块长度 |
 
-`workflow.save` 在资源声明或依赖绑定非空时返回 `METHOD_UNAVAILABLE`。`trajectoryEdit` 的处理结果为通过结构校验的封存内容引用；资产提交和依赖版本绑定未实现。M1 后续组件包括独立 Engine 进程与启动协调、运行调度和原生输入，见[路线图](../../ROADMAP.md)。方法与参数见[本机协议](../interfaces/local-protocol.md)。
+`workflow.save` 在资源声明或依赖绑定非空时返回 `METHOD_UNAVAILABLE`。`trajectoryEdit` 的处理结果为通过结构校验的封存内容引用；资产提交和依赖版本绑定未实现。M1 后续组件包括跨宿主发现与启动协调、运行调度和原生输入，见[路线图](../../ROADMAP.md)。方法与参数见[本机协议](../interfaces/local-protocol.md)。
 
 ## 服务调用
 

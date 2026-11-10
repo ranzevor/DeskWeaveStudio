@@ -10,9 +10,13 @@ from pathlib import Path
 
 def main():
     arguments = sys.argv[1:] or ["discover", "-s", "tests", "-q"]
+    examples = {
+        "--example": "examples/engine/native_connection.py",
+        "--process-example": "examples/engine/process.py",
+    }
     command = (
-        [sys.executable, "examples/engine/native_connection.py"]
-        if arguments == ["--example"]
+        [sys.executable, examples[arguments[0]]]
+        if len(arguments) == 1 and arguments[0] in examples
         else [sys.executable, "-m", "unittest", *arguments]
     )
     if sys.platform == "linux" and os.environ.get("CI") == "true":

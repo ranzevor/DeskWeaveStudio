@@ -166,18 +166,35 @@ class Process(Resource):
         self._lock = threading.RLock()
         try:
             self.initial = self.snapshot()
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            self._abort_initialization(error)
             raise
+
+    def _check_running(self):
+        if self._handle is None:
+            raise rejected()
+        status = WaitForSingleObject(self._handle, 0)
+        if status == 0:
+            raise rejected()
+        if status == 0xFFFFFFFF:
+            raise c.WinError(c.get_last_error())
+        if status != 258:
+            raise OSError("进程等待状态无效。")
 
     def snapshot(self):
         with self._lock:
-            if self._handle is None or WaitForSingleObject(self._handle, 0) != 258:
-                raise rejected()
-            times = [c.c_uint64() for _ in range(4)]
-            checked(GetProcessTimes(self._handle, *(c.byref(item) for item in times)))
-            executable = process_executable(self._handle)
-            user, session, self.logon_sid = token_identity(self._handle)
+            self._check_running()
+            try:
+                times = [c.c_uint64() for _ in range(4)]
+                checked(GetProcessTimes(self._handle, *(c.byref(item) for item in times)))
+                executable = process_executable(self._handle)
+                user, session, self.logon_sid = token_identity(self._handle)
+            except OSError as error:
+                if getattr(error, "winerror", None) == 5:
+                    raise rejected() from error
+                self._check_running()
+                raise
+            self._check_running()
             return user, session, str(times[0].value), executable
 
     def close(self):

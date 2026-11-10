@@ -20,7 +20,7 @@ DeskWeaveStudio focuses on recording across all displays, reproducing continuous
 
 ## Project status
 
-The execution core is under development. The Python service library provides expression previews, workflow validation, workflow version storage, chunked content transfer, catalog and revision pagination, saved-request lookup, connection authentication, and native local transports. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, standalone Engine process, Rust Agent, MCP Bridge and installers follow the [roadmap (zh-Hans)](ROADMAP.md).
+The execution core is under development. The Python service library provides expression previews, workflow validation, workflow version storage, chunked content transfer, catalog and revision pagination, saved-request lookup, connection authentication, native local transports, and a standalone Engine service process. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, cross-host launch coordination, Rust Agent, MCP Bridge and installers follow the [roadmap (zh-Hans)](ROADMAP.md).
 
 ## Execution core
 
@@ -31,7 +31,7 @@ uv sync --frozen
 uv run --frozen python examples/engine/workspace.py
 ```
 
-The example saves, reads and validates a workflow and previews an expression in a temporary workspace. Run `uv run --frozen python examples/engine/content_transfer.py` for the [large-workflow example](examples/engine/content_transfer.py), including chunked upload, resource reads and cleanup. See [Engine development (zh-Hans)](docs/development/engine.md) for available methods and development commands.
+The example saves, reads and validates a workflow and previews an expression in a temporary workspace. Run `uv run --frozen python examples/engine/content_transfer.py` for the [large-workflow example](examples/engine/content_transfer.py), including chunked upload, resource reads and cleanup. Run `uv run --frozen python examples/engine/process.py` for controlled process startup, saving and reconnecting. See [Engine development (zh-Hans)](docs/development/engine.md) for available methods and development commands.
 
 ## Interface prototypes
 
