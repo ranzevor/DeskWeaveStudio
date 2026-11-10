@@ -60,6 +60,15 @@ class DirectoryCase(unittest.TestCase):
         self.assertIsNone(directory.read("entry.json"))
         self.assertEqual(list(directory.path.iterdir()), [])
 
+    def test_atomic_record_replacement_preserves_open_reader(self):
+        directory = self.stack.enter_context(runtime_directory(self.local, self.root / "runtime"))
+        directory.write("entry.json", b'{"epoch":"first"}')
+        with directory.open("entry.json") as reader:
+            directory.write("entry.json", b'{"epoch":"second"}')
+            self.assertEqual(reader.read(), b'{"epoch":"first"}')
+            self.assertEqual(directory.read("entry.json"), b'{"epoch":"second"}')
+        self.assertEqual(directory.read("entry.json"), b'{"epoch":"second"}')
+
     def test_lock_contention_cancellation_and_release(self):
         directory = self.stack.enter_context(Directory(self.root))
         first = self.stack.enter_context(StartupLock(directory, Budget(2)))
