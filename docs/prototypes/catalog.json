@@ -10529,10 +10529,7 @@
               "$ref": "urn:deskweave:workflow:1"
             },
             "dependencies": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "urn:deskweave:values:1#/$defs/raw"
-              }
+              "$ref": "urn:deskweave:dependencies:1"
             },
             "definitionHash": {
               "type": "string",
@@ -10724,10 +10721,7 @@
               "$ref": "urn:deskweave:workflow:1"
             },
             "dependencies": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "urn:deskweave:values:1#/$defs/raw"
-              }
+              "$ref": "urn:deskweave:dependencies:1"
             },
             "modelRef": {
               "$ref": "urn:deskweave:content:1#/$defs/contentRef"
