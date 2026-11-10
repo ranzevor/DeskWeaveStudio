@@ -28,6 +28,10 @@ class CallBudgetExpired(Exception):
     pass
 
 
+class PauseExpired(Exception):
+    pass
+
+
 class Runtime:
     def __init__(
         self, workspace, *, clock=time.monotonic, threaded=True, max_runs=17, ports=LOGIC_PORTS
@@ -189,6 +193,10 @@ class Runtime:
                 self._condition.notify()
         return future
 
+    def _check_pause_retention(self, run):
+        if run.state == "paused" and self.clock() - run.paused_at >= 1800:
+            raise PauseExpired()
+
     def _command(self, item):
         run_id, command, expected, future, access = item
         if not future.set_running_or_notify_cancel():
@@ -199,6 +207,8 @@ class Runtime:
             if run is None:
                 raise DeskWeaveError("INVALID_ARGUMENT", "运行已结束或尚未接入执行器。")
             run.access.revalidate()
+            if command != "stop":
+                self._check_pause_retention(run)
             if type(expected) is not int or expected != run.control_version:
                 raise DeskWeaveError("REVISION_CONFLICT", "运行控制版本已变化。")
             now = self.clock()
@@ -225,10 +235,24 @@ class Runtime:
                         control_version=run.control_version + 1,
                     )
                 )
-            self.store.commit(run, change, self.clock())
+            self.store.commit(
+                run,
+                change,
+                self.clock(),
+                checkpoint=lambda: self._check_pause_retention(run) if command != "stop" else None,
+            )
             self._active[run_id] = change.run
             self._publish(change, all_frames=True)
             future.set_result(self.store.snapshot(run_id))
+        except PauseExpired:
+            try:
+                self._system_stop(
+                    run, self.clock(), "cancelled", fault("TIMEOUT", "运行暂停时间超过限制。")
+                )
+            except Exception as error:
+                future.set_exception(error)
+            else:
+                future.set_exception(DeskWeaveError("TIMEOUT", "运行暂停期限已届满。"))
         except Exception as error:
             future.set_exception(error)
 

@@ -1723,3 +1723,88 @@ class RuntimeTests(EngineCase):
             self.runtime.read_value(run, "shared", "x", access=self.access)["visibility"],
             "redacted",
         )
+
+    def test_sensitive_assertion_taints_skipped_error_writes(self):
+        for initial in ({}, {"x": 0}):
+            for secret in (True, False):
+                run = self.start(
+                    flow(
+                        f"assert{len(initial)}{secret}",
+                        [
+                            node(
+                                "assert",
+                                "logic.assert",
+                                {"condition": path("inputs", "secret")},
+                                next="done",
+                                error="write",
+                            ),
+                            node("write", "data.assign", {"name": "x", "value": 1}, next="done"),
+                            node(
+                                "done",
+                                "flow.return",
+                                {"values": {"x": operation("coalesce", path("vars", "x"), 0)}},
+                            ),
+                        ],
+                        parameters={
+                            "secret": {"type": "boolean", "required": True, "sensitive": True}
+                        },
+                        variables={"public": 9, **initial},
+                    ),
+                    inputs={"secret": secret},
+                )
+                self.assertEqual(self.result(run)["output"]["visibility"], "redacted")
+                self.assertEqual(
+                    self.runtime.read_value(run, "local", "public", access=self.access)["value"], 9
+                )
+
+    def test_expired_pause_rejects_resume_and_duplicate_pause(self):
+        for command, stale in (("resume", False), ("pause", False), ("resume", True)):
+            run = self.start(
+                flow(f"expire{command}{stale}", [node("wait", "time.wait", {"durationMs": 10000})])
+            )
+            self.runtime.pump()
+            pause = self.runtime.control(
+                run,
+                "pause",
+                self.runtime.read_state(run, access=self.access)["controlVersion"],
+                access=self.access,
+            )
+            self.runtime.tick()
+            version = pause.result()["controlVersion"]
+            self.elapsed[0] += 1801
+            resumed = self.runtime.control(run, command, version - int(stale), access=self.access)
+            self.runtime.tick()
+            with self.assertRaises(DeskWeaveError) as caught:
+                resumed.result()
+            self.assertEqual(caught.exception.code, "TIMEOUT")
+            self.assertEqual(self.runtime.result(run, access=self.access)["state"], "cancelled")
+            self.assertNotIn(run, self.runtime._active)
+
+    def test_pause_expiry_during_resume_commit_rolls_back_transition(self):
+        run = self.start(flow("expireCommit", [node("wait", "time.wait", {"durationMs": 10000})]))
+        self.runtime.pump()
+        pause = self.runtime.control(
+            run,
+            "pause",
+            self.runtime.read_state(run, access=self.access)["controlVersion"],
+            access=self.access,
+        )
+        self.runtime.tick()
+        version = pause.result()["controlVersion"]
+        self.elapsed[0] = 1799
+        resumed = self.runtime.control(run, "resume", version, access=self.access)
+        commit = self.runtime.store.commit
+
+        def cross_deadline(before, change, now, **kwargs):
+            if change.run.state == "running":
+                self.elapsed[0] = 1801
+            return commit(before, change, now, **kwargs)
+
+        with patch.object(self.runtime.store, "commit", side_effect=cross_deadline):
+            self.runtime.tick()
+        with self.assertRaises(DeskWeaveError) as caught:
+            resumed.result()
+        self.assertEqual(caught.exception.code, "TIMEOUT")
+        result = self.runtime.result(run, access=self.access)
+        self.assertEqual(result["state"], "cancelled")
+        self.assertEqual(result["controlVersion"], version + 1)

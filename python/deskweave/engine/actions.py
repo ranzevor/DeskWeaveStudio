@@ -151,10 +151,7 @@ class LogicActions:
                     ),
                 )
             else:
-                if condition.sensitive:
-                    frame.control += (
-                        (kernel._program(change, frame).error_joins[frame.node], True),
-                    )
+                kernel._guard(change, frame, condition.sensitive)
                 kernel._complete(
                     change, frame, node, Value.freeze({"passed": True}).marked(condition.sensitive)
                 )
