@@ -70,11 +70,15 @@ class Directory(Resource):
 
     def open(self, name, *, write=False, create=False, exclusive=False, delete=False):
         flags = (os.O_RDWR if write else os.O_RDONLY) | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
-        if create:
-            flags |= os.O_CREAT
-        if exclusive:
-            flags |= os.O_CREAT | os.O_EXCL
-        fd = os.open(name, flags, 0o600, dir_fd=self.fd)
+        if create or exclusive:
+            try:
+                fd = os.open(name, flags | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=self.fd)
+            except FileExistsError:
+                if exclusive:
+                    raise
+                fd = os.open(name, flags, dir_fd=self.fd)
+        else:
+            fd = os.open(name, flags, dir_fd=self.fd)
         owned = File(fd)
         try:
             info = os.fstat(fd)
