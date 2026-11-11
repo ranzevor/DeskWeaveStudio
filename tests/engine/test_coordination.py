@@ -85,6 +85,129 @@ class DirectoryCase(unittest.TestCase):
             self.assertTrue((self.root / ".engine-start.lock").exists())
         self.assertTrue((self.root / ".engine-start.lock").exists())
 
+    def test_concurrent_startup_creation_shares_file_and_serializes_updates(self):
+        from deskweave.coordination.directory import backend
+
+        count = 12
+        ready = threading.Barrier(count)
+
+        def increment(_):
+            with Directory(self.root) as directory:
+                ready.wait(timeout=10)
+                with StartupLock(directory, Budget(10)) as selected:
+                    value = int(selected.stream.read() or b"0")
+                    selected.stream.seek(0)
+                    selected.stream.write(str(value + 1).encode("ascii"))
+                    selected.stream.truncate()
+                    return value, backend.file_identity(selected.stream)
+
+        with ThreadPoolExecutor(max_workers=count) as pool:
+            results = list(pool.map(increment, range(count)))
+        self.assertEqual(sorted(value for value, _ in results), list(range(count)))
+        self.assertEqual(len({identity for _, identity in results}), 1)
+        self.assertEqual((self.root / ".engine-start.lock").read_bytes(), str(count).encode())
+
+    @unittest.skipIf(os.name == "nt", "POSIX concurrent file creation")
+    def test_shared_creation_opens_file_created_by_competitor(self):
+        import errno
+
+        from deskweave.coordination.directory import backend
+
+        directory = self.stack.enter_context(Directory(self.root))
+        original = os.open
+        for write in (False, True):
+            name = f"shared-{write}.lock"
+            created = []
+
+            def compete(selected, flags, mode=0o777, *, dir_fd=None, name=name, created=created):
+                if selected == name and dir_fd == directory._raw.fd and flags & os.O_CREAT:
+                    with os.fdopen(
+                        original(name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=dir_fd),
+                        "wb",
+                    ) as other:
+                        other.write(b"existing")
+                        created.append(backend.file_identity(other))
+                    if not flags & os.O_EXCL:
+                        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), name)
+                return original(selected, flags, mode, dir_fd=dir_fd)
+
+            with self.subTest(write=write), patch.object(os, "open", compete):
+                with directory.open(name, write=write, create=True) as selected:
+                    self.assertEqual(selected.read(), b"existing")
+                    self.assertEqual(backend.file_identity(selected), created[0])
+            self.assertEqual((self.root / name).read_bytes(), b"existing")
+            self.assertEqual(len(created), 1)
+
+    @unittest.skipIf(os.name == "nt", "POSIX exclusive file creation")
+    def test_exclusive_creation_preserves_existing_file(self):
+        directory = self.stack.enter_context(Directory(self.root))
+        with directory.open("entry.lock", write=True, exclusive=True) as selected:
+            selected.write(b"original")
+            self.assertEqual(os.fstat(selected.fileno()).st_mode & 0o777, 0o600)
+            self.assertFalse(os.get_inheritable(selected.fileno()))
+        with self.assertRaises(FileExistsError):
+            directory.open("entry.lock", write=True, exclusive=True)
+        with self.assertRaises(FileNotFoundError):
+            directory.open("absent.lock")
+        self.assertEqual((self.root / "entry.lock").read_bytes(), b"original")
+
+    @unittest.skipIf(os.name == "nt", "POSIX file creation failures")
+    def test_shared_creation_preserves_errors_and_does_not_recreate_removed_file(self):
+        import errno
+
+        directory = self.stack.enter_context(Directory(self.root))
+        original = os.open
+        for code in (errno.EACCES, errno.EIO, errno.ENOENT):
+            calls = []
+
+            def fail(name, flags, mode=0o777, *, dir_fd=None, code=code, calls=calls):
+                if name == "failed.lock" and dir_fd == directory._raw.fd:
+                    calls.append(flags)
+                    raise OSError(code, os.strerror(code), name)
+                return original(name, flags, mode, dir_fd=dir_fd)
+
+            with self.subTest(code=code), patch.object(os, "open", fail):
+                with self.assertRaises(OSError) as caught:
+                    directory.open("failed.lock", write=True, create=True)
+                self.assertEqual(caught.exception.errno, code)
+            self.assertEqual(len(calls), 1)
+            self.assertFalse((self.root / "failed.lock").exists())
+
+        removed = self.root / "removed.lock"
+        removed.write_bytes(b"original")
+
+        def disappear(name, flags, mode=0o777, *, dir_fd=None):
+            if name == removed.name and dir_fd == directory._raw.fd and not flags & os.O_CREAT:
+                removed.unlink()
+            return original(name, flags, mode, dir_fd=dir_fd)
+
+        with patch.object(os, "open", disappear), self.assertRaises(FileNotFoundError):
+            directory.open(removed.name, write=True, create=True)
+        self.assertFalse(removed.exists())
+        self.assertEqual(directory._streams, set())
+
+    @unittest.skipIf(os.name == "nt", "POSIX special file protection")
+    def test_shared_creation_rejects_links_and_nonregular_files(self):
+        import errno
+
+        directory = self.stack.enter_context(Directory(self.root))
+        source = self.root / "original"
+        source.write_bytes(b"original")
+        (self.root / "symbolic").symlink_to(source)
+        os.link(source, self.root / "hard")
+        os.mkfifo(self.root / "pipe", 0o600)
+        (self.root / "folder").mkdir()
+        for name, code in (("symbolic", errno.ELOOP), ("folder", errno.EISDIR)):
+            with self.subTest(name=name), self.assertRaises(OSError) as caught:
+                directory.open(name, write=True, create=True)
+            self.assertEqual(caught.exception.errno, code)
+        for name in ("hard", "pipe"):
+            with self.subTest(name=name), self.assertRaises(DeskWeaveError) as caught:
+                directory.open(name, write=True, create=True)
+            self.assertEqual(caught.exception.code, "RESOURCE_DENIED")
+        self.assertEqual(source.read_bytes(), b"original")
+        self.assertEqual(directory._streams, set())
+
     def test_metadata_limits_and_invalid_names(self):
         directory = self.stack.enter_context(Directory(self.root))
         directory.write("large.json", b"a" * 16384)
