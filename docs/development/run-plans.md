@@ -2,7 +2,7 @@
 
 ## 内部接口
 
-`RunService(workspace)` 位于 `deskweave.engine.run_planning`，提供准备与接收接口：
+`RunService(workspace, ports=LOGIC_PORTS)` 位于 `deskweave.engine.run_planning`，提供准备与接收接口：
 
 - `prepare(access, params)` 根据固定流程版本构建 `RunPlan`，完成静态校验、依赖读取、输入默认值与类型检查、目标授权和预算计算。
 - `accept(access, request_id, params)` 先查询原请求，再为新请求准备计划并原子登记运行，返回既有 run.start 格式的 queued 接收结果。
@@ -22,7 +22,7 @@
 
 省略 limits 时使用默认 10 分钟主动时间、10,000 步、8 层调用、8 个并行调用和 100,000 个输入事件。显式 limits 替换默认请求预算，再逐项与根流程声明上限取较小值。子流程保留自己的固定定义上限供调用时计算。JSON 整值浮点与整数按同一数值处理。
 
-准备过程要求 run.execute，并核对所有流程、资产和动作所需权限。声明的必需目标必须提供，目标令牌由授权服务检查；准备过程不发送桌面输入。快照的规范编码最多 32MiB，依赖版本与绑定数量沿用依赖解析器的统一预算。
+准备过程按实际注册的动作端口检查完整依赖计划，要求 run.execute，并核对所有流程、资产和动作所需权限。声明的必需目标必须提供，目标令牌由授权服务检查；准备过程不发送桌面输入。快照的规范编码最多 32MiB，依赖版本与绑定数量沿用依赖解析器的统一预算。
 
 ## 原子接收与重放
 
@@ -36,7 +36,7 @@
 
 数据库格式 4 将 command_receipt 的对象归属改为 subject_kind/subject_id，增加授权引用与代次；已有 workflow.save 行保持原请求摘要、结果、时间及 workflow 归属。升级与运行表建立在同一事务完成，失败恢复原结构与版本号。
 
-新增 run、frame、run_event、run_workflow_ref、run_asset_ref，索引覆盖运行拥有者与状态、调用创建次序、事件序号及反向版本引用。格式 1～3 沿既有升级入口打开，旧版本引擎拒绝写入格式 4。已有流程、资产与保存回执保持原内容。
+新增 run、frame、run_event、run_workflow_ref、run_asset_ref，索引覆盖运行拥有者与状态、调用创建次序、事件序号及反向版本引用。格式 1～4 沿既有升级入口升级到当前格式 5，旧版本引擎拒绝写入较新格式。已有流程、资产与保存回执保持原内容。执行位置、变量版本与调用结果的增量扩展见[纯逻辑执行内核](execution-core.md)。
 
 ## 验证入口
 

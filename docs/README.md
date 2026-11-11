@@ -34,6 +34,7 @@
 | [模板生产](design/templates.md) | 候选提取、OCR 与规则命名、冲突、批次和导出 |
 | [观察中心](design/observations.md) | 持续会话、变化检测、记录查询和导出 |
 | [模型连接](design/model-connections.md) | 模型参数、图像消息模板、输出结构和连接测试 |
+| [纯逻辑执行内核](development/execution-core.md) | 协作调度、调用帧、错误恢复、变量版本与执行存储 |
 | [运行计划与持久化基础](development/run-plans.md) | 不可变计划、原子接收、运行引用与通用回执 |
 | [资产版本与流程依赖](development/assets.md) | 不可变资产、固定依赖、内容完整性与范围读取 |
 | [数据设计](design/storage.md) | 表结构、对象存储、事务、包交换与备份 |

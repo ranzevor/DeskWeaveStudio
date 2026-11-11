@@ -52,7 +52,10 @@ workspace.json 保存格式版本、工作空间身份和创建信息，不保�
 | template_candidate_set | id、source_ref_hash、source_hash、roi_hash、options_hash、candidate_manifest_hash、version、total、truncated_count、state、expires_at |
 | template_name_proposal | id、candidate_set_id、candidate_version、selection_hash、policy_hash、proposal_hash、items_hash、state、expires_at |
 | template_batch | id、proposal_id、manifest_hash、committed_at；proposal_id 唯一 |
-| run_variable | run_id、version、values_hash；按预期版本比较提交 |
+| execution_run | run_id、version、shared_version、steps、active_ms、clock_state、background、error |
+| execution_frame | frame_id、run_id、metadata、error；保存执行位置及循环和控制上下文 |
+| execution_value | run_id、frame_id、scope、name、version、value_hash、labels_hash、valid_until；按版本读取值与标签 |
+| execution_unhandled | parent_id、child_id；未由显式错误路径处理的子调用 |
 | start_plan | id、snapshot_inputs_hash、target_generations_hash、expires_at |
 | pause_record | run_id、pause_id、agent_epoch、generation、checkpoint_hash、input_target_token、held_inputs_hash、target_state_hash、expires_at；原生游标由存活 Agent 持有 |
 | resume_plan | id、run_id、pause_id、control_version、restore_target_token、plan_hash、expires_at、state、consumed_by_request；状态为 prepared/consumed/cancelled/expired |

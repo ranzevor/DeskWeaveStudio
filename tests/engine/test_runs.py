@@ -445,7 +445,17 @@ class RunTests(EngineCase):
     def legacy_v3(self):
         self.engine.close()
         with closing(sqlite3.connect(self.directory / "data/workspace.db")) as connection:
-            for name in ["run_asset_ref", "run_workflow_ref", "run_event", "frame", "run"]:
+            for name in [
+                "execution_value",
+                "execution_unhandled",
+                "execution_frame",
+                "execution_run",
+                "run_asset_ref",
+                "run_workflow_ref",
+                "run_event",
+                "frame",
+                "run",
+            ]:
                 connection.execute(f"DROP TABLE {name}")
             connection.execute(
                 "ALTER TABLE command_receipt RENAME COLUMN subject_id TO workflow_id"
@@ -481,7 +491,7 @@ class RunTests(EngineCase):
                 ).fetchone()
             )
             self.assertEqual(after, before)
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 5)
         self.assertEqual(
             self.success("request.status", {"requestId": before[1]})["result"],
             json.loads(before[5]),
@@ -555,3 +565,58 @@ class RunTests(EngineCase):
             self.runs.store.create(plan, "changed", authorize=self.access.check_snapshot)
         self.assertEqual(caught.exception.code, "DEPENDENCY_MISMATCH")
         self.empty_runs()
+
+    def legacy_v4(self):
+        self.engine.close()
+        with closing(sqlite3.connect(self.directory / "data/workspace.db")) as connection:
+            for name in (
+                "execution_value",
+                "execution_unhandled",
+                "execution_frame",
+                "execution_run",
+            ):
+                connection.execute(f"DROP TABLE {name}")
+            connection.execute("PRAGMA user_version=4")
+
+    def test_v4_upgrade_preserves_run_plan_and_original_receipt(self):
+        params = self.saved()
+        accepted = self.runs.accept(self.access, "accepted-v4", params)
+        before = self.runs.store.read(accepted["runId"])
+        self.legacy_v4()
+        self.reopen()
+        self.assertEqual(self.runs.store.read(accepted["runId"]), before)
+        self.assertEqual(self.runs.accept(self.access, "accepted-v4", params), accepted)
+        with self.workspace.transaction() as connection:
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 5)
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM execution_run").fetchone()[0], 0
+            )
+
+    def test_v4_upgrade_failure_restores_entire_schema(self):
+        self.saved()
+        self.legacy_v4()
+        connect = sqlite3.connect
+
+        class FailingConnection(sqlite3.Connection):
+            def execute(self, sql, *args):
+                if sql.startswith("CREATE TABLE IF NOT EXISTS execution_unhandled"):
+                    raise sqlite3.OperationalError("execution schema upgrade failed")
+                return super().execute(sql, *args)
+
+        with patch(
+            "deskweave.adapters.workspace.sqlite3.connect",
+            side_effect=lambda *args, **kwargs: connect(*args, factory=FailingConnection, **kwargs),
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                Workspace(self.directory)
+        with closing(connect(self.directory / "data/workspace.db")) as connection:
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
+            self.assertFalse(
+                connection.execute(
+                    "SELECT name FROM sqlite_master WHERE name LIKE 'execution_%'"
+                ).fetchall()
+            )
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM command_receipt").fetchone()[0], 1
+            )
+        self.reopen()

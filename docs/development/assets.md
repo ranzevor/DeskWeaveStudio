@@ -32,7 +32,7 @@
 
 ## 持久化格式
 
-资产存储在数据库格式 3 中引入；当前格式 4 的运行持久化扩展见[运行计划](run-plans.md)。资产结构在单次事务中增加 asset、asset_version、asset_name_claim、blob_chunk、revision_asset_ref 和 revision_workflow_ref。格式 1/2 的既有流程版本、对象和保存回执保持原内容；初始化失败回滚，重新打开后继续按原格式处理。数据格式由支持相应格式的 Engine 读取，旧 Engine 拒绝写入。
+资产存储在数据库格式 3 中引入；当前格式 5 的运行持久化见[运行计划](run-plans.md)和[执行内核](execution-core.md)。资产结构在单次事务中增加 asset、asset_version、asset_name_claim、blob_chunk、revision_asset_ref 和 revision_workflow_ref。格式 1/2 的既有流程版本、对象和保存回执保持原内容；初始化失败回滚，重新打开后继续按原格式处理。数据格式由支持相应格式的 Engine 读取，旧 Engine 拒绝写入。
 
 ## 验证
 

@@ -10,6 +10,7 @@ from deskweave.contracts import method_schema, validate
 from deskweave.domain.runs import RunPlan
 from deskweave.domain.values import matches_type
 from deskweave.domain.workflow import validate_workflow
+from deskweave.engine.actions import LOGIC_PORTS
 from deskweave.errors import DeskWeaveError
 from deskweave.json import digest, dumps, json_pointer, loads
 
@@ -87,7 +88,8 @@ def _invalid(message, *path):
 
 
 class RunService:
-    def __init__(self, workspace):
+    def __init__(self, workspace, *, ports=LOGIC_PORTS):
+        self.supported_actions = ports.actions
         self.workspace = workspace
         self.store = RunStore(workspace)
 
@@ -139,6 +141,12 @@ class RunService:
             for node in definition["nodes"]:
                 self.workspace.check_deadline()
                 action = node["action"]
+                if action not in self.supported_actions:
+                    raise DeskWeaveError(
+                        "METHOD_UNAVAILABLE",
+                        "执行器不支持此流程中的动作。",
+                        details={"action": action},
+                    )
                 if action.startswith(("pointer.", "keyboard.")) or action == "input.trajectory":
                     required.add("desktop.input")
                 elif action == "screen.capture":
