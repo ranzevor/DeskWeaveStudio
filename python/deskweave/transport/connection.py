@@ -90,6 +90,7 @@ class ServerConnection(_Connection):
     ):
         super().__init__()
         self.authority = authority
+        self._requests = threading.Lock()
         self._check_peer = check_peer
         self._close_transport = close_transport
         self.peer = peer
@@ -110,15 +111,17 @@ class ServerConnection(_Connection):
         self.authority.check(self, session.client_id, session.authorization_version)
 
     def receive(self, value: object) -> dict:
-        with self._lock:
+        with self._requests:
             try:
-                if self._check_peer is not None:
-                    self._check_peer()
-                if self._state == "new":
-                    return self._hello(value)
-                if self._state == "challenge":
-                    return self._authenticate(value)
-                self._expect("ready")
+                with self._lock:
+                    if self._check_peer is not None:
+                        self._check_peer()
+                    if self._state == "new":
+                        return self._hello(value)
+                    if self._state == "challenge":
+                        return self._authenticate(value)
+                    self._expect("ready")
+                    session = self._session
                 self._guard()
                 request = loads(
                     dumps(value, max_bytes=self._max_frame_bytes, checkpoint=self._guard),
@@ -127,7 +130,7 @@ class ServerConnection(_Connection):
                 if type(request) is not dict or request.get("kind") != "request":
                     raise DeskWeaveError("INVALID_ARGUMENT", "认证后的连接需要业务请求。")
                 response = self.authority.engine.dispatch(
-                    self._session.id,
+                    session.id,
                     request,
                     authorize=self._guard,
                     max_frame_bytes=self._max_frame_bytes,
@@ -185,6 +188,7 @@ class ServerConnection(_Connection):
             workflow_ids=grant.policy.workflow_ids,
             capabilities=set(self._selected["capabilities"]),
             authorization_version=grant.version,
+            revalidate=lambda: self.authority.check_grant(grant.client_id, grant.version),
         )
         self._guard()
         ready = {

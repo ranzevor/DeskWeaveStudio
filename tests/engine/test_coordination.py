@@ -402,13 +402,13 @@ class CoordinationCase(unittest.TestCase):
         )
         self.coordinator = self.coordinator_for()
 
-    def coordinator_for(self, **options):
+    def coordinator_for(self, idle_grace=1.0, **options):
         return self.stack.enter_context(
             WorkspaceCoordinator(
                 self.launch,
                 self.local,
                 directory=self.runtime,
-                idle_grace=0.3,
+                idle_grace=idle_grace,
                 **options,
             )
         )

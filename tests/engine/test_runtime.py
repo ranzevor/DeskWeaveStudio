@@ -37,7 +37,7 @@ class RuntimeTests(EngineCase):
             "runner",
             "grant",
             1,
-            frozenset({"run.execute", "run.read", "workflow.read", "asset.read"}),
+            frozenset({"run.execute", "run.control", "run.read", "workflow.read", "asset.read"}),
         )
         self.runtime = Runtime(self.workspace, clock=lambda: self.elapsed[0], threaded=False)
         self.planner = RunService(self.workspace)
@@ -831,23 +831,30 @@ class RuntimeTests(EngineCase):
             "unavailable",
         )
 
-    def test_active_attach_and_reads_check_current_owner(self):
+    def test_execution_owner_and_shared_read_control_permissions(self):
         run = self.start(flow("owner", [node("wait", "time.wait", {"durationMs": 1000})]))
         other = replace(self.access, client_id="other")
-        for call in (
-            lambda: self.runtime.attach(run, other),
-            lambda: self.runtime.read_state(run, access=other),
-            lambda: self.runtime.read_value(run, "local", "x", access=other),
-            lambda: self.runtime.result(run, access=other),
+        with self.assertRaises(DeskWeaveError) as caught:
+            self.runtime.attach(run, other)
+        self.assertEqual(caught.exception.code, "ACCESS_DENIED")
+        self.assertEqual(self.runtime.read_state(run, access=other)["runId"], run)
+        self.runtime.read_value(run, "local", "x", access=other)
+        self.runtime.result(run, access=other)
+        for denied in (
+            replace(other, permissions=frozenset({"workflow.read"})),
+            replace(other, workflow_ids=frozenset({"unrelated"})),
         ):
             with self.assertRaises(DeskWeaveError) as caught:
-                call()
+                self.runtime.read_state(run, access=denied)
+            self.assertEqual(caught.exception.code, "ACCESS_DENIED")
+            future = self.runtime.control(run, "stop", 1, access=denied)
+            self.runtime.tick()
+            with self.assertRaises(DeskWeaveError) as caught:
+                future.result()
             self.assertEqual(caught.exception.code, "ACCESS_DENIED")
         future = self.runtime.control(run, "stop", 1, access=other)
         self.runtime.tick()
-        with self.assertRaises(DeskWeaveError) as caught:
-            future.result()
-        self.assertEqual(caught.exception.code, "ACCESS_DENIED")
+        self.assertEqual(future.result()["state"], "cancelled")
 
     def test_sensitive_expression_normal_and_error_paths_meet(self):
         for secret in (0, 1):

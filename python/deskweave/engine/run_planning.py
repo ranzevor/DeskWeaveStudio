@@ -57,10 +57,13 @@ class RunAccess:
         if not set(permissions) <= self.permissions:
             raise DeskWeaveError("ACCESS_DENIED", "当前客户端缺少运行所需的权限。")
 
-    def workflow(self, identity):
-        self.require("workflow.read")
+    def check_workflow_scope(self, identity):
         if self.workflow_ids is not None and identity not in self.workflow_ids:
             raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此流程的访问权限。")
+
+    def workflow(self, identity):
+        self.require("workflow.read")
+        self.check_workflow_scope(identity)
 
     def target(self, slot, token, kind):
         self.revalidate()
@@ -88,10 +91,11 @@ def _invalid(message, *path):
 
 
 class RunService:
-    def __init__(self, workspace, *, ports=LOGIC_PORTS):
+    def __init__(self, workspace, *, ports=LOGIC_PORTS, max_unfinished=None):
         self.supported_actions = ports.actions
         self.workspace = workspace
         self.store = RunStore(workspace)
+        self.max_unfinished = max_unfinished
 
     def _parameters(self, params):
         value = loads(
@@ -101,33 +105,53 @@ class RunService:
         validate(
             method_schema("run.start", "params"), value, checkpoint=self.workspace.check_deadline
         )
-        if any(key in value for key in ("startNode", "initialVariables", "debug", "planId")):
+        if any(key in value for key in ("startNode", "initialVariables", "debug")):
             raise DeskWeaveError("METHOD_UNAVAILABLE", "该运行入口尚未接入执行服务。")
         return {"interruptPolicy": "pause", **value}
 
-    def _inputs(self, definition, supplied):
-        if not supplied.keys() <= definition["parameters"].keys():
-            key = next(key for key in supplied if key not in definition["parameters"])
-            _invalid("输入参数未在流程中声明。", "inputs", key)
+    def _inputs(self, definition, supplied, report=None):
+        def invalid(message, key):
+            if report is None:
+                _invalid(message, "inputs", key)
+            report["diagnostics"].append(
+                {
+                    "code": "INVALID_ARGUMENT",
+                    "message": message,
+                    "fieldPath": json_pointer(("inputs", key)),
+                }
+            )
+
+        for key in supplied.keys() - definition["parameters"].keys():
+            invalid("输入参数未在流程中声明。", key)
         inputs, sensitive = {}, []
         for key, spec in definition["parameters"].items():
             self.workspace.check_deadline()
+            satisfied = True
             if key in supplied:
                 value = supplied[key]
             elif "default" in spec:
                 value = spec["default"]
             elif spec["required"]:
-                _invalid("缺少必填输入参数。", "inputs", key)
+                invalid("缺少必填输入参数。", key)
+                satisfied, value = False, None
             else:
+                if report is not None:
+                    report["requirements"].append({"name": key, "kind": "input", "satisfied": True})
                 continue
-            if not matches_type(value, spec["type"]):
-                _invalid("输入参数类型不匹配。", "inputs", key)
-            inputs[key] = value
-            if spec["sensitive"]:
-                sensitive.append(key)
+            if satisfied and not matches_type(value, spec["type"]):
+                invalid("输入参数类型不匹配。", key)
+                satisfied = False
+            if report is not None:
+                report["requirements"].append(
+                    {"name": key, "kind": "input", "satisfied": satisfied}
+                )
+            if satisfied:
+                inputs[key] = value
+                if spec["sensitive"]:
+                    sensitive.append(key)
         return inputs, sorted(sensitive)
 
-    def _prepare(self, access, params):
+    def _prepare(self, access, params, report=None):
         access.require("run.execute")
         root = None
         required = {"run.execute", "workflow.read"}
@@ -164,13 +188,43 @@ class RunService:
         if graph.assets:
             required.add("asset.read")
         access.require(*required)
-        inputs, sensitive = self._inputs(root, params["inputs"])
+        manifest = graph.manifest()
+        if report is not None:
+            report["workflows"] = sorted({item["workflowId"] for item in manifest["workflows"]})
+            report["definitionHash"] = next(
+                item["definitionHash"]
+                for item in manifest["workflows"]
+                if (item["workflowId"], item["revision"])
+                == (params["workflowId"], params["revision"])
+            )
+        inputs, sensitive = self._inputs(root, params["inputs"], report)
         targets = params["targets"]
         if not targets.keys() <= root["targets"].keys():
-            _invalid("目标槽未在流程中声明。", "targets")
+            if report is None:
+                _invalid("目标槽未在流程中声明。", "targets")
+            report["diagnostics"].append(
+                {
+                    "code": "INVALID_ARGUMENT",
+                    "message": "目标槽未在流程中声明。",
+                    "fieldPath": "/targets",
+                }
+            )
         for slot, spec in root["targets"].items():
-            if spec["required"] and slot not in targets:
-                _invalid("缺少必填目标槽。", "targets", slot)
+            satisfied = not spec["required"] or slot in targets
+            if not satisfied:
+                if report is None:
+                    _invalid("缺少必填目标槽。", "targets", slot)
+                report["diagnostics"].append(
+                    {
+                        "code": "INVALID_ARGUMENT",
+                        "message": "缺少必填目标槽。",
+                        "fieldPath": json_pointer(("targets", slot)),
+                    }
+                )
+            if report is not None:
+                report["requirements"].append(
+                    {"name": slot, "kind": "target", "satisfied": satisfied}
+                )
             if slot in targets:
                 access.target(slot, targets[slot], spec["kind"])
         shared = {**root.get("runVariables", {}), **params.get("runVariables", {})}
@@ -183,6 +237,12 @@ class RunService:
             key: min(int(root["limits"][key]), int(value))
             for key, value in params.get("limits", DEFAULT_LIMITS).items()
         }
+        if report is not None:
+            report["requirements"].extend(
+                {"name": name, "kind": "variable", "satisfied": True} for name in root["variables"]
+            )
+            if report["diagnostics"]:
+                return None
         snapshot = {
             "formatVersion": "1.0",
             "workspaceId": self.workspace.id,
@@ -192,7 +252,7 @@ class RunService:
                 "revision": params["revision"],
                 "entry": root["entry"],
             },
-            **graph.manifest(),
+            **manifest,
             "initialState": {
                 "inputs": inputs,
                 "variables": root["variables"],
@@ -223,7 +283,25 @@ class RunService:
         with self.workspace.budget(None, authorize=access.revalidate):
             return self._prepare(access, self._parameters(params))
 
-    def accept(self, access: RunAccess, request_id: str, params: dict):
+    def inspect(self, access, params):
+        report = {"diagnostics": [], "requirements": []}
+        with self.workspace.budget(None, authorize=access.revalidate):
+            plan = self._prepare(access, self._parameters(params), report)
+            report["requirements"].sort(
+                key=lambda item: (item["kind"], item["name"].encode("utf-16-be"))
+            )
+            report["diagnostics"].sort(key=lambda item: (item.get("fieldPath", ""), item["code"]))
+        return plan, report
+
+    def accept(
+        self,
+        access: RunAccess,
+        request_id: str,
+        params: dict,
+        *,
+        on_accept=None,
+        plan_provider=None,
+    ):
         if type(request_id) is not str or not 1 <= len(request_id) <= 128:
             _invalid("请求身份长度应为 1～128。", "requestId")
         with self.workspace.budget(None, authorize=access.revalidate):
@@ -241,5 +319,18 @@ class RunService:
                 snapshot = self.store.read(row["subject_id"])["snapshot"]
                 access.check_snapshot(snapshot)
                 return replay
-            plan = self._prepare(access, params)
-            return self.store.create(plan, request_id, authorize=access.check_snapshot)
+            if "planId" in params:
+                if plan_provider is None:
+                    raise DeskWeaveError("METHOD_UNAVAILABLE", "运行准备服务未接入。")
+                source = plan_provider(params["planId"], params)
+                access.check_snapshot(source.value(checkpoint=self.workspace.check_deadline))
+                plan = RunPlan(source.content, payload_hash)
+            else:
+                plan = self._prepare(access, params)
+            return self.store.create(
+                plan,
+                request_id,
+                authorize=access.check_snapshot,
+                max_unfinished=self.max_unfinished,
+                on_accept=on_accept,
+            )

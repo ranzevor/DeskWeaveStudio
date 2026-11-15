@@ -181,6 +181,8 @@ class ConnectionAuthority:
             for connection in selected:
                 del self._connections[connection]
                 self._closing.add(connection)
+        for client_id in expired:
+            self.engine.runs.revoke_client(client_id)
         self._close_all(list(set(selected) | self._closing_snapshot()))
 
     def authorize(
@@ -245,6 +247,7 @@ class ConnectionAuthority:
                 if value.value.client_id != credential.client_id
             }
             selected = self._remove_client_connections_locked(credential.client_id)
+        self.engine.runs.revoke_client(credential.client_id, expected_version)
         self._close_all(selected)
         return version
 
@@ -261,6 +264,7 @@ class ConnectionAuthority:
             ):
                 raise DeskWeaveError("ACCESS_DENIED", "身份恢复凭据无效。")
             selected = self._revoke_client_locked(credential.client_id)
+        self.engine.runs.revoke_client(credential.client_id)
         self._close_all(selected)
 
     def _revoke_client_locked(self, client_id):
@@ -289,7 +293,29 @@ class ConnectionAuthority:
             for connection in selected:
                 del self._connections[connection]
                 self._closing.add(connection)
+        for client_id in identities:
+            self.engine.runs.revoke_client(client_id)
         self._close_all(selected)
+
+    def depart_clients(self, clients):
+        identities = frozenset(clients)
+        with self._lock:
+            self._tickets = {
+                k: v for k, v in self._tickets.items() if v.value.client_id not in identities
+            }
+            selected = []
+            for identity in identities:
+                selected.extend(self._remove_client_connections_locked(identity))
+        for identity in identities:
+            self.engine.client_exited(identity)
+        self._close_all(selected)
+
+    def check_grant(self, client_id, version):
+        with self._lock:
+            self._open_locked()
+            grant = self._clients.get(client_id)
+            if grant is None or grant.version != version or grant.expires_at <= self.now():
+                raise DeskWeaveError("ACCESS_DENIED", "运行授权已失效。")
 
     def issue(self, credential: ClientCredential, peer: PeerIdentity) -> ConnectionTicket:
         self._peer(peer)

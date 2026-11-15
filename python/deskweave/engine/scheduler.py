@@ -34,10 +34,26 @@ class PauseExpired(Exception):
 
 class Runtime:
     def __init__(
-        self, workspace, *, clock=time.monotonic, threaded=True, max_runs=17, ports=LOGIC_PORTS
+        self,
+        workspace,
+        *,
+        clock=time.monotonic,
+        threaded=True,
+        max_runs=17,
+        ports=LOGIC_PORTS,
+        before_tick=None,
+        control_handler=None,
+        on_publish=None,
+        signal_handler=None,
     ):
         self.workspace, self.clock, self.max_runs = workspace, clock, max_runs
         self.ports = ports
+        self.signal_handler = signal_handler
+        self.before_tick, self.control_handler, self.on_publish = (
+            before_tick,
+            control_handler,
+            on_publish,
+        )
         self.store, self.runs = ExecutionStore(workspace), RunStore(workspace)
         self._condition = threading.Condition()
         self._step_lock = threading.RLock()
@@ -46,6 +62,7 @@ class Runtime:
         self._timers, self._heap, self._timer_seq = {}, [], 0
         self._waiters, self._waiting_on = defaultdict(set), {}
         self._commands, self._faults = [], {}
+        self._signals = {}
         self._closing = False
         self._thread = None
         self.kernel = Kernel(self.store, self._checkpoint, ports)
@@ -53,10 +70,57 @@ class Runtime:
         self._executing_frame = None
         self._attempted = None
         if threaded:
-            self._thread = threading.Thread(
-                target=self._serve, name="deskweave-runtime", daemon=True
+            self.start()
+
+    def start(self):
+        with self._condition:
+            if self._closing:
+                raise DeskWeaveError("WORKSPACE_CLOSED", "执行器已关闭。")
+            if self._thread is None:
+                thread = threading.Thread(target=self._serve, name="deskweave-runtime", daemon=True)
+                thread.start()
+                self._thread = thread
+
+    def wake(self):
+        with self._condition:
+            self._condition.notify()
+
+    def signal(self, run_id, command):
+        if command not in {"pause", "stop"}:
+            raise ValueError("运行生命周期信号无效。")
+        with self._condition:
+            if self._closing:
+                return
+            if run_id not in self._signals and len(self._signals) >= 64:
+                raise DeskWeaveError("LIMIT_EXCEEDED", "运行生命周期信号数量超过限制。")
+            if self._signals.get(run_id) != "stop":
+                self._signals[run_id] = command
+            self._condition.notify()
+
+    def _signal(self, run_id, command):
+        self._attempted = run_id
+        run = self._active.get(run_id)
+        if run is None:
+            if self.signal_handler is not None:
+                self.signal_handler(run_id, command)
+        elif command == "stop":
+            self._system_stop(run, self.clock(), "cancelled", fault("CANCELLED", "运行已停止。"))
+        elif run.state != "paused":
+            change = Change(
+                replace(
+                    run,
+                    state="paused",
+                    paused_at=self.clock(),
+                    control_version=run.control_version + 1,
+                ),
+                system=True,
             )
-            self._thread.start()
+            self.store.commit(run, change, self.clock())
+            self._active[run_id] = change.run
+            self._publish(change, all_frames=True)
+        with self._condition:
+            if self._signals.get(run_id) == command:
+                del self._signals[run_id]
 
     @property
     def supported_actions(self):
@@ -75,8 +139,12 @@ class Runtime:
         ):
             raise CallBudgetExpired()
         with self._condition:
-            if self._closing or any(
-                item[0] == run.id and item[1] in {"pause", "stop"} for item in self._commands
+            if (
+                self._closing
+                or run.id in self._signals
+                or any(
+                    item[0] == run.id and item[1] in {"pause", "stop"} for item in self._commands
+                )
             ):
                 raise YieldStep()
 
@@ -179,7 +247,7 @@ class Runtime:
             self._publish(change)
             return self.store.snapshot(run_id)
 
-    def control(self, run_id, command, expected_control_version, *, access):
+    def control(self, run_id, command, expected_control_version, *, access, receipt=None):
         if command not in {"pause", "resume", "stop"}:
             raise DeskWeaveError("INVALID_ARGUMENT", "运行控制操作无效。")
         future = Future()
@@ -189,7 +257,9 @@ class Runtime:
             elif len(self._commands) >= 64:
                 future.set_exception(DeskWeaveError("LIMIT_EXCEEDED", "控制请求数量超过限制。"))
             else:
-                self._commands.append((run_id, command, expected_control_version, future, access))
+                self._commands.append(
+                    (run_id, command, expected_control_version, future, access, receipt)
+                )
                 self._condition.notify()
         return future
 
@@ -198,15 +268,25 @@ class Runtime:
             raise PauseExpired()
 
     def _command(self, item):
-        run_id, command, expected, future, access = item
+        run_id, command, expected, future, access, receipt = item
         if not future.set_running_or_notify_cancel():
             return
         try:
-            self.store.check_access(run_id, access, "run.execute")
+            self.store.check_access(run_id, access, "run.control")
+            if receipt is not None:
+                with self.workspace.transaction(authorize=receipt.check) as connection:
+                    replay = receipt.replay(connection, self.workspace.check_deadline)
+                if replay is not None:
+                    future.set_result(replay)
+                    return
             run = self._active.get(run_id)
+            if run is None and self.control_handler is not None:
+                future.set_result(self.control_handler(run_id, command, expected, access, receipt))
+                return
             if run is None:
                 raise DeskWeaveError("INVALID_ARGUMENT", "运行已结束或尚未接入执行器。")
-            run.access.revalidate()
+            if command == "resume":
+                run.access.check_snapshot(run.plan)
             if command != "stop":
                 self._check_pause_retention(run)
             if type(expected) is not int or expected != run.control_version:
@@ -216,7 +296,13 @@ class Runtime:
                 change = self.kernel.terminate(run, "cancelled")
             elif command == "pause":
                 if run.state == "paused":
-                    future.set_result(self.store.snapshot(run_id))
+                    with self.workspace.transaction(
+                        authorize=receipt.check if receipt is not None else access.revalidate
+                    ) as connection:
+                        state = self.store.snapshot(run_id)
+                        if receipt is not None:
+                            receipt.write(connection, receipt.result(state))
+                    future.set_result(state)
                     return
                 change = Change(
                     replace(
@@ -235,12 +321,14 @@ class Runtime:
                         control_version=run.control_version + 1,
                     )
                 )
-            self.store.commit(
-                run,
-                change,
-                self.clock(),
-                checkpoint=lambda: self._check_pause_retention(run) if command != "stop" else None,
-            )
+            change.system = command in {"pause", "stop"}
+
+            def checkpoint():
+                access.require("run.control")
+                if command != "stop":
+                    self._check_pause_retention(run)
+
+            self.store.commit(run, change, self.clock(), checkpoint=checkpoint, receipt=receipt)
             self._active[run_id] = change.run
             self._publish(change, all_frames=True)
             future.set_result(self.store.snapshot(run_id))
@@ -335,8 +423,9 @@ class Runtime:
         if len(self._heap) > 2 * len(self._timers) + 32:
             self._heap = [(due, seq, key) for key, (due, seq) in self._timers.items()]
             heapq.heapify(self._heap)
-        with self._condition:
-            self._condition.notify()
+        if self.on_publish is not None:
+            self.on_publish(change)
+        self.wake()
 
     def _system_stop(self, run, now, state, error):
         change = self.kernel.terminate(run, state, error)
@@ -347,6 +436,14 @@ class Runtime:
 
     def tick(self):
         with self._step_lock:
+            self._attempted = None
+            with self._condition:
+                signal = min(
+                    self._signals.items(), key=lambda item: item[1] != "stop", default=None
+                )
+            if signal is not None:
+                self._signal(*signal)
+                return True
             command = None
             with self._condition:
                 if self._commands:
@@ -357,6 +454,8 @@ class Runtime:
                     command = self._commands.pop(index)
             if command is not None:
                 self._command(command)
+                return True
+            if self.before_tick is not None and self.before_tick():
                 return True
             now = self.clock()
             for run in tuple(self._active.values()):
@@ -539,11 +638,12 @@ class Runtime:
                     failures.append(error)
             with self._condition:
                 self._closing = True
-                for _run_id, _command, _expected, future, _access in self._commands:
+                for _run_id, _command, _expected, future, _access, _receipt in self._commands:
                     if future.cancelled():
                         continue
                     future.set_exception(DeskWeaveError("WORKSPACE_CLOSED", "执行器已关闭。"))
                 self._commands.clear()
+                self._signals.clear()
                 self._condition.notify_all()
         if self._thread is not None:
             self._thread.join()

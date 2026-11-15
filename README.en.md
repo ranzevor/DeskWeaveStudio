@@ -20,7 +20,7 @@ DeskWeaveStudio focuses on recording across all displays, reproducing continuous
 
 ## Project status
 
-The execution core is under development. The Python service library provides expression previews, workflow validation, workflow version storage, chunked content transfer, catalog and revision pagination, saved-request lookup, connection authentication, native local transports, a standalone Engine service process, and cross-host launch coordination. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, Rust Agent, MCP Bridge and installers follow the [roadmap (zh-Hans)](ROADMAP.md).
+The project is integrating the execution core with public Engine services. The Python service library provides expression previews, workflow validation, workflow version storage, chunked content transfer, catalog and revision pagination, saved-request lookup, public run preparation/control/snapshots and variable inspection, native event streaming, connection authentication, native local transports, a standalone Engine service process, and cross-host launch coordination. The repository also contains system designs, interactive prototypes, high-resolution mockups and public contracts. The desktop application, Rust Agent, MCP Bridge and installers follow the [roadmap (zh-Hans)](ROADMAP.md).
 
 ## Execution core
 

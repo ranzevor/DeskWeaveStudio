@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+from deskweave.adapters.run_views import record_frame, record_run
 from deskweave.adapters.workspace import utc_time
 from deskweave.domain.frozen import Value
 from deskweave.errors import DeskWeaveError
@@ -63,7 +64,7 @@ class ExecutionStore:
     def __init__(self, workspace):
         self.workspace = workspace
 
-    def commit(self, before, change, now, *, initial=False, checkpoint=lambda: None):
+    def commit(self, before, change, now, *, initial=False, checkpoint=lambda: None, receipt=None):
         run = change.run
         data_version = before.data_version + bool(change.frames or change.values)
         version = before.version + 1
@@ -72,7 +73,9 @@ class ExecutionStore:
         def authorize():
             if not change.system:
                 run.access.revalidate()
-                checkpoint()
+            checkpoint()
+            if receipt is not None:
+                receipt.check()
 
         with self.workspace.budget(None, authorize=authorize):
             for key, value in change.values.items():
@@ -167,6 +170,7 @@ class ExecutionStore:
                         "UPDATE frame SET state=?,node_id=? WHERE id=? AND run_id=?",
                         (frame.state, frame.node, identity, run.id),
                     )
+                record_frame(connection, run.id, identity, data_version, frame.state, frame.node)
                 connection.execute(
                     "INSERT INTO execution_frame VALUES(?,?,?,?) "
                     "ON CONFLICT(frame_id) DO UPDATE SET "
@@ -215,6 +219,17 @@ class ExecutionStore:
                 "state=?,control_version=?,data_version=?,last_seq=?,updated_at=? WHERE id=?",
                 (run.state, run.control_version, data_version, last_seq, created, run.id),
             )
+            record_run(connection, run.id, run.state, created)
+            if receipt is not None:
+                receipt.write(
+                    connection,
+                    {
+                        "accepted": True,
+                        "runId": run.id,
+                        "state": run.state,
+                        "controlVersion": run.control_version,
+                    },
+                )
         run.version, run.data_version, run.last_seq = version, data_version, last_seq
         for identity, frame in change.frames.items():
             if identity in change.removed:
@@ -223,7 +238,7 @@ class ExecutionStore:
                 run.frames[identity] = frame
 
     def check_access(self, run_id, access, permission):
-        access.require(permission, "workflow.read")
+        access.require(permission)
         with self.workspace.transaction(authorize=access.revalidate) as connection:
             row = connection.execute(
                 "SELECT owner_client_id,authorization_ref,authorization_version,root_frame_id "
@@ -232,7 +247,7 @@ class ExecutionStore:
             ).fetchone()
             if row is None:
                 raise DeskWeaveError("RESOURCE_NOT_FOUND", "运行不存在。")
-            if tuple(row)[:3] != (
+            if permission not in {"run.read", "run.control"} and tuple(row)[:3] != (
                 access.client_id,
                 access.authorization_ref,
                 access.authorization_version,

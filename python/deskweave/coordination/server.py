@@ -203,16 +203,23 @@ class SharedRuntime(Runtime):
             "peer": self.listener.local.identity.as_dict(),
         }
 
+    def can_drop(self, record):
+        return (
+            not record.children
+            and not record.clients
+            and record.credential.client_id not in self.registry.grants
+        )
+
     def drop_host(self, record):
         self.hosts.pop(record.binding.grant_id, None)
         self.host_bytes -= record.size
         parent = self.hosts.get(record.parent)
         if parent is not None:
             parent.children.discard(record.binding.grant_id)
-            if parent.departed and not parent.children:
+            if parent.departed and self.can_drop(parent):
                 self.drop_host(parent)
 
-    def retire_hosts(self, records, *, defer=None):
+    def retire_hosts(self, records, *, defer=None, revoke=True):
         actions, clients = [], set()
         for record in records:
             record.departed = True
@@ -225,7 +232,8 @@ class SharedRuntime(Runtime):
                     actions.append(channel.close)
             clients.update(record.clients)
             clients.add(record.credential.client_id)
-        cleanup(lambda: self.registry.revoke_clients(clients), *actions)
+        retire = self.registry.revoke_clients if revoke else self.registry.depart_clients
+        cleanup(lambda: retire(clients), *actions)
 
     def revoke_host(self, identity, *, defer=None):
         queue, selected = [identity], []
@@ -242,9 +250,9 @@ class SharedRuntime(Runtime):
 
     def depart_host(self, record):
         try:
-            self.retire_hosts((record,))
+            self.retire_hosts((record,), revoke=False)
         finally:
-            if not record.children and record.binding.grant_id in self.hosts:
+            if self.can_drop(record) and record.binding.grant_id in self.hosts:
                 self.drop_host(record)
 
     def sweep_hosts(self):
@@ -268,6 +276,8 @@ class SharedRuntime(Runtime):
                 errors.append(error)
         for record in tuple(self.hosts.values()):
             if record.departed:
+                if self.can_drop(record):
+                    self.drop_host(record)
                 continue
             peer = self.registry.get(record.binding.peer.process_id)
             try:
@@ -667,7 +677,11 @@ class SharedRuntime(Runtime):
                     now = self.authority.now()
                     if not self.published.is_set() and time.monotonic() >= self.config["deadline"]:
                         break
-                    active = self.registry.active_users or self.pending_count
+                    active = (
+                        self.registry.active_users
+                        or self.pending_count
+                        or self.authority.engine.has_work
+                    )
                     if active:
                         idle_since = None
                     elif idle_since is None:

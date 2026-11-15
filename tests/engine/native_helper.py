@@ -53,7 +53,11 @@ def main():
         stack.callback(engine.close)
         authority = stack.enter_context(ConnectionAuthority(engine, local.identity))
         credential = authority.authorize(
-            ConnectionPolicy({"workflow.read", "workflow.write"}, local=True), lifetime=300
+            ConnectionPolicy(
+                {"workflow.read", "workflow.write", "run.execute", "run.control", "run.read"},
+                local=True,
+            ),
+            lifetime=300,
         )
         listener = stack.enter_context(NativeListener(local, directory=config["directory"]))
         output({"address": listener.address, "pid": os.getpid()})
@@ -87,6 +91,8 @@ def main():
                     worker = threading.Thread(target=serve, args=(channel,))
                     workers.append(worker)
                     worker.start()
+                elif command["action"] == "crash":
+                    os._exit(0)
                 elif command["action"] == "expire":
                     advance[0] += 301
                     output({"expired": True})

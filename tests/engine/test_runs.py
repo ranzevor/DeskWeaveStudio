@@ -446,6 +446,9 @@ class RunTests(EngineCase):
         self.engine.close()
         with closing(sqlite3.connect(self.directory / "data/workspace.db")) as connection:
             for name in [
+                "run_frame_version",
+                "run_catalog_version",
+                "run_metrics",
                 "execution_value",
                 "execution_unhandled",
                 "execution_frame",
@@ -491,7 +494,7 @@ class RunTests(EngineCase):
                 ).fetchone()
             )
             self.assertEqual(after, before)
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 5)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 6)
         self.assertEqual(
             self.success("request.status", {"requestId": before[1]})["result"],
             json.loads(before[5]),
@@ -532,7 +535,7 @@ class RunTests(EngineCase):
         response = self.request("request.status", {"requestId": "internal"}, session=session)
         self.assertEqual(response["error"]["code"], "ACCESS_DENIED")
         self.assertEqual(RunStore(self.workspace).read(result["runId"])["state"], "queued")
-        self.assertNotIn("run.start", self.engine.methods)
+        self.assertIn("run.start", self.engine.methods)
 
     def test_deadline_before_commit_preserves_empty_admission(self):
         from deskweave.adapters.runs import write_receipt
@@ -570,6 +573,9 @@ class RunTests(EngineCase):
         self.engine.close()
         with closing(sqlite3.connect(self.directory / "data/workspace.db")) as connection:
             for name in (
+                "run_frame_version",
+                "run_catalog_version",
+                "run_metrics",
                 "execution_value",
                 "execution_unhandled",
                 "execution_frame",
@@ -584,10 +590,11 @@ class RunTests(EngineCase):
         before = self.runs.store.read(accepted["runId"])
         self.legacy_v4()
         self.reopen()
-        self.assertEqual(self.runs.store.read(accepted["runId"]), before)
+        self.assertEqual(self.runs.store.read(accepted["runId"])["snapshot"], before["snapshot"])
+        self.assertEqual(self.runs.store.read(accepted["runId"])["state"], "interrupted")
         self.assertEqual(self.runs.accept(self.access, "accepted-v4", params), accepted)
         with self.workspace.transaction() as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 5)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 6)
             self.assertEqual(
                 connection.execute("SELECT COUNT(*) FROM execution_run").fetchone()[0], 0
             )

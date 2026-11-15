@@ -548,6 +548,10 @@ class BoundaryTests(EngineCase):
         self.engine.close()
         with closing(sqlite3.connect(self.directory / "data/workspace.db")) as connection:
             connection.executescript("""
+                DROP INDEX execution_inspection_names;
+                DROP TABLE run_frame_version;
+                DROP TABLE run_catalog_version;
+                DROP TABLE run_metrics;
                 DROP INDEX revision_catalog_name_asc;
                 DROP INDEX revision_catalog_name_desc;
                 ALTER TABLE revision DROP COLUMN name_key;
@@ -586,7 +590,7 @@ class BoundaryTests(EngineCase):
             self.success("request.status", {"requestId": "first-save"})["result"], first
         )
         with self.workspace.transaction() as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 5)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 6)
             rows = connection.execute(
                 "SELECT sequence,name_key,valid_until FROM revision ORDER BY sequence"
             ).fetchall()
