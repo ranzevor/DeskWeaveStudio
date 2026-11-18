@@ -15,9 +15,14 @@
 | `retry(run_id, access=...)` | 存储恢复后重新调度原来的未提交步骤 |
 | `close()` | 结束活动调用、完成持久化收尾并关闭调度线程 |
 
-挂接、控制和重试要求 run.execute，读取要求 run.read；同时核对工作空间中的运行归属、授权引用与代次、当前授权有效性及流程访问范围。调用帧必须属于指定运行。内部完整计划与结果存储由执行核心使用，面向调用方的值统一经过脱敏投影。
+按操作类别执行不同的权限、归属与流程范围校验：
 
-`threaded=False` 配合 `tick()` 或有步数上限的 `pump()` 用于可控时钟测试。`max_runs` 是内核容器容量；公共运行服务负责根运行活动名额、排队与客户端生命周期，见[实施路线图](../../ROADMAP.md)。
+- **挂接（`attach`）**：通过 `RunAccess.check_snapshot` 校验当前授权有效性、原运行计划记录的归属客户端与原授权引用及代次匹配、计划所需的全部权限（含 `run.execute`、`workflow.read` 及相关资产或动作端口权限）、流程访问范围覆盖全部依赖流程及目标授权校验；同一活动运行重复挂接亦按原计划校验上述条件。
+- **重试（`retry`）**：通过 `ExecutionStore.check_access` 要求 `run.execute` 与当前授权有效性，并核对工作空间中该运行的创建者客户端、原授权引用与代次匹配，以及流程访问范围覆盖运行关联的全部依赖流程。
+- **读取（`read_state`、`read_value`、`result` 及 `run.snapshot`、`debug.variables.read`、`event.subscribe`、`event.read`、`runFrames` / `runEffects` 查询）**：通过 `ExecutionStore.check_access` 要求 `run.read` 与当前授权有效性，并核对流程访问范围覆盖运行关联的全部依赖流程；满足上述条件时允许其他已授权客户端读取运行数据，不再要求与运行创建者身份、原授权引用或代次匹配。会话派生引用仍按会话隔离：`workspace.catalog(kind="run")` 的分页快照/游标、`debug.variables.read` 的 `snapshotId` / 游标及返回的 `resourceId`、`run.snapshot` 返回的 `runFrames` / `runEffects` 查询集合，以及 `event.subscribe` 的 `subscriptionId` 均归创建会话所有；其他客户端须通过自己的会话重新创建查询/检查快照、集合或订阅并取得相应资源引用，不能复用其他会话的标识。`event.read` 直接按运行 ID 校验 `run.read`，不依赖订阅标识。`workspace.catalog(kind="run")` 同样要求 `run.read` 并按 `workflowIds` 过滤；按 `requestId` 查询运行回执 `request.status` 时，还要求原请求客户端身份、对应原请求权限（`run.start` 对应 `run.execute`，控制请求对应 `run.control`）、当前授权有效、流程访问范围覆盖运行关联的全部依赖流程，并与回执中的授权引用及代次匹配。调用帧必须属于指定运行（`read_value` 经 `check_frame` 校验）；内部完整计划与结果存储由执行核心使用，面向调用方的值统一经过脱敏投影。
+- **控制（`control` 及公共 `run.pause`、`run.resume`、`run.stop`）**：公共方法与调度控制路径通过 `ExecutionStore.check_access`（及事务检查点）要求 `run.control` 与当前授权有效性，并核对控制发起方的流程访问范围覆盖运行关联的全部依赖流程；满足上述条件时允许其他具备 `run.control` 的客户端发起暂停、继续或停止，不再要求控制发起方与运行创建者身份、原授权引用或代次匹配（携带 `requestId` 的控制回执写入与重放仍按控制发起方的客户端身份、`run.control` 及原授权引用与代次校验）。执行 `resume` 时，除校验控制发起方外，`Runtime` 与 `RunManager` 还会重新校验原运行拥有者的计划授权上下文（`check_snapshot`）仍然有效。
+
+`threaded=False` 配合 `tick()` 或有步数上限的 `pump()` 用于可控时钟测试。`max_runs` 是内核容器容量；公共运行服务由 `RunManager`、`RunAPI`、`RunQueries`、`RunEvents` 与 `Inspection` 负责根运行名额、排队、查询投影、事件分发、变量脱敏资源化与客户端生命周期，接口范围见[Engine 开发](engine.md)与[实施路线图](../../ROADMAP.md)。
 
 ## 计划、节点与调用帧
 
@@ -45,9 +50,9 @@
 
 同步调用或 join 的失败经过父流程 on.error 成功处理后，允许整体成功。未处理的后台失败使所属调用失败。父调用退出前等待全部子任务收拢；join 超时先取消并收拢对应调用，再进入错误路径。重复 join 读取同一持久化结果；跨运行句柄、自等待及循环等待被拒绝。
 
-## 格式 5 与原子提交
+## 格式 5/6 与原子提交
 
-格式 5 在单次事务中建立以下执行表，保持格式 4 的运行计划、依赖强引用与原请求回执：
+格式 5 在单次事务中建立以下执行表，保持格式 4 的运行计划、依赖强引用与原请求回执，随后在格式 6 中补齐运行视图与启动恢复索引：
 
 | 表 | 用途 |
 |---|---|
@@ -58,8 +63,8 @@
 
 `frame.state_hash` 保存调用创建时的输入与局部初值；后续状态由 execution_frame 和 execution_value 的增量记录表示。循环前一轮输出和继承的循环值使用内部 runtime 范围持久化。每步只发布变化值对象，在短事务中原子更新调用状态、相关值版本、运行状态和事件序号；提交成功后再发布内存状态。失败回滚数据库并保留原内存状态，重试继续同一未提交步骤。
 
-完成调用从活动内存移除，历史结果按运行与帧索引读取；历史事件在存储中分页消费。调度线程遇到存储错误隔离受影响运行，其余运行继续调度。格式升级失败回滚全部结构和版本号，重新打开后可再次升级。
+完成调用从活动内存移除，历史结果按运行与帧索引读取；历史事件在存储中分页消费。格式 6 增加 `run_catalog_version`、`run_frame_version`、`run_metrics` 及 `execution_inspection_names`、`run_state_sequence`、`frame_unfinished` 索引，工作空间打开时把残留未完成运行统一标记为 `interrupted` 并取消未完成帧。调度线程遇到存储错误隔离受影响运行，其余运行继续调度。格式升级失败回滚全部结构和版本号，重新打开后可再次升级。
 
 ## 验证入口
 
-`uv run --frozen python -m unittest tests.engine.test_runtime tests.engine.test_runs -q` 覆盖动作、显式错误恢复、调用收拢、控制竞争、敏感标签、预算、版本一致性与升级回滚。三平台 Engine 工作流对源码及安装后的 wheel 运行相同契约测试。
+`uv run --frozen python -m unittest tests.engine.test_runtime tests.engine.test_runs tests.engine.test_run_service -q` 覆盖动作、显式错误恢复、调用收拢、控制竞争、敏感标签、预算、版本一致性、公共运行服务与升级回滚。三平台 Engine 工作流对源码及安装后的 wheel 运行相同契约测试。

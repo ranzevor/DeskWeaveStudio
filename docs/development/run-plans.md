@@ -8,7 +8,7 @@
 - `accept(access, request_id, params)` 先查询原请求，再为新请求准备计划并原子登记运行，返回既有 run.start 格式的 queued 接收结果。
 - `RunStore.create(plan, request_id, authorize=...)` 是应用服务使用的持久化接口，消费内存中的准备结果；`RunStore.read(run_id)` 读取内部完整快照和当前状态。
 
-这些 Python 接口由可信应用服务调用。公共运行方法按[实施路线图](../../ROADMAP.md)接入 Engine 方法注册表。内部完整快照供执行器使用，面向人的变量和运行数据由对应查询服务生成脱敏投影。
+这些 Python 接口由可信应用服务调用。`RunAPI`、`RunManager` 与 `RunQueries` 已接入 Engine 方法注册表以提供 `run.prepare`、`run.start` 与运行查询；桌面目标动作、确认授权及调试启动控制参数在接入平台端口前按契约返回 `METHOD_UNAVAILABLE`。内部完整快照供执行器使用，面向人的变量和运行数据由对应查询与检查服务生成脱敏投影。
 
 `RunAccess` 由认证上下文构造，包含稳定客户端身份、授权引用、授权代次、权限和流程范围。revalidate 检查授权的当前有效性；authorize_target 根据目标槽、目标令牌与类型核对实际目标。创建者、授权引用与代次固定到计划。工作空间请求预算通过 `Workspace.budget` 传入，准备、内容读取、引用核对和最终提交使用同一预算与授权检查。
 
@@ -36,7 +36,7 @@
 
 数据库格式 4 将 command_receipt 的对象归属改为 subject_kind/subject_id，增加授权引用与代次；已有 workflow.save 行保持原请求摘要、结果、时间及 workflow 归属。升级与运行表建立在同一事务完成，失败恢复原结构与版本号。
 
-新增 run、frame、run_event、run_workflow_ref、run_asset_ref，索引覆盖运行拥有者与状态、调用创建次序、事件序号及反向版本引用。格式 1～4 沿既有升级入口升级到当前格式 5，旧版本引擎拒绝写入较新格式。已有流程、资产与保存回执保持原内容。执行位置、变量版本与调用结果的增量扩展见[纯逻辑执行内核](execution-core.md)。
+新增 run、frame、run_event、run_workflow_ref、run_asset_ref，索引覆盖运行拥有者与状态、调用创建次序、事件序号及反向版本引用。格式 1～5 沿既有升级入口升级到当前格式 6，旧版本引擎拒绝写入较新格式。已有流程、资产与保存回执保持原内容。执行位置、变量版本、运行视图及恢复索引的增量扩展见[纯逻辑执行内核](execution-core.md)。
 
 ## 验证入口
 

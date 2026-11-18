@@ -5,7 +5,9 @@ import uuid
 
 from deskweave.adapters.blobs import Blobs
 from deskweave.adapters.receipts import find_receipt, replay_receipt, write_receipt
+from deskweave.adapters.run_views import record_frame, record_run
 from deskweave.adapters.workspace import utc_time
+from deskweave.domain.frozen import Value
 from deskweave.domain.runs import RunPlan, validate_snapshot
 from deskweave.errors import DeskWeaveError
 
@@ -98,7 +100,9 @@ class RunStore:
             ):
                 raise DeskWeaveError("DEPENDENCY_MISMATCH", "运行计划的资产版本已不匹配。")
 
-    def create(self, plan: RunPlan, request_id: str, *, authorize):
+    def create(
+        self, plan: RunPlan, request_id: str, *, authorize, max_unfinished=None, on_accept=None
+    ):
         with self.workspace.budget(None):
             snapshot = plan.value(checkpoint=self.workspace.check_deadline)
             if snapshot["workspaceId"] != self.workspace.id:
@@ -117,6 +121,17 @@ class RunStore:
                     ):
                         raise DeskWeaveError("ACCESS_DENIED", "当前授权不能读取此运行回执。")
                     return replay
+            if max_unfinished is not None:
+                if type(max_unfinished) is not int or max_unfinished < 1:
+                    raise ValueError("运行容量必须为正整数。")
+                with self.workspace.transaction() as connection:
+                    pending = connection.execute(
+                        "SELECT id FROM run WHERE state IN "
+                        "('queued','preparing','running','pausing','paused','stopping') LIMIT ?",
+                        (max_unfinished,),
+                    ).fetchall()
+                    if len(pending) >= max_unfinished:
+                        raise DeskWeaveError("LIMIT_EXCEEDED", "运行队列已满，请等待已有运行结束。")
             self._verify_content(snapshot)
             snapshot_hash, _ = self.blobs.put(io.BytesIO(plan.content), maximum=33_554_432)
             state_hash = self.workspace._put_object(snapshot["initialState"])
@@ -124,6 +139,28 @@ class RunStore:
             event_hash = self.workspace._put_object({"state": "queued", "controlVersion": 0})
             result = {"accepted": True, "runId": run_id, "state": "queued"}
             root = snapshot["root"]
+            values = []
+            initial = snapshot["initialState"]
+            sensitive = frozenset(initial["sensitiveInputs"])
+            for scope, entries in (
+                ("inputs", initial["inputs"]),
+                ("local", initial["variables"]),
+                ("shared", initial["runVariables"]),
+            ):
+                for name, raw in entries.items():
+                    self.workspace.check_deadline()
+                    value = Value.freeze(raw).marked(scope == "inputs" and name in sensitive)
+                    values.append(
+                        (
+                            run_id,
+                            "" if scope == "shared" else frame_id,
+                            scope,
+                            name,
+                            0,
+                            self.workspace._put_object(value.raw()),
+                            self.workspace._put_object(value.labels()),
+                        )
+                    )
             with self.workspace.transaction() as connection:
                 authorize(snapshot)
                 self._verify_versions(connection, snapshot)
@@ -158,6 +195,18 @@ class RunStore:
                         state_hash,
                     ),
                 )
+                record_run(
+                    connection,
+                    run_id,
+                    "queued",
+                    created,
+                    name=snapshot["name"],
+                    revision=root["revision"],
+                )
+                record_frame(connection, run_id, frame_id, 0, "queued", root["entry"])
+                connection.executemany(
+                    "INSERT INTO execution_value VALUES(?,?,?,?,?,?,?,NULL)", values
+                )
                 for item in snapshot["workflows"]:
                     self.workspace.check_deadline()
                     connection.execute(
@@ -186,6 +235,8 @@ class RunStore:
                     authorization_version=authorization["version"],
                 )
                 authorize(snapshot)
+            if on_accept is not None:
+                on_accept(dict(result))
             return result
 
     def read(self, run_id: str):

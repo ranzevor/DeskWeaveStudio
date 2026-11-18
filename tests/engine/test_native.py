@@ -752,12 +752,21 @@ class NativeCase(unittest.TestCase):
             is_closed = False
             request = None
 
+            def __init__(self):
+                self.pending = queue.Queue()
+
             def send(self, value, **_options):
                 self.request = value
-                self.pending = server.receive(value)
+                self.pending.put(server.receive(value))
 
-            def receive(self, **_options):
-                return self.pending
+            def receive(self, *, cancel=None, **_options):
+                while True:
+                    if self.is_closed or (cancel is not None and cancel.is_set()):
+                        raise DeskWeaveError("TRANSPORT_CLOSED", "连接已关闭。")
+                    try:
+                        return self.pending.get(timeout=0.01)
+                    except queue.Empty:
+                        continue
 
             def close(self):
                 self.is_closed = True
@@ -946,6 +955,120 @@ class NativeCase(unittest.TestCase):
         result = engine[1].get(timeout=10)
         self.assertEqual(result["active"], 0)
         self.assertNotIn("ExceptionGroup", result["errors"])
+
+    def run_call(self, client, method, params, request="request"):
+        result = client.call(method, params, request_id=request, timeout=10)
+        self.assertTrue(result["ok"], result)
+        return result["result"]
+
+    def start_waiting_run(self, client):
+        from tests.engine.test_runs import definition
+
+        value = definition("wait")
+        value["nodes"] = [
+            {
+                "id": "wait",
+                "title": "等待",
+                "action": "time.wait",
+                "params": {"durationMs": 100000},
+                "on": {},
+            }
+        ]
+        value["entry"] = "wait"
+        saved = self.run_call(
+            client,
+            "workflow.save",
+            {
+                "workflowId": value["id"],
+                "draftVersion": 1,
+                "baseRevision": None,
+                "definition": value,
+                "dependencies": {},
+            },
+            "save",
+        )
+        started = self.run_call(
+            client,
+            "run.start",
+            {
+                "workflowId": value["id"],
+                "revision": saved["revision"],
+                "inputs": {},
+                "targets": {},
+                "detached": True,
+            },
+            "start",
+        )
+        return started["runId"]
+
+    def test_native_run_control_events_and_request_reconnection(self):
+        import time
+
+        engine = self.start_engine()
+        client = self.open_engine(*engine)
+        run = self.start_waiting_run(client)
+        subscription = self.run_call(client, "event.subscribe", {"runId": run}, "subscribe")
+        snapshot = subscription["snapshot"]
+        until = time.monotonic() + 5
+        while snapshot["state"] != "running" and time.monotonic() < until:
+            message = client.next_event(timeout=5)
+            self.assertGreater(int(message["seq"]), int(subscription["snapshot"]["lastSeq"]))
+            if message["event"] == "run.state.changed":
+                snapshot.update(message["payload"])
+        self.assertEqual(snapshot["state"], "running")
+        paused = self.run_call(
+            client,
+            "run.pause",
+            {"runId": run, "expectedControlVersion": snapshot["controlVersion"]},
+            "pause",
+        )
+        self.assertEqual(paused["state"], "paused")
+        event = client.next_event(timeout=5)
+        self.assertEqual(event["streamId"], run)
+        resumed = self.run_call(
+            client,
+            "run.resume",
+            {"runId": run, "expectedControlVersion": paused["controlVersion"]},
+            "resume",
+        )
+        client.close()
+        reconnected = self.open_engine(*engine)
+        receipt = self.run_call(reconnected, "request.status", {"requestId": "pause"}, "status")
+        self.assertEqual(receipt["result"], paused)
+        stopped = self.run_call(
+            reconnected,
+            "run.stop",
+            {"runId": run, "expectedControlVersion": resumed["controlVersion"]},
+            "stop",
+        )
+        self.assertEqual(stopped["state"], "cancelled")
+        self.assertEqual(
+            self.run_call(reconnected, "run.snapshot", {"runId": run}, "snapshot")["state"],
+            "cancelled",
+        )
+        reconnected.close()
+        self.send_control(engine[0], "join")
+        self.assertEqual(engine[1].get(timeout=10)["active"], 0)
+
+    def test_native_restart_publishes_interrupted_run(self):
+        engine = self.start_engine()
+        client = self.open_engine(*engine)
+        run = self.start_waiting_run(client)
+        self.send_control(engine[0], "crash")
+        engine[0].wait(timeout=5)
+        client.close()
+        restarted = self.start_engine()
+        reader = self.open_engine(*restarted)
+        snapshot = self.run_call(reader, "run.snapshot", {"runId": run}, "snapshot")
+        self.assertEqual(snapshot["state"], "interrupted")
+        page = self.run_call(
+            reader,
+            "query.read",
+            {"collectionId": snapshot["framesQuery"]["collectionId"], "kind": "runFrames"},
+            "frames",
+        )
+        self.assertEqual(page["items"][0]["value"]["state"], "cancelled")
+        reader.close()
 
     def test_fake_server_pid_rejected(self):
         engine = self.start_engine()

@@ -8,17 +8,29 @@ import time
 import unicodedata
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from concurrent.futures import Future
+from concurrent.futures import TimeoutError as FutureTimeout
+from dataclasses import dataclass, field
+
+import rfc8785
 
 from deskweave.adapters.assets import Assets
 from deskweave.adapters.content import MAX_CONTENT, Content, ContentStore
 from deskweave.adapters.dependencies import Dependencies
+from deskweave.adapters.execution import ExecutionStore
 from deskweave.adapters.receipts import find_receipt
+from deskweave.adapters.run_commands import RunCommand
 from deskweave.adapters.workspace import Workspace, utc_time
 from deskweave.contracts import method_schema, schema_contents, validate
 from deskweave.domain.values import evaluate
 from deskweave.domain.workflow import validate_workflow
+from deskweave.engine.inspection import Inspection
 from deskweave.engine.pagination import Pages
+from deskweave.engine.run_api import RunAPI
+from deskweave.engine.run_events import RunEvents
+from deskweave.engine.run_manager import RunManager
+from deskweave.engine.run_planning import RunAccess
+from deskweave.engine.run_queries import RunQueries
 from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME, digest, dumps, loads
 
@@ -32,6 +44,7 @@ class Session:
     local: bool
     authorization_version: int = 1
     capabilities: frozenset[str] = frozenset()
+    revalidate: Callable = field(default=lambda: None, repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -45,7 +58,9 @@ class Method:
 
 
 class Engine:
-    def __init__(self, workspace: Workspace, *, clock=time.time, monotonic=time.monotonic):
+    def __init__(
+        self, workspace: Workspace, *, clock=time.time, monotonic=time.monotonic, threaded=True
+    ):
         self.workspace = workspace
         self.clock = clock
         self.monotonic = monotonic
@@ -54,6 +69,16 @@ class Engine:
             clock=clock, monotonic=lambda: self.monotonic(), checkpoint=workspace.check_deadline
         )
         self._mutex = threading.RLock()
+        self._revocations = {}
+        self._draining = False
+        self._frame_limit = MAX_FRAME
+        self._response_overhead = 256
+        self.runs = RunManager(workspace, clock=monotonic, threaded=threaded)
+        self.runs.lifecycle.recover()
+        self.run_api = RunAPI(self)
+        self.run_queries = RunQueries(self)
+        self.inspection = Inspection(self)
+        self.events = RunEvents(self)
         self._sessions: dict[str, Session] = {}
         self._closing_sessions: dict[str, Session] = {}
         self._collections: dict[str, dict] = {}
@@ -89,7 +114,7 @@ class Engine:
         self.register(
             "query.read",
             self._query,
-            {"workflow.read"},
+            set(),
             {"filter": {}, "order": "asc", "cursor": None, "pageSize": 50, "includeTotal": False},
         )
         self.register("query.close", self._close_query, set())
@@ -100,6 +125,24 @@ class Engine:
         self.register("content.discard", self._content_discard, set())
         self.register("resource.read", self._resource_read, set())
         self.register("asset.read", self._asset_read, {"asset.read"})
+        self.register("run.prepare", self.run_api.prepare, {"run.execute"})
+        self.register("run.start", self.run_api.start, {"run.execute"})
+        for method in ("run.pause", "run.resume", "run.stop"):
+            self.register(method, self.run_api.control, {"run.control"})
+        self.register(
+            "run.snapshot",
+            lambda session, params, _id: self.run_queries.snapshot(session, params["runId"]),
+            {"run.read"},
+        )
+        self.register(
+            "debug.variables.read",
+            lambda session, params, _id: self.inspection.read(session, params),
+            {"run.read"},
+            {"cursor": None, "pageSize": 50},
+        )
+        self.register("event.subscribe", self.events.subscribe, {"run.read"})
+        self.register("event.read", self.events.read, {"run.read"})
+        self.register("event.unsubscribe", self.events.unsubscribe, set())
 
     @property
     def methods(self) -> tuple[str, ...]:
@@ -139,9 +182,10 @@ class Engine:
         workflow_ids: set[str] | None = None,
         capabilities: set[str] | None = None,
         authorization_version: int = 1,
+        revalidate: Callable | None = None,
     ) -> Session:
         with self._mutex:
-            if self.workspace.closed:
+            if self.workspace.closed or self._draining:
                 raise DeskWeaveError("WORKSPACE_CLOSED", "工作空间已关闭。")
             if not client_id or len(client_id) > 128:
                 raise ValueError("客户端身份长度应为 1～128。")
@@ -150,6 +194,19 @@ class Engine:
                 or not 1 <= authorization_version <= 9007199254740991
             ):
                 raise ValueError("授权版本无效。")
+            revoked = (
+                self._revocations.setdefault(client_id, threading.Event())
+                if revalidate is None
+                else threading.Event()
+            )
+
+            def current():
+                if revoked.is_set():
+                    raise DeskWeaveError("ACCESS_DENIED", "客户端授权已撤销。")
+                if revalidate is not None:
+                    revalidate()
+
+            current()
             session = Session(
                 secrets.token_urlsafe(24),
                 client_id,
@@ -158,22 +215,70 @@ class Engine:
                 local,
                 authorization_version=authorization_version,
                 capabilities=frozenset(capabilities or ()),
+                revalidate=current,
             )
             self._sessions[session.id] = session
             return session
 
+    def run_access(self, session):
+        return RunAccess(
+            session.client_id,
+            session.client_id,
+            session.authorization_version,
+            session.permissions,
+            session.workflow_ids,
+            revalidate=session.revalidate,
+        )
+
+    def result_limit(self, method):
+        return min(self._methods[method].result_bytes, self._frame_limit - self._response_overhead)
+
+    @property
+    def has_work(self):
+        return self.runs.busy.is_set()
+
+    def begin_idle_shutdown(self):
+        with self._mutex:
+            if self.has_work:
+                return False
+            self._draining = True
+            return True
+
     def close(self) -> None:
         with self._mutex:
-            self._sessions.clear()
+            self._draining = True
+        failures = []
+        try:
+            self.runs.close()
+        except BaseException as error:
+            failures.append(error)
+        with self._mutex:
+            for owner in tuple(self._sessions):
+                try:
+                    self.close_session(owner)
+                except BaseException as error:
+                    failures.append(error)
             self._collections.clear()
+            self.run_api.plans.clear()
+            self.run_queries.collections.clear()
             try:
                 self.contents.close()
                 self._closing_sessions.clear()
+            except BaseException as error:
+                failures.append(error)
             finally:
                 self.workspace.close()
+        self._raise_cleanup(failures)
+
+    def client_exited(self, client_id):
+        self.runs.client_exited(client_id)
 
     def revoke_client(self, client_id: str) -> None:
         with self._mutex:
+            revoked = self._revocations.pop(client_id, None)
+            if revoked is not None:
+                revoked.set()
+            self.runs.revoke_client(client_id)
             failures = []
             for session in tuple({**self._sessions, **self._closing_sessions}.values()):
                 if session.client_id == client_id:
@@ -196,7 +301,13 @@ class Engine:
             if session is not None:
                 self._closing_sessions[session.id] = session
             failures = []
-            releases = [self.contents.release]
+            releases = [
+                self.inspection.release,
+                self.run_api.release,
+                self.run_queries.release,
+                self.events.release,
+                self.contents.release,
+            ]
             if not self.workspace.closed:
                 releases.append(self.pages.release)
             for release in releases:
@@ -238,13 +349,38 @@ class Engine:
             validate(
                 "urn:deskweave:message:1#/$defs/requestEnvelope", request, checkpoint=checkpoint
             )
+            deadline = started + request["deadlineMs"] / 1000
+            name = request["method"]
+            if name == "expression.preview":
+                deadline = min(deadline, started + 1)
+            is_query = name in {
+                "query.read",
+                "workspace.catalog",
+                "workflow.revisions",
+                "run.snapshot",
+                "event.subscribe",
+                "event.read",
+                "debug.variables.read",
+            }
+            if is_query:
+                deadline = min(
+                    deadline, started + (5 if request["params"].get("includeTotal") else 2)
+                )
+
+            def current():
+                checkpoint()
+                if self._sessions.get(session_id) is not session:
+                    raise DeskWeaveError("ACCESS_DENIED", "客户端会话已关闭。")
+                session.revalidate()
+
             with self._mutex:
                 session = self._sessions.get(session_id)
                 if session is None or request["session"] != session_id:
                     raise DeskWeaveError("ACCESS_DENIED", "客户端会话无效。")
+                current()
                 if request["workspace"] != self.workspace.id:
                     raise DeskWeaveError("ACCESS_DENIED", "请求不属于当前工作空间。")
-                method = self._methods.get(request["method"])
+                method = self._methods.get(name)
                 if method is None:
                     raise DeskWeaveError("METHOD_UNAVAILABLE", "此服务方法尚未实现。")
                 if (
@@ -253,24 +389,17 @@ class Engine:
                     and not session.local
                 ):
                     raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此操作权限。")
-                deadline = started + request["deadlineMs"] / 1000
-                if request["method"] == "expression.preview":
-                    deadline = min(deadline, started + 1)
-                is_query = request["method"] in {
-                    "query.read",
-                    "workspace.catalog",
-                    "workflow.revisions",
-                }
-                if is_query:
-                    deadline = min(
-                        deadline, started + (5 if request["params"].get("includeTotal") else 2)
-                    )
+                if self._draining and name in {"run.start", "run.prepare"}:
+                    raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
+                self._frame_limit = max_frame_bytes
+                empty = rfc8785.dumps({**header, "ok": True, "result": {}})
+                self._response_overhead = len(empty) - 2
                 scope = (
                     self.workspace.transaction(
-                        deadline=deadline, clock=self.monotonic, authorize=authorize
+                        deadline=deadline, clock=self.monotonic, authorize=current
                     )
                     if is_query
-                    else self.workspace.budget(deadline, self.monotonic, authorize=authorize)
+                    else self.workspace.budget(deadline, self.monotonic, authorize=current)
                 )
                 with scope:
                     dumps(
@@ -279,39 +408,35 @@ class Engine:
                         checkpoint=self.workspace.check_deadline,
                     )
                     validate(
-                        method_schema(request["method"], "params"),
+                        method_schema(name, "params"),
                         request["params"],
                         checkpoint=self.workspace.check_deadline,
                     )
-                    self.workspace.check_deadline()
                     params = copy.deepcopy(method.defaults)
                     params.update(copy.deepcopy(request["params"]))
                     if "workflowId" in params:
                         self._authorize_workflow(session, params["workflowId"])
-                    result = method.handler(session, params, request["id"])
-                    self.workspace.check_deadline()
-                    try:
-                        validate(
-                            method_schema(request["method"], "result"),
-                            result,
-                            checkpoint=self.workspace.check_deadline,
+                    if name in {"run.pause", "run.resume", "run.stop"}:
+                        result = self.run_api.control(
+                            session, name, params, request["id"], deadline, current
                         )
-                    except DeskWeaveError as error:
-                        if error.code != "INVALID_ARGUMENT":
-                            raise
-                        raise DeskWeaveError(
-                            "INTERNAL_ERROR", "服务结果不符合接口要求。"
-                        ) from error
-                    dumps(
-                        result,
-                        max_bytes=method.result_bytes,
-                        checkpoint=self.workspace.check_deadline,
-                    )
-                    response = {**header, "ok": True, "result": result}
-                    dumps(
-                        response,
-                        max_bytes=max_frame_bytes,
-                        checkpoint=self.workspace.check_deadline,
+                    else:
+                        result = method.handler(session, params, request["id"])
+                    if not isinstance(result, Future):
+                        response = self._response(header, name, method, result, max_frame_bytes)
+            if isinstance(result, Future):
+                try:
+                    result = result.result(timeout=max(0, deadline - self.monotonic()))
+                except FutureTimeout:
+                    raise DeskWeaveError(
+                        "DEADLINE_EXCEEDED", "运行控制请求已超时。", retry="afterQuery"
+                    ) from None
+                with (
+                    self._mutex,
+                    self.workspace.budget(deadline, self.monotonic, authorize=current),
+                ):
+                    response = self._response(
+                        header, name, method, RunCommand.result(result), max_frame_bytes
                     )
             return response
         except DeskWeaveError as error:
@@ -330,6 +455,21 @@ class Engine:
             dumps(response, max_bytes=max_frame_bytes)
         except DeskWeaveError as error:
             response = {**header, "ok": False, "error": error.as_dict()}
+        return response
+
+    def _response(self, header, name, method, result, max_frame_bytes):
+        self.workspace.check_deadline()
+        try:
+            validate(
+                method_schema(name, "result"), result, checkpoint=self.workspace.check_deadline
+            )
+        except DeskWeaveError as error:
+            if error.code != "INVALID_ARGUMENT":
+                raise
+            raise DeskWeaveError("INTERNAL_ERROR", "服务结果不符合接口要求。") from error
+        dumps(result, max_bytes=method.result_bytes, checkpoint=self.workspace.check_deadline)
+        response = {**header, "ok": True, "result": result}
+        dumps(response, max_bytes=max_frame_bytes, checkpoint=self.workspace.check_deadline)
         return response
 
     @staticmethod
@@ -439,6 +579,8 @@ class Engine:
         self._require_content(session)
         if item.permission not in session.permissions:
             raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有访问此内容的权限。")
+        if item.inspection_id is not None:
+            self.inspection.check(session, item.inspection_id)
         if item.workflow_id is not None:
             self._authorize_workflow(session, item.workflow_id)
 
@@ -571,6 +713,8 @@ class Engine:
         )
 
     def _catalog(self, session, params, _request_id):
+        if params["kind"] == "run":
+            return self.run_queries.catalog(session, params)
         if params["kind"] not in {"workflow", "asset"}:
             raise DeskWeaveError("METHOD_UNAVAILABLE", "此对象目录服务尚未实现。")
         permission = "asset.read" if params["kind"] == "asset" else "workflow.read"
@@ -611,6 +755,10 @@ class Engine:
         )
 
     def _query(self, session, params, _request_id):
+        if not ({"workflow.read", "run.read", "run.execute"} & session.permissions):
+            raise DeskWeaveError("ACCESS_DENIED", "当前客户端缺少所需权限。")
+        if params["collectionId"] in self.run_queries.collections:
+            return self.run_queries.read(session, params)
         collection = self._collections.get(params["collectionId"])
         if (
             collection is None
@@ -618,11 +766,13 @@ class Engine:
             or params["kind"] != "diagnostics"
         ):
             raise DeskWeaveError("COLLECTION_NOT_FOUND", "结果集合不存在。")
+        if "workflow.read" not in session.permissions:
+            raise DeskWeaveError("ACCESS_DENIED", "当前客户端缺少所需权限。")
         if collection["workflow"] is not None:
             self._authorize_workflow(session, collection["workflow"])
         if collection["expires"] <= self.clock():
             raise DeskWeaveError("CURSOR_EXPIRED", "结果集合已过期，请重新校验流程。")
-        filters = {"text": "", "codes": [], "nodeId": None, **params["filter"]}
+        filters = {"text": "", "codes": [], **params["filter"]}
         filters["text"] = unicodedata.normalize("NFC", filters["text"]).casefold()
         filters["codes"] = sorted(set(filters["codes"]))
         params["filter"] = filters
@@ -639,7 +789,7 @@ class Engine:
                     )
                 )
                 and (not filters["codes"] or row["code"] in filters["codes"])
-                and (filters["nodeId"] is None or row.get("nodeId") == filters["nodeId"])
+                and ("nodeId" not in filters or row.get("nodeId") == filters["nodeId"])
             )
 
         def factory(_connection):
@@ -695,6 +845,7 @@ class Engine:
         if "snapshotId" in params:
             return self.pages.close(session.id, params["snapshotId"])
         identity = params["collectionId"]
+        self.run_queries.close(session.id, identity)
         self.pages.release_collection(session.id, identity)
         collection = self._collections.get(identity)
         if collection is not None and collection["owner"] == session.id:
@@ -705,10 +856,25 @@ class Engine:
         with self.workspace.transaction() as connection:
             row = find_receipt(connection, session.client_id, params["requestId"])
         if row is not None:
-            if row["subject_kind"] != "workflow" or row["method"] != "workflow.save":
-                raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此请求的访问权限。")
-            self._authorize_workflow(session, row["subject_id"])
-            if "workflow.write" not in session.permissions:
+            if row["subject_kind"] == "run" and row["method"] in {
+                "run.start",
+                "run.pause",
+                "run.resume",
+                "run.stop",
+            }:
+                access = self.run_access(session)
+                permission = "run.execute" if row["method"] == "run.start" else "run.control"
+                ExecutionStore(self.workspace).check_access(row["subject_id"], access, permission)
+                if (row["authorization_ref"], row["authorization_version"]) != (
+                    access.authorization_ref,
+                    access.authorization_version,
+                ):
+                    raise DeskWeaveError("ACCESS_DENIED", "当前授权不能读取此请求回执。")
+            elif row["subject_kind"] == "workflow" and row["method"] == "workflow.save":
+                self._authorize_workflow(session, row["subject_id"])
+                if "workflow.write" not in session.permissions:
+                    raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此请求的访问权限。")
+            else:
                 raise DeskWeaveError("ACCESS_DENIED", "当前客户端没有此请求的访问权限。")
         return {
             "requestId": params["requestId"],

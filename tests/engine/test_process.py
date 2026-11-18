@@ -669,6 +669,7 @@ class RegistryCase(unittest.TestCase):
             identity=identity,
             installation=self.installation,
             check=lambda checkpoint: checkpoint(),
+            _check_process=lambda: None,
             close=lambda: None,
         )
 

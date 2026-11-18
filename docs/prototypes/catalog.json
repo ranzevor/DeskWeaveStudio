@@ -14218,7 +14218,10 @@
                   "cursor": {
                     "type": "string"
                   }
-                }
+                },
+                "required": [
+                  "cursor"
+                ]
               },
               "then": {
                 "properties": {
@@ -14233,7 +14236,8 @@
           ]
         },
         "result": {
-          "$ref": "urn:deskweave:inspection:1#/$defs/variablesPage"
+          "$ref": "urn:deskweave:inspection:1#/$defs/variablesPage",
+          "x-maxUtf8Bytes": 262144
         }
       },
       {

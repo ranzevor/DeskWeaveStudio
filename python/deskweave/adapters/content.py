@@ -32,6 +32,7 @@ class Content:
     expires: float
     deadline: float
     resource_id: str
+    inspection_id: str | None = None
     upload_id: str | None = None
     workflow_id: str | None = None
     asset_version: str | None = None
@@ -278,6 +279,7 @@ class ContentStore:
         purpose="workflowModel",
         media_type="application/json",
         asset_version=None,
+        inspection_id=None,
     ) -> dict:
         self.expire()
         sha256 = hashlib.sha256(data).hexdigest()
@@ -285,6 +287,7 @@ class ContentStore:
         for item in outputs:
             if (
                 item.owner == owner
+                and item.inspection_id == inspection_id
                 and item.workflow_id == workflow_id
                 and item.asset_version == asset_version
                 and item.permission == permission
@@ -303,6 +306,7 @@ class ContentStore:
             sha256,
             workflow_id=workflow_id,
             asset_version=asset_version,
+            inspection_id=inspection_id,
             media_type=media_type,
             sealed=True,
         )

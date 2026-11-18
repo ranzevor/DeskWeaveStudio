@@ -117,7 +117,7 @@ class Workspace:
             self._connection = connection
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys=ON")
-            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2, 3, 4, 5):
+            if connection.execute("PRAGMA user_version").fetchone()[0] not in (0, 1, 2, 3, 4, 5, 6):
                 raise DeskWeaveError("SCHEMA_UNSUPPORTED", "工作空间数据库版本不受支持。")
             connection.execute("PRAGMA synchronous=FULL")
             self._initialize_storage()
@@ -132,6 +132,13 @@ class Workspace:
                 1,
                 lambda value: unicodedata.normalize("NFC", value).casefold(),
                 deterministic=True,
+            )
+            connection.create_collation(
+                "UTF16",
+                lambda left, right: (
+                    (left.encode("utf-16-be") > right.encode("utf-16-be"))
+                    - (left.encode("utf-16-be") < right.encode("utf-16-be"))
+                ),
             )
             statements = [
                 "CREATE TABLE IF NOT EXISTS workflow (id TEXT PRIMARY KEY, name"
@@ -239,7 +246,10 @@ class Workspace:
             from deskweave.adapters.execution import initialize_execution_storage
 
             initialize_execution_storage(connection)
-            connection.execute("PRAGMA user_version=5")
+            from deskweave.adapters.run_views import initialize_run_views
+
+            initialize_run_views(connection)
+            connection.execute("PRAGMA user_version=6")
 
     @staticmethod
     def catalog_rows(connection, source, position, limit):

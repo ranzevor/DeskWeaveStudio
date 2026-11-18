@@ -37,6 +37,7 @@ class Grant:
     peer: Peer
     deadline: float
     version: int
+    departed: bool = False
 
 
 class Registry:
@@ -128,6 +129,17 @@ class Registry:
 
     def prune(self):
         now = self.authority.now()
+        by_peer = {}
+        for client, grant in tuple(self.grants.items()):
+            if not grant.departed:
+                by_peer.setdefault(grant.peer.process_id, (grant.peer, []))[1].append(client)
+        for peer, clients in by_peer.values():
+            try:
+                peer.binding._check_process()
+            except DeskWeaveError as error:
+                if error.code != "AUTHENTICATION_FAILED":
+                    raise
+                self.depart_clients(clients)
         if (
             self.retry_authority
             or self.authority._closing_snapshot()
@@ -147,6 +159,12 @@ class Registry:
             if current is not None and (current.deadline, current.version) == (deadline, version):
                 try:
                     self.forget(client)
+                except BaseException as error:
+                    errors.append(error)
+        for client, grant in tuple(self.grants.items()):
+            if grant.departed and not self.authority.engine.runs.has_owned_work(client):
+                try:
+                    self.revoke_clients((client,))
                 except BaseException as error:
                     errors.append(error)
         return errors
@@ -240,7 +258,7 @@ class Registry:
     def selected(self, credential):
         self.authority.describe(credential)
         grant = self.grants.get(credential.client_id)
-        if grant is None:
+        if grant is None or grant.departed:
             raise DeskWeaveError("ACCESS_DENIED", "客户端登记已结束。")
         return grant
 
@@ -278,6 +296,18 @@ class Registry:
 
     def revoke(self, credential):
         return self._revoke(credential.client_id, lambda: self.authority.revoke(credential))
+
+    def depart_clients(self, clients):
+        selected = tuple(clients)
+        for client in selected:
+            grant = self.grants.get(client)
+            if grant is not None:
+                grant.departed = True
+        self.authority.depart_clients(selected)
+        inactive = [
+            client for client in selected if not self.authority.engine.runs.has_owned_work(client)
+        ]
+        self.revoke_clients(inactive)
 
     def revoke_clients(self, clients):
         selected = tuple(clients)
@@ -328,7 +358,7 @@ class Registry:
 
     def stop_when_idle(self):
         with self.lock:
-            if self.active_users:
+            if self.active_users or not self.authority.engine.begin_idle_shutdown():
                 return False
             self.accepting = False
             return True
@@ -581,8 +611,18 @@ class Runtime:
     def control_messages(self, control, state, dispatch):
         previous = 0
         transaction = None
+        next_maintenance = 0.0
+
+        def maintain():
+            nonlocal next_maintenance
+            if state is self and time.monotonic() >= next_maintenance:
+                next_maintenance = time.monotonic() + 0.1
+                errors = self.registry.prune()
+                if errors:
+                    raise BaseExceptionGroup("客户端生命周期维护失败。", errors)
+
         while not self.cancel.is_set():
-            budget = transaction or Budget(30)
+            budget = transaction or Budget(30, checkpoint=maintain)
             request = control.receive(budget=budget)
             if self.cancel.is_set():
                 break
