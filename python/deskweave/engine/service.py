@@ -69,6 +69,9 @@ class Engine:
             clock=clock, monotonic=lambda: self.monotonic(), checkpoint=workspace.check_deadline
         )
         self._mutex = threading.RLock()
+        self._desktop_lock = threading.Lock()
+        self._desktop_stopping = threading.Event()
+        self._desktop_agent = None
         self._revocations = {}
         self._draining = False
         self._frame_limit = MAX_FRAME
@@ -242,12 +245,27 @@ class Engine:
             if self.has_work:
                 return False
             self._draining = True
+            self._desktop_stopping.set()
             return True
+
+    def start_desktop_agent(self, local, installation, authority, *, timeout=10, cancel=None):
+        from deskweave.agent import start_agent
+
+        return start_agent(self, local, installation, authority, timeout=timeout, cancel=cancel)
 
     def close(self) -> None:
         with self._mutex:
             self._draining = True
+            self._desktop_stopping.set()
         failures = []
+        with self._desktop_lock:
+            if self._desktop_agent is not None:
+                try:
+                    self._desktop_agent.close()
+                except BaseException as error:
+                    failures.append(error)
+                else:
+                    self._desktop_agent = None
         try:
             self.runs.close()
         except BaseException as error:

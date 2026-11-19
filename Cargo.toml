@@ -1,0 +1,3 @@
+[workspace]
+members = ["rust/desktop-agent"]
+resolver = "3"
