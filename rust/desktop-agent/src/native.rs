@@ -80,6 +80,95 @@ pub(crate) fn claim_scope(scope: &str) -> io::Result<std::os::unix::net::UnixDat
     UnixDatagram::bind_addr(&name)
 }
 
+#[cfg(target_os = "macos")]
+pub(crate) fn claim_scope(scope: &str) -> io::Result<File> {
+    use std::ffi::OsStr;
+    use std::fs::{self, DirBuilder};
+    use std::os::unix::{
+        ffi::OsStrExt,
+        fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+    };
+    use std::path::PathBuf;
+
+    const CS_DARWIN_USER_TEMP_DIR: libc::c_int = 65537;
+    if scope.is_empty()
+        || scope.len() > 128
+        || !scope
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(io::ErrorKind::InvalidInput.into());
+    }
+    let mut buffer = [0_u8; 4096];
+    let size = unsafe {
+        libc::confstr(
+            CS_DARWIN_USER_TEMP_DIR,
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+        )
+    };
+    if size == 0 || size > buffer.len() {
+        return Err(io::Error::last_os_error());
+    }
+    let length = buffer[..size]
+        .iter()
+        .position(|&byte| byte == 0)
+        .unwrap_or(size);
+    if length == 0 {
+        return Err(io::ErrorKind::NotFound.into());
+    }
+    let uid = unsafe { libc::geteuid() };
+    let directory = PathBuf::from(OsStr::from_bytes(&buffer[..length]))
+        .join(format!("dw-agent-scope-v1-{uid}"));
+    match DirBuilder::new().mode(0o700).create(&directory) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error),
+    }
+    let dir = File::options()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(&directory)?;
+    let dir_info = dir.metadata()?;
+    let dir_path_info = fs::symlink_metadata(&directory)?;
+    if !dir_info.is_dir()
+        || dir_info.uid() != uid
+        || (dir_info.mode() & 0o077) != 0
+        || (dir_info.dev(), dir_info.ino()) != (dir_path_info.dev(), dir_path_info.ino())
+    {
+        return Err(io::ErrorKind::PermissionDenied.into());
+    }
+    let path = directory.join(format!("{scope}.lock"));
+    for _ in 0..4 {
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&path)?;
+        if let Err(error) = file.try_lock().map_err(io::Error::from) {
+            if error.kind() == io::ErrorKind::WouldBlock {
+                return Err(io::ErrorKind::AlreadyExists.into());
+            }
+            return Err(error);
+        }
+        let info = file.metadata()?;
+        let current = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
+        if !info.is_file() || info.uid() != uid || (info.mode() & 0o077) != 0 || info.nlink() != 1 {
+            return Err(io::ErrorKind::PermissionDenied.into());
+        }
+        if (info.dev(), info.ino()) == (current.dev(), current.ino()) {
+            return Ok(file);
+        }
+    }
+    Err(io::ErrorKind::PermissionDenied.into())
+}
+
 #[cfg(windows)]
 pub(crate) fn claim_scope(scope: &str) -> io::Result<std::os::windows::io::OwnedHandle> {
     use std::os::windows::io::{FromRawHandle, OwnedHandle, RawHandle};

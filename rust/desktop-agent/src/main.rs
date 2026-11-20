@@ -250,7 +250,6 @@ fn run() -> io::Result<()> {
         native::owner_identity(&owner)?,
         &verification_key,
     )?;
-    #[cfg(any(target_os = "linux", windows))]
     let _scope = match native::claim_scope(&registration.scope) {
         Ok(scope) => scope,
         Err(error)
@@ -263,8 +262,6 @@ fn run() -> io::Result<()> {
         }
         Err(error) => return Err(error),
     };
-    #[cfg(target_os = "macos")]
-    drop(registration);
     if let Err(error) = owner.try_lock().map_err(io::Error::from) {
         if error.kind() == io::ErrorKind::WouldBlock {
             return busy(&mut channel, &bootstrap);
@@ -341,7 +338,6 @@ mod tests {
         assert!(read_frame::<Bootstrap>(&mut array.as_slice()).is_err());
     }
 
-    #[cfg(any(target_os = "linux", windows))]
     #[test]
     fn scope_is_exclusive_until_native_handle_closes() {
         let scope = format!("unit-{}", process::id());

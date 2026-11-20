@@ -445,7 +445,6 @@ class DesktopAgentTests(unittest.TestCase):
             self._read_error("CANCELLED", lambda: starting.result(timeout=5))
         request.close.assert_called_once()
 
-    @unittest.skipUnless(sys.platform in ("win32", "linux"), "内核所有权命名空间场景。")
     def test_occupied_native_scope_returns_busy_even_with_another_file(self):
         with self._start() as first:
             alternate_runtime = self.root / "alternate-runtime"
@@ -494,6 +493,27 @@ class DesktopAgentTests(unittest.TestCase):
             with patch.object(agent.subprocess, "Popen") as spawn:
                 self._read_error("RESOURCE_DENIED", self._start)
                 spawn.assert_not_called()
+            context = multiprocessing.get_context("spawn")
+            start, finish, results = context.Event(), context.Event(), context.Queue()
+            start.set()
+            contender = context.Process(
+                target=_contender, args=(self.runtime, start, finish, results)
+            )
+            try:
+                contender.start()
+                self.assertEqual(results.get(timeout=25), ("DESKTOP_BUSY", None))
+            finally:
+                finish.set()
+                contender.join(8)
+                if contender.is_alive():
+                    contender.kill()
+                    contender.join(5)
+                exit_code = contender.exitcode
+                if exit_code is not None:
+                    contender.close()
+                results.close()
+                results.join_thread()
+            self.assertEqual(exit_code, 0)
             self._read_error("RESOURCE_DENIED", first.probe)
             self.assertFalse(first.running)
 
