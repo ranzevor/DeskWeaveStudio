@@ -260,8 +260,11 @@ class DesktopAgentTests(unittest.TestCase):
 
     def test_agent_rejects_endpoint_with_wrong_native_pid(self):
         def accept(listener, process, _epoch, _owner, _runtime, _secret):
-            with listener._raw.accept(Budget(5)):
-                self.assertNotEqual(process.wait(timeout=5), 0)
+            try:
+                with listener._raw.accept(Budget(5)):
+                    self.assertNotEqual(process.wait(timeout=5), 0)
+            except DeskWeaveError as error:
+                self.assertEqual(error.code, "TRANSPORT_CLOSED")
 
         self._launch_probe(os.getpid() + 1, accept)
 
