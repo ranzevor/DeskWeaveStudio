@@ -480,6 +480,27 @@ class DesktopAgentTests(unittest.TestCase):
         with patch.object(agent, "_linux_namespaces", return_value=(("1", "2"), ("3", "4"))):
             self._read_error("AUTHENTICATION_FAILED", self._start)
 
+    def _assert_contender_busy(self):
+        context = multiprocessing.get_context("spawn")
+        start, finish, results = context.Event(), context.Event(), context.Queue()
+        start.set()
+        contender = context.Process(target=_contender, args=(self.runtime, start, finish, results))
+        try:
+            contender.start()
+            self.assertEqual(results.get(timeout=25), ("DESKTOP_BUSY", None))
+        finally:
+            finish.set()
+            contender.join(8)
+            if contender.is_alive():
+                contender.kill()
+                contender.join(5)
+            exit_code = contender.exitcode
+            if exit_code is not None:
+                contender.close()
+            results.close()
+            results.join_thread()
+        self.assertEqual(exit_code, 0)
+
     @unittest.skipIf(sys.platform == "win32", "POSIX 所有权文件替换场景。")
     def test_replaced_owner_cannot_be_registered_or_probed(self):
         with self._start() as first:
@@ -493,29 +514,25 @@ class DesktopAgentTests(unittest.TestCase):
             with patch.object(agent.subprocess, "Popen") as spawn:
                 self._read_error("RESOURCE_DENIED", self._start)
                 spawn.assert_not_called()
-            context = multiprocessing.get_context("spawn")
-            start, finish, results = context.Event(), context.Event(), context.Queue()
-            start.set()
-            contender = context.Process(
-                target=_contender, args=(self.runtime, start, finish, results)
-            )
-            try:
-                contender.start()
-                self.assertEqual(results.get(timeout=25), ("DESKTOP_BUSY", None))
-            finally:
-                finish.set()
-                contender.join(8)
-                if contender.is_alive():
-                    contender.kill()
-                    contender.join(5)
-                exit_code = contender.exitcode
-                if exit_code is not None:
-                    contender.close()
-                results.close()
-                results.join_thread()
-            self.assertEqual(exit_code, 0)
+            self._assert_contender_busy()
             self._read_error("RESOURCE_DENIED", first.probe)
             self.assertFalse(first.running)
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX 运行目录替换场景。")
+    def test_replaced_runtime_directory_still_blocks_second_process(self):
+        with self._start() as first:
+            self.runtime.rename(self.root / "moved-runtime")
+            with (
+                runtime_directory(self.local, self.runtime) as runtime,
+                runtime.open(agent._OWNER, write=True, create=True),
+            ):
+                pass
+            self._assert_contender_busy()
+            self._read_error("RESOURCE_DENIED", first.probe)
+            self.assertFalse(first.running)
+        other = agent.AgentAuthority((self.local,), _SignatureRequest)
+        with self._start(authority=other) as second:
+            self.assertEqual(second.probe(), second.epoch)
 
     @unittest.skipUnless(sys.platform == "win32", "Windows 登录 SID 命名空间场景。")
     def test_windows_reused_session_number_does_not_reuse_acl_directory(self):

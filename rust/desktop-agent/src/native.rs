@@ -81,92 +81,146 @@ pub(crate) fn claim_scope(scope: &str) -> io::Result<std::os::unix::net::UnixDat
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn claim_scope(scope: &str) -> io::Result<File> {
-    use std::ffi::OsStr;
-    use std::fs::{self, DirBuilder};
-    use std::os::unix::{
-        ffi::OsStrExt,
-        fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
-    };
-    use std::path::PathBuf;
+pub(crate) struct ScopeClaim {
+    port: *mut std::ffi::c_void,
+}
 
-    const CS_DARWIN_USER_TEMP_DIR: libc::c_int = 65537;
+#[cfg(target_os = "macos")]
+impl Drop for ScopeClaim {
+    fn drop(&mut self) {
+        unsafe {
+            macos_scope::CFMessagePortInvalidate(self.port);
+            macos_scope::CFRelease(self.port.cast_const());
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos_scope {
+    use std::ffi::c_void;
+    use std::io;
+
+    pub(super) type CallBack = unsafe extern "C" fn(
+        local: *mut c_void,
+        msgid: i32,
+        data: *const c_void,
+        info: *mut c_void,
+    ) -> *const c_void;
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        pub(super) fn CFStringCreateWithBytes(
+            alloc: *const c_void,
+            bytes: *const u8,
+            num_bytes: isize,
+            encoding: u32,
+            is_external_representation: u8,
+        ) -> *const c_void;
+        pub(super) fn CFMessagePortCreateLocal(
+            allocator: *const c_void,
+            name: *const c_void,
+            callout: Option<CallBack>,
+            context: *const c_void,
+            should_free_info: *mut u8,
+        ) -> *mut c_void;
+        pub(super) fn CFMessagePortCreateRemote(
+            allocator: *const c_void,
+            name: *const c_void,
+        ) -> *mut c_void;
+        pub(super) fn CFMessagePortIsValid(port: *mut c_void) -> u8;
+        pub(super) fn CFMessagePortInvalidate(port: *mut c_void);
+        pub(super) fn CFRelease(cf: *const c_void);
+    }
+
+    pub(super) struct CfString {
+        pub(super) raw: *const c_void,
+    }
+
+    impl CfString {
+        pub(super) fn create(value: &str) -> io::Result<Self> {
+            const CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+            let len = isize::try_from(value.len())
+                .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+            let raw = unsafe {
+                CFStringCreateWithBytes(
+                    std::ptr::null(),
+                    value.as_ptr(),
+                    len,
+                    CF_STRING_ENCODING_UTF8,
+                    0,
+                )
+            };
+            if raw.is_null() {
+                return Err(io::ErrorKind::OutOfMemory.into());
+            }
+            Ok(Self { raw })
+        }
+    }
+
+    impl Drop for CfString {
+        fn drop(&mut self) {
+            unsafe {
+                CFRelease(self.raw);
+            }
+        }
+    }
+
+    pub(super) unsafe extern "C" fn ignore_message(
+        _local: *mut c_void,
+        _msgid: i32,
+        _data: *const c_void,
+        _info: *mut c_void,
+    ) -> *const c_void {
+        std::ptr::null()
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn claim_scope(scope: &str) -> io::Result<ScopeClaim> {
     if scope.is_empty()
-        || scope.len() > 128
+        || scope.len() > 100
         || !scope
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
     {
         return Err(io::ErrorKind::InvalidInput.into());
     }
-    let mut buffer = [0_u8; 4096];
-    let size = unsafe {
-        libc::confstr(
-            CS_DARWIN_USER_TEMP_DIR,
-            buffer.as_mut_ptr().cast(),
-            buffer.len(),
-        )
-    };
-    if size == 0 || size > buffer.len() {
-        return Err(io::Error::last_os_error());
-    }
-    let length = buffer[..size]
-        .iter()
-        .position(|&byte| byte == 0)
-        .unwrap_or(size);
-    if length == 0 {
-        return Err(io::ErrorKind::NotFound.into());
-    }
-    let uid = unsafe { libc::geteuid() };
-    let directory = PathBuf::from(OsStr::from_bytes(&buffer[..length]))
-        .join(format!("dw-agent-scope-v1-{uid}"));
-    match DirBuilder::new().mode(0o700).create(&directory) {
-        Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-        Err(error) => return Err(error),
-    }
-    let dir = File::options()
-        .read(true)
-        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
-        .open(&directory)?;
-    let dir_info = dir.metadata()?;
-    let dir_path_info = fs::symlink_metadata(&directory)?;
-    if !dir_info.is_dir()
-        || dir_info.uid() != uid
-        || (dir_info.mode() & 0o077) != 0
-        || (dir_info.dev(), dir_info.ino()) != (dir_path_info.dev(), dir_path_info.ino())
-    {
-        return Err(io::ErrorKind::PermissionDenied.into());
-    }
-    let path = directory.join(format!("{scope}.lock"));
-    for _ in 0..4 {
-        let file = File::options()
-            .read(true)
-            .write(true)
-            .create(true)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(&path)?;
-        if let Err(error) = file.try_lock().map_err(io::Error::from) {
-            if error.kind() == io::ErrorKind::WouldBlock {
+    let name = macos_scope::CfString::create(&format!("deskweave.agent.v1.{scope}"))?;
+    for attempt in 0..50 {
+        let mut should_free: u8 = 0;
+        let port = unsafe {
+            macos_scope::CFMessagePortCreateLocal(
+                std::ptr::null(),
+                name.raw,
+                Some(macos_scope::ignore_message),
+                std::ptr::null(),
+                &mut should_free,
+            )
+        };
+        if !port.is_null() {
+            if should_free != 0 {
+                unsafe {
+                    macos_scope::CFRelease(port.cast_const());
+                }
                 return Err(io::ErrorKind::AlreadyExists.into());
             }
-            return Err(error);
+            return Ok(ScopeClaim { port });
         }
-        let info = file.metadata()?;
-        let current = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error),
-        };
-        if !info.is_file() || info.uid() != uid || (info.mode() & 0o077) != 0 || info.nlink() != 1 {
-            return Err(io::ErrorKind::PermissionDenied.into());
+        let remote = unsafe { macos_scope::CFMessagePortCreateRemote(std::ptr::null(), name.raw) };
+        if !remote.is_null() {
+            let live = unsafe { macos_scope::CFMessagePortIsValid(remote) } != 0;
+            unsafe {
+                macos_scope::CFRelease(remote.cast_const());
+            }
+            if live {
+                return Err(io::ErrorKind::AlreadyExists.into());
+            }
         }
-        if (info.dev(), info.ino()) == (current.dev(), current.ino()) {
-            return Ok(file);
+        if attempt < 49 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
-    Err(io::ErrorKind::PermissionDenied.into())
+    Err(io::ErrorKind::AlreadyExists.into())
 }
 
 #[cfg(windows)]
