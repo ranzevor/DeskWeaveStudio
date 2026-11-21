@@ -175,52 +175,107 @@ mod macos_scope {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
+mod macos_claim {
+    use std::io;
+    use std::time::Duration;
+
+    pub(super) const ATTEMPTS: usize = 50;
+    pub(super) const RETRY_DELAY: Duration = Duration::from_millis(10);
+
+    pub(super) enum LocalPort<T> {
+        Created(T),
+        Duplicate(T),
+        Unavailable,
+    }
+
+    pub(super) fn validate_scope(scope: &str) -> io::Result<String> {
+        if scope.is_empty()
+            || scope.len() > 100
+            || !scope
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
+            return Err(io::ErrorKind::InvalidInput.into());
+        }
+        Ok(format!("deskweave.agent.v1.{scope}"))
+    }
+
+    pub(super) fn retry_claim<T>(
+        attempts: usize,
+        retry_delay: Duration,
+        mut create_local: impl FnMut() -> LocalPort<T>,
+        mut release_duplicate: impl FnMut(T),
+        mut remote_is_live: impl FnMut() -> bool,
+        mut pause: impl FnMut(Duration),
+    ) -> io::Result<T> {
+        for attempt in 0..attempts {
+            match create_local() {
+                LocalPort::Created(port) => return Ok(port),
+                LocalPort::Duplicate(port) => {
+                    release_duplicate(port);
+                    return Err(io::ErrorKind::AlreadyExists.into());
+                }
+                LocalPort::Unavailable => {
+                    if remote_is_live() {
+                        return Err(io::ErrorKind::AlreadyExists.into());
+                    }
+                    if attempt + 1 < attempts {
+                        pause(retry_delay);
+                    }
+                }
+            }
+        }
+        Err(io::Error::other(
+            "CFMessagePortCreateLocal failed without an active owner",
+        ))
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub(crate) fn claim_scope(scope: &str) -> io::Result<ScopeClaim> {
-    if scope.is_empty()
-        || scope.len() > 100
-        || !scope
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-    {
-        return Err(io::ErrorKind::InvalidInput.into());
-    }
-    let name = macos_scope::CfString::create(&format!("deskweave.agent.v1.{scope}"))?;
-    for attempt in 0..50 {
-        let mut should_free: u8 = 0;
-        let port = unsafe {
-            macos_scope::CFMessagePortCreateLocal(
-                std::ptr::null(),
-                name.raw,
-                Some(macos_scope::ignore_message),
-                std::ptr::null(),
-                &mut should_free,
-            )
-        };
-        if !port.is_null() {
-            if should_free != 0 {
-                unsafe {
-                    macos_scope::CFRelease(port.cast_const());
-                }
-                return Err(io::ErrorKind::AlreadyExists.into());
+    let service = macos_claim::validate_scope(scope)?;
+    let name = macos_scope::CfString::create(&service)?;
+    let port = macos_claim::retry_claim(
+        macos_claim::ATTEMPTS,
+        macos_claim::RETRY_DELAY,
+        || {
+            let mut should_free: u8 = 0;
+            let port = unsafe {
+                macos_scope::CFMessagePortCreateLocal(
+                    std::ptr::null(),
+                    name.raw,
+                    Some(macos_scope::ignore_message),
+                    std::ptr::null(),
+                    &mut should_free,
+                )
+            };
+            if port.is_null() {
+                macos_claim::LocalPort::Unavailable
+            } else if should_free != 0 {
+                macos_claim::LocalPort::Duplicate(port)
+            } else {
+                macos_claim::LocalPort::Created(port)
             }
-            return Ok(ScopeClaim { port });
-        }
-        let remote = unsafe { macos_scope::CFMessagePortCreateRemote(std::ptr::null(), name.raw) };
-        if !remote.is_null() {
+        },
+        |port| unsafe {
+            macos_scope::CFRelease(port.cast_const());
+        },
+        || {
+            let remote =
+                unsafe { macos_scope::CFMessagePortCreateRemote(std::ptr::null(), name.raw) };
+            if remote.is_null() {
+                return false;
+            }
             let live = unsafe { macos_scope::CFMessagePortIsValid(remote) } != 0;
             unsafe {
                 macos_scope::CFRelease(remote.cast_const());
             }
-            if live {
-                return Err(io::ErrorKind::AlreadyExists.into());
-            }
-        }
-        if attempt < 49 {
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-    }
-    Err(io::ErrorKind::AlreadyExists.into())
+            live
+        },
+        std::thread::sleep,
+    )?;
+    Ok(ScopeClaim { port })
 }
 
 #[cfg(windows)]
@@ -346,4 +401,132 @@ pub(crate) fn connect(address: &str, expected_pid: u32) -> io::Result<File> {
         return Err(io::ErrorKind::PermissionDenied.into());
     }
     Ok(channel)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::macos_claim::{ATTEMPTS, LocalPort, RETRY_DELAY, retry_claim, validate_scope};
+    use std::io;
+
+    #[test]
+    fn macos_scope_validation_enforces_bootstrap_bounds() {
+        assert_eq!(
+            validate_scope("").unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            validate_scope(&"a".repeat(101)).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            validate_scope("bad/scope").unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        let max_service = validate_scope(&"a".repeat(100)).unwrap();
+        assert_eq!(max_service.len(), 119);
+    }
+
+    #[test]
+    fn macos_claim_returns_already_exists_only_for_confirmed_ownership() {
+        let mut released = None;
+        let mut remote_checks = 0;
+        let mut pauses = 0;
+        let duplicate = retry_claim(
+            ATTEMPTS,
+            RETRY_DELAY,
+            || LocalPort::Duplicate(7_usize),
+            |port| released = Some(port),
+            || {
+                remote_checks += 1;
+                false
+            },
+            |_| pauses += 1,
+        );
+        assert_eq!(duplicate.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(released, Some(7));
+        assert_eq!(remote_checks, 0);
+        assert_eq!(pauses, 0);
+
+        let mut create_calls = 0;
+        remote_checks = 0;
+        pauses = 0;
+        let occupied = retry_claim::<usize>(
+            ATTEMPTS,
+            RETRY_DELAY,
+            || {
+                create_calls += 1;
+                LocalPort::Unavailable
+            },
+            |_| unreachable!(),
+            || {
+                remote_checks += 1;
+                true
+            },
+            |_| pauses += 1,
+        );
+        assert_eq!(occupied.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(create_calls, 1);
+        assert_eq!(remote_checks, 1);
+        assert_eq!(pauses, 0);
+    }
+
+    #[test]
+    fn macos_claim_retries_transient_teardown_until_created() {
+        let mut attempt = 0;
+        let mut remote_checks = 0;
+        let mut delays = Vec::new();
+        let port = retry_claim(
+            ATTEMPTS,
+            RETRY_DELAY,
+            || {
+                attempt += 1;
+                if attempt < 3 {
+                    LocalPort::Unavailable
+                } else {
+                    LocalPort::Created(42_usize)
+                }
+            },
+            |_| unreachable!(),
+            || {
+                remote_checks += 1;
+                false
+            },
+            |delay| delays.push(delay),
+        )
+        .unwrap();
+        assert_eq!(port, 42);
+        assert_eq!(attempt, 3);
+        assert_eq!(remote_checks, 2);
+        assert_eq!(delays, vec![RETRY_DELAY, RETRY_DELAY]);
+    }
+
+    #[test]
+    fn macos_claim_returns_native_error_when_retries_exhaust_without_owner() {
+        let mut attempts = 0;
+        let mut remote_checks = 0;
+        let mut delays = Vec::new();
+        let error = retry_claim::<usize>(
+            ATTEMPTS,
+            RETRY_DELAY,
+            || {
+                attempts += 1;
+                LocalPort::Unavailable
+            },
+            |_| unreachable!(),
+            || {
+                remote_checks += 1;
+                false
+            },
+            |delay| delays.push(delay),
+        )
+        .unwrap_err();
+        assert_eq!(attempts, ATTEMPTS);
+        assert_eq!(remote_checks, ATTEMPTS);
+        assert_eq!(delays.len(), ATTEMPTS - 1);
+        assert_eq!(error.kind(), io::ErrorKind::Other);
+        assert!(!matches!(
+            error.kind(),
+            io::ErrorKind::AlreadyExists | io::ErrorKind::AddrInUse
+        ));
+    }
 }

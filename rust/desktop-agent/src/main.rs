@@ -237,6 +237,27 @@ fn busy(channel: &mut (impl Read + Write), bootstrap: &Bootstrap) -> io::Result<
     }
 }
 
+fn acquire_scope<T>(
+    scope: &str,
+    claim: impl FnOnce(&str) -> io::Result<T>,
+    channel: &mut (impl Read + Write),
+    bootstrap: &Bootstrap,
+) -> io::Result<Option<T>> {
+    match claim(scope) {
+        Ok(guard) => Ok(Some(guard)),
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::AlreadyExists | io::ErrorKind::AddrInUse
+            ) =>
+        {
+            busy(channel, bootstrap)?;
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn run() -> io::Result<()> {
     let verification_key = verification_key()?;
     let bootstrap: Bootstrap =
@@ -250,17 +271,14 @@ fn run() -> io::Result<()> {
         native::owner_identity(&owner)?,
         &verification_key,
     )?;
-    let _scope = match native::claim_scope(&registration.scope) {
-        Ok(scope) => scope,
-        Err(error)
-            if matches!(
-                error.kind(),
-                io::ErrorKind::AlreadyExists | io::ErrorKind::AddrInUse
-            ) =>
-        {
-            return busy(&mut channel, &bootstrap);
-        }
-        Err(error) => return Err(error),
+    let Some(_scope) = acquire_scope(
+        &registration.scope,
+        native::claim_scope,
+        &mut channel,
+        &bootstrap,
+    )?
+    else {
+        return Ok(());
     };
     if let Err(error) = owner.try_lock().map_err(io::Error::from) {
         if error.kind() == io::ErrorKind::WouldBlock {
@@ -338,13 +356,61 @@ mod tests {
         assert!(read_frame::<Bootstrap>(&mut array.as_slice()).is_err());
     }
 
+    fn test_bootstrap() -> Bootstrap {
+        Bootstrap {
+            version: VERSION,
+            engine_pid: 1,
+            address: String::from("endpoint"),
+            agent_epoch: "a".repeat(64),
+            secret: [0x11; 32],
+        }
+    }
+
     #[test]
     fn scope_is_exclusive_until_native_handle_closes() {
         let scope = format!("unit-{}", process::id());
         let first = native::claim_scope(&scope).unwrap();
-        assert!(native::claim_scope(&scope).is_err());
+        let error = native::claim_scope(&scope).err().unwrap();
+        assert!(matches!(
+            error.kind(),
+            io::ErrorKind::AlreadyExists | io::ErrorKind::AddrInUse
+        ));
         drop(first);
         assert!(native::claim_scope(&scope).is_ok());
+    }
+
+    #[test]
+    fn scope_creation_failure_is_not_reported_as_busy() {
+        let bootstrap = test_bootstrap();
+        let mut channel = Cursor::new(Vec::new());
+        let error = acquire_scope(
+            "scope-a",
+            |_| Err::<(), _>(io::Error::other("CFMessagePortCreateLocal failed")),
+            &mut channel,
+            &bootstrap,
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::Other);
+        assert!(channel.get_ref().is_empty());
+    }
+
+    #[test]
+    fn occupied_scope_reports_busy_frame() {
+        let bootstrap = test_bootstrap();
+        for kind in [io::ErrorKind::AlreadyExists, io::ErrorKind::AddrInUse] {
+            let mut channel = Cursor::new(Vec::new());
+            let result = acquire_scope(
+                "scope-a",
+                |_| Err::<(), _>(kind.into()),
+                &mut channel,
+                &bootstrap,
+            )
+            .unwrap();
+            assert!(result.is_none());
+            let mut written = Cursor::new(channel.into_inner());
+            let frame: serde_json::Value = read_frame(&mut written).unwrap().unwrap();
+            assert_eq!(frame["kind"], "agent.busy");
+        }
     }
 
     #[cfg(not(feature = "test-authority"))]
