@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
 import secrets
 import struct
@@ -14,7 +15,9 @@ from pathlib import Path
 
 from deskweave.coordination.directory import Directory, StartupLock, backend, runtime_directory
 from deskweave.coordination.startup import InvalidDiscovery, check_idle
+from deskweave.domain.platform import validate_desktop_capabilities, validate_desktop_topology
 from deskweave.errors import DeskWeaveError
+from deskweave.json import MAX_FRAME as _MAX_CONTROL_FRAME
 from deskweave.json import dumps, loads
 from deskweave.process import _wire as wire
 from deskweave.process._wire import write_frame
@@ -37,6 +40,13 @@ _STARTUP = ".agent-start.lock"
 _DISCOVERY = "agent.json"
 _MAX_FRAME = 4096
 _DISCOVERY_LIMIT = 16384
+_LINUX_SESSION_ENV = (
+    "XDG_SESSION_TYPE",
+    "XDG_SESSION_ID",
+    "XDG_RUNTIME_DIR",
+    "WAYLAND_DISPLAY",
+    "DISPLAY",
+)
 
 
 def _scope(local):
@@ -79,6 +89,14 @@ def _is_hex(value):
     )
 
 
+def _is_session_id(value):
+    return (
+        type(value) is str
+        and len(value) == 32
+        and all(letter in "0123456789abcdef" for letter in value)
+    )
+
+
 def _check_owner(runtime, expected):
     runtime.check()
     with runtime.open(_OWNER) as current:
@@ -86,14 +104,16 @@ def _check_owner(runtime, expected):
             raise DeskWeaveError("RESOURCE_DENIED", "桌面 Agent 所有权对象已改变。")
 
 
-def _proof(secret, role, engine_pid, agent_pid, epoch, *, address=None):
+def _proof(secret, role, engine_pid, agent_pid, epoch, *, address=None, session=None):
     identity = struct.pack("<II", engine_pid, agent_pid) + epoch.encode("ascii")
     if address is not None:
         identity += b"\0" + address.encode("utf-8")
+    if session is not None:
+        identity += b"\0" + session.encode("ascii")
     return hmac.digest(secret, b"deskweave/desktop-agent/v1\0" + role + b"\0" + identity, "sha256")
 
 
-def _attach_ready_proof(proof_key, engine_pid, agent_pid, workspace_id, epoch, nonce):
+def _attach_ready_proof(proof_key, engine_pid, agent_pid, workspace_id, epoch, nonce, session):
     payload = (
         b"deskweave/desktop-agent/attach-ready/v1\0"
         + struct.pack("<II", engine_pid, agent_pid)
@@ -102,6 +122,8 @@ def _attach_ready_proof(proof_key, engine_pid, agent_pid, workspace_id, epoch, n
         + epoch.encode("ascii")
         + b"\0"
         + nonce
+        + b"\0"
+        + session.encode("ascii")
     )
     return hmac.digest(proof_key, payload, "sha256")
 
@@ -387,6 +409,7 @@ class AgentProcess(Resource):
         self.workspace_id = workspace_id
         self.idle_grace = idle_grace
         self.epoch = None
+        self.session = None
         self.created = False
         self._published = False
         self._process = self._peer = self._listener = self._channel = None
@@ -584,10 +607,11 @@ class AgentProcess(Resource):
         )
         ready = self._channel.receive(budget=budget)
         if (
-            ready.keys() != {"kind", "agentEpoch", "workspaceId", "proof"}
+            ready.keys() != {"kind", "agentEpoch", "workspaceId", "session", "proof"}
             or ready["kind"] != "agent.attach.ready"
             or ready["agentEpoch"] != record["agentEpoch"]
             or ready["workspaceId"] != self.workspace_id
+            or not _is_session_id(ready["session"])
         ):
             raise rejected()
         expected = _attach_ready_proof(
@@ -597,13 +621,16 @@ class AgentProcess(Resource):
             self.workspace_id,
             record["agentEpoch"],
             nonce,
+            ready["session"],
         )
         if not hmac.compare_digest(_bytes(ready["proof"], 32), expected):
             raise rejected()
         _check_owner(self._runtime_dir, owner_identity)
         self._close_resource("_owner")
         self._owner_identity = owner_identity
+        self._channel.max_frame_bytes = _MAX_CONTROL_FRAME
         self.epoch = record["agentEpoch"]
+        self.session = ready["session"]
         self.created = False
         return True
 
@@ -703,9 +730,10 @@ class AgentProcess(Resource):
                 raise rejected()
             raise DeskWeaveError("DESKTOP_BUSY", "当前登录会话已有 Desktop Agent。")
         if (
-            ready.keys() != {"kind", "agentEpoch", "address", "proof"}
+            ready.keys() != {"kind", "agentEpoch", "address", "session", "proof"}
             or kind != "agent.ready"
             or ready["agentEpoch"] != self.epoch
+            or not _is_session_id(ready["session"])
         ):
             raise rejected()
         address = ready["address"]
@@ -713,17 +741,32 @@ class AgentProcess(Resource):
             raise rejected()
         if not hmac.compare_digest(
             _bytes(ready["proof"], 32),
-            _proof(secret, b"agent", engine.process_id, process.pid, self.epoch, address=address),
+            _proof(
+                secret,
+                b"agent",
+                engine.process_id,
+                process.pid,
+                self.epoch,
+                address=address,
+                session=ready["session"],
+            ),
         ):
             raise rejected()
+        self.session = ready["session"]
+        self._channel.max_frame_bytes = _MAX_CONTROL_FRAME
         return address
 
     def _spawn(self, path, image):
-        environment = {
-            name: os.environ[name]
-            for name in ("SystemRoot", "WINDIR")
-            if sys.platform == "win32" and name in os.environ
-        }
+        environment = {}
+        if sys.platform == "win32":
+            for name in ("SystemRoot", "WINDIR"):
+                if name in os.environ:
+                    environment[name] = os.environ[name]
+        elif sys.platform == "linux":
+            for name in _LINUX_SESSION_ENV:
+                value = os.environ.get(name)
+                if value and "\x00" not in value:
+                    environment[name] = value
         launch = {}
         if sys.platform == "linux":
             descriptor = image.fileno()
@@ -776,6 +819,82 @@ class AgentProcess(Resource):
             raise
         finally:
             self._io.release()
+
+    def call(self, method: str, params: dict | None = None, *, timeout=10, cancel=None):
+        if type(method) is not str or not method:
+            raise ValueError("Agent 方法名无效。")
+        payload = {} if params is None else params
+        if type(payload) is not dict:
+            raise TypeError("Agent 请求参数必须为对象。")
+        if self._stopping.is_set() or self.session is None:
+            raise closed()
+        budget = Budget(timeout, Cancellation(cancel, self._stopping))
+        budget.acquire(self._io)
+        agent_error = None
+        try:
+            _check_owner(self._runtime_dir, self._owner_identity)
+            request_id = secrets.token_hex(16)
+            deadline_ms = max(1, min(86_400_000, math.ceil(remaining(budget) * 1000)))
+            self._channel.send(
+                {
+                    "protocolVersion": "1.0",
+                    "kind": "request",
+                    "id": request_id,
+                    "session": self.session,
+                    "workspace": self.workspace_id,
+                    "method": method,
+                    "deadlineMs": deadline_ms,
+                    "params": payload,
+                },
+                budget=budget,
+            )
+            response = self._channel.receive(budget=budget)
+            _check_owner(self._runtime_dir, self._owner_identity)
+            if (
+                type(response) is not dict
+                or response.get("protocolVersion") != "1.0"
+                or response.get("kind") != "response"
+                or response.get("replyTo") != request_id
+                or type(response.get("ok")) is not bool
+            ):
+                raise rejected()
+            if response["ok"]:
+                if response.keys() != {"protocolVersion", "kind", "replyTo", "ok", "result"}:
+                    raise rejected()
+                return response["result"]
+            if response.keys() != {"protocolVersion", "kind", "replyTo", "ok", "error"}:
+                raise rejected()
+            body = response["error"]
+            if (
+                type(body) is not dict
+                or not {"code", "message", "retry"}
+                <= body.keys()
+                <= {"code", "message", "retry", "details"}
+                or type(body["code"]) is not str
+                or type(body["message"]) is not str
+                or body["retry"] not in {"never", "sameRequest", "afterQuery"}
+            ):
+                raise rejected()
+            details = body.get("details")
+            if details is not None and type(details) is not dict:
+                raise rejected()
+            agent_error = DeskWeaveError(
+                body["code"], body["message"], retry=body["retry"], details=details
+            )
+        except BaseException as error:
+            self._abort(error)
+            raise
+        finally:
+            self._io.release()
+        raise agent_error
+
+    def desktop_capabilities(self, *, timeout=10, cancel=None) -> dict:
+        result = self.call("desktop.capabilities", {}, timeout=timeout, cancel=cancel)
+        return validate_desktop_capabilities(result)
+
+    def desktop_topology(self, *, timeout=10, cancel=None) -> dict:
+        result = self.call("desktop.topology", {}, timeout=timeout, cancel=cancel)
+        return validate_desktop_topology(result)
 
     def _close_resource(self, name):
         resource = getattr(self, name)

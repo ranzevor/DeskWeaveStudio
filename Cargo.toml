@@ -1,3 +1,10 @@
 [workspace]
-members = ["rust/desktop-agent"]
+members = [
+    "rust/platform-api",
+    "rust/platform-windows",
+    "rust/platform-macos",
+    "rust/platform-linux-x11",
+    "rust/platform-linux-wayland",
+    "rust/desktop-agent",
+]
 resolver = "3"

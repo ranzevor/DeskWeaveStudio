@@ -33,7 +33,9 @@ uv build
 
 首次启动时，候选 Agent 通过启动 Engine 创建的临时 Windows 命名管道或 Unix socket 反向连接，核对实际端点与进程；Rust 对随机挑战、双端进程、实例 `epoch`、`workspaceId` 和实际文件身份核验 Ed25519 启动登记后，建立自有原生监听端点（Windows 登录 SID DACL 命名管道，Linux/macOS `0700`/`0600` 私有 Unix socket，macOS 同步核验 audit session），并在 `agent.ready` 认证证明中返回监听地址。启动方持 `.agent-start.lock` 原子发布仅含非秘密定位信息的 `agent.json` 发现记录。签名私钥留在受信签名入口，不进入 Agent。发行构建由控制面的 `DESKWEAVE_AGENT_AUTHORITY_KEY` 编译配置提供对应的 32 字节小写十六进制公钥，未配置时不进入就绪；合成测试构建只接受测试签名。Agent 的标准输出句柄只继承所有权文件，不写数据。`probe()` 核对当前实例，不是公开 Engine 或 Agent 方法。
 
-启动竞争与共享发现按原生用户和登录会话分组，不用工作空间、显示后端或安装版本分组。Windows 运行目录使用与 ACL 一致的登录 SID；Windows（命名 Mutex）、Linux（抽象域套接字）和 macOS（登录会话 Mach bootstrap 端口）均持有生命周期内不随文件或目录替换而分裂的非文件会话级所有权对象。Linux 准入要求 Engine 与 Agent 使用受信控制面的挂载和网络命名空间。受信控制面在同一桌面授权周期内固定所有权文件身份，不为被替换的文件签发启动或接入登记。后续 Engine 优先读取 `agent.json` 并通过 `ProcessBinding`、原生端点核验以及 Ed25519 `deskweave/agent-attach/v1` + 每次连接随机密钥 HMAC 双向认证共享接入同一 Agent（最多 32 个并发连接，未认证握手限时 10 秒）；非法或未共享的第二个候选仍由会话级所有权对象以 `DESKTOP_BUSY` 阻断。父 Engine 在发布就绪后关闭继承的锁句柄，单个 Engine 退出不终止仍在为其他工作空间服务的共享 Agent；最后一个已认证连接断开且经过空闲宽限（`idle_grace` 默认 2 秒，范围 0.05～300 秒）后，Agent 原子转入排空并正常退出，宽限期内的新接入取消退出。重启分配新 `epoch`，旧连接在失联、旧代次请求或所有权对象变化时关闭。平台端口、桌面租约和急停尚未接入。
+Rust 工作空间位于 `rust/`，包含端口与格式模型 `platform-api`、四类桌面后端边界（`platform-windows`、`platform-macos`、`platform-linux-x11`、`platform-linux-wayland`）以及原生进程 `desktop-agent`。共享核心不暴露 `HWND`、`CGEventRef`、`XID`、`PipeWire` 或 `EIS` 句柄。
+
+启动竞争与共享发现按原生用户和登录会话分组，不用工作空间、显示后端或安装版本分组。Windows 运行目录使用与 ACL 一致的登录 SID；Windows（命名 Mutex）、Linux（抽象域套接字）和 macOS（登录会话 Mach bootstrap 端口）均持有生命周期内不随文件或目录替换而分裂的非文件会话级所有权对象。Linux 准入要求 Engine 与 Agent 使用受信控制面的挂载和网络命名空间，且会话后端按真实登录会话与原生套接字选择，不单凭 `DISPLAY` 环境变量判定。受信控制面在同一桌面授权周期内固定所有权文件身份，不为被替换的文件签发启动或接入登记。后续 Engine 优先读取 `agent.json` 并通过 `ProcessBinding`、原生端点核验以及 Ed25519 `deskweave/agent-attach/v1` + 每次连接随机密钥 HMAC 双向认证共享接入同一 Agent（最多 32 个并发连接，未认证握手限时 10 秒）；就绪帧由服务端签发并认证绑定每次连接的 `session`，认证完成后控制帧预算提升为 1MiB 并接收标准 `requestEnvelope`（现已接入 `desktop.capabilities` 与 `desktop.topology`，其余未实现方法返回 `METHOD_UNAVAILABLE`）。非法或未共享的第二个候选仍由会话级所有权对象以 `DESKTOP_BUSY` 阻断。父 Engine 在发布就绪后关闭继承的锁句柄，单个 Engine 退出不终止仍在为其他工作空间服务的共享 Agent；最后一个已认证连接断开且经过空闲宽限（`idle_grace` 默认 2 秒，范围 0.05～300 秒）后，Agent 原子转入排空并正常退出，宽限期内的新接入取消退出。重启分配新 `epoch`，旧连接在失联、旧代次请求或所有权对象变化时关闭。M1 中四类后端只执行只读会话探测与诚实能力报告（不触发授权弹窗、不为未实现原生后端伪造 `available`）；桌面租约和急停尚未接入。
 
 在仓库根目录构建并验证：
 
@@ -73,6 +75,7 @@ macOS 测试构建后先用 `codesign --force --sign - target/agent-fixture/debu
 | run.snapshot | 读取运行状态、控制与数据版本、末事件序号及帧和副作用查询集合 |
 | debug.variables.read | 读取运行或帧作用域的脱敏变量快照，超限明文按协商导出为私有资源 |
 | event.subscribe / event.read / event.unsubscribe | 建立事件订阅、按实例 epoch 与序号分页读取增量事件及退订关闭 |
+| system.capabilities | 返回平台标识、组件版本、已实现动作、有界容量；会话协商 `platform-capabilities-v1` 且已连接 Agent 时透传并复验 `desktop` 能力摘要 |
 
 `workflow.save` 固定图像、轨迹和子流程的正式版本，核对依赖内容与完整授权范围；存储接口、复制规则和容量见[资产版本与流程依赖](assets.md)。`trajectoryEdit` 封存完整轨迹 JSON，由资产编辑应用服务进行时长与正式版本提交。方法与参数见[本机协议](../interfaces/local-protocol.md)。
 

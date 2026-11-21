@@ -7,12 +7,23 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+deskweave-platform-api = { path = "../platform-api" }
 ed25519-dalek = "2.2.0"
 getrandom = "0.3.4"
 hmac = "0.12.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 sha2 = "0.10.9"
+
+[target.'cfg(windows)'.dependencies]
+deskweave-platform-windows = { path = "../platform-windows" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+deskweave-platform-macos = { path = "../platform-macos" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+deskweave-platform-linux-x11 = { path = "../platform-linux-x11" }
+deskweave-platform-linux-wayland = { path = "../platform-linux-wayland" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.177"

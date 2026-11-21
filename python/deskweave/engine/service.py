@@ -11,6 +11,8 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 
 import rfc8785
 
@@ -22,6 +24,7 @@ from deskweave.adapters.receipts import find_receipt
 from deskweave.adapters.run_commands import RunCommand
 from deskweave.adapters.workspace import Workspace, utc_time
 from deskweave.contracts import method_schema, schema_contents, validate
+from deskweave.domain.platform import current_platform_tag
 from deskweave.domain.values import evaluate
 from deskweave.domain.workflow import validate_workflow
 from deskweave.engine.inspection import Inspection
@@ -29,10 +32,22 @@ from deskweave.engine.pagination import Pages
 from deskweave.engine.run_api import RunAPI
 from deskweave.engine.run_events import RunEvents
 from deskweave.engine.run_manager import RunManager
-from deskweave.engine.run_planning import RunAccess
+from deskweave.engine.run_planning import DEFAULT_LIMITS, RunAccess
 from deskweave.engine.run_queries import RunQueries
 from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME, digest, dumps, loads
+
+
+def _engine_version() -> str:
+    try:
+        return package_version("deskweave")
+    except PackageNotFoundError:
+        return "0.1.0"
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingCapabilities:
+    base: dict
 
 
 @dataclass(frozen=True)
@@ -146,6 +161,7 @@ class Engine:
         self.register("event.subscribe", self.events.subscribe, {"run.read"})
         self.register("event.read", self.events.read, {"run.read"})
         self.register("event.unsubscribe", self.events.unsubscribe, set())
+        self.register("system.capabilities", self._system_capabilities, set())
 
     @property
     def methods(self) -> tuple[str, ...]:
@@ -450,9 +466,37 @@ class Engine:
                         )
                     else:
                         result = method.handler(session, params, request["id"])
-                    if not isinstance(result, Future):
+                    if not isinstance(result, (Future, _PendingCapabilities)):
                         response = self._response(header, name, method, result, max_frame_bytes)
-            if isinstance(result, Future):
+            if isinstance(result, _PendingCapabilities):
+                with self._desktop_lock:
+                    desktop_agent = (
+                        self._desktop_agent
+                        if self._desktop_agent is not None and self._desktop_agent.running
+                        else None
+                    )
+                payload = result.base
+                if desktop_agent is not None:
+                    left = deadline - self.monotonic()
+                    if left <= 0:
+                        raise DeskWeaveError("DEADLINE_EXCEEDED", "请求已超过截止时间。")
+                    desktop = desktop_agent.desktop_capabilities(
+                        timeout=left, cancel=self._desktop_stopping
+                    )
+                    payload = {
+                        **payload,
+                        "componentVersions": {
+                            **payload["componentVersions"],
+                            "agent": desktop["backendVersion"],
+                        },
+                        "desktop": desktop,
+                    }
+                with (
+                    self._mutex,
+                    self.workspace.budget(deadline, self.monotonic, authorize=current),
+                ):
+                    response = self._response(header, name, method, payload, max_frame_bytes)
+            elif isinstance(result, Future):
                 try:
                     result = result.result(timeout=max(0, deadline - self.monotonic()))
                 except FutureTimeout:
@@ -879,6 +923,21 @@ class Engine:
         if collection is not None and collection["owner"] == session.id:
             del self._collections[identity]
         return {"closed": True}
+
+    def _system_capabilities(self, session, _params, _request_id):
+        base = {
+            "platform": current_platform_tag(),
+            "componentVersions": {"engine": _engine_version()},
+            "actions": sorted(self.runs.ports.actions),
+            "limits": {
+                **DEFAULT_LIMITS,
+                "maxFrameBytes": self._frame_limit,
+                "maxContentBytes": MAX_CONTENT,
+            },
+        }
+        if "platform-capabilities-v1" in session.capabilities:
+            return _PendingCapabilities(base)
+        return base
 
     def _request_status(self, session, params, _request_id):
         with self.workspace.transaction() as connection:

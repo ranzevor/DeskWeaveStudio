@@ -697,6 +697,19 @@ class ConnectionTests(EngineCase):
         )
         self.assertEqual(negotiate(current, compatible)["protocolVersion"], "1.0")
         self.assertEqual(negotiate(current, compatible)["capabilities"], ["contentRefsV1"])
+        full = replace(
+            current,
+            capabilities={
+                "contentRefsV1",
+                "platform-capabilities-v1",
+                "display-coordinates-v1",
+                "future",
+            },
+        )
+        self.assertEqual(
+            negotiate(current, full)["capabilities"],
+            ["contentRefsV1", "display-coordinates-v1", "platform-capabilities-v1"],
+        )
         self.assert_code(
             "PROTOCOL_UNSUPPORTED",
             lambda: negotiate(current, replace(current, protocol_version="2.0")),

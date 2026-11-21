@@ -1,4 +1,5 @@
 mod native;
+mod platform;
 mod protocol;
 mod server;
 
@@ -10,10 +11,10 @@ use std::time::{Duration, Instant};
 
 use native::{DeadlineIo, Listener, StopSignal};
 use protocol::{
-    Bootstrap, Challenge, Hello, Ready, Registration, is_hex, parse_object, read_frame,
-    valid_workspace_id, write_frame,
+    Bootstrap, Challenge, Hello, Ready, Registration, generate_session_id, is_hex, parse_object,
+    read_frame, valid_workspace_id, write_frame,
 };
-use server::{HANDSHAKE_TIMEOUT, MAX_CLIENTS, ServerConfig};
+use server::{HANDSHAKE_TIMEOUT, MAX_CLIENTS, ServerConfig, SessionContext};
 
 const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -59,7 +60,7 @@ fn authenticate(
         return Err(io::ErrorKind::PermissionDenied.into());
     }
     bootstrap
-        .proof(b"engine", None)
+        .proof(b"engine", None, None)
         .verify_slice(&hello.proof)
         .map_err(|_| io::ErrorKind::PermissionDenied)?;
     let signature =
@@ -86,6 +87,7 @@ fn answer(
     channel: &mut impl Write,
     bootstrap: &Bootstrap,
     address: Option<&str>,
+    session: Option<&str>,
 ) -> io::Result<()> {
     let (kind, role) = match address {
         Some(_) => ("agent.ready", b"agent".as_slice()),
@@ -97,8 +99,9 @@ fn answer(
             kind,
             agent_epoch: &bootstrap.agent_epoch,
             address,
+            session,
             proof: bootstrap
-                .proof(role, address)
+                .proof(role, address, session)
                 .finalize()
                 .into_bytes()
                 .into(),
@@ -107,7 +110,7 @@ fn answer(
 }
 
 fn busy(channel: &mut (impl Read + Write), bootstrap: &Bootstrap) -> io::Result<()> {
-    answer(channel, bootstrap, None)?;
+    answer(channel, bootstrap, None, None)?;
     if channel.read(&mut [0])? == 0 {
         Ok(())
     } else {
@@ -169,11 +172,23 @@ fn run() -> io::Result<()> {
         }
         return Err(error);
     }
+    let desktop = platform::current_session();
+    let initial_session_id = generate_session_id()?;
     let listener = Listener::bind()?;
     {
         let mut io = DeadlineIo::new(&mut channel, deadline, &stop);
-        answer(&mut io, &bootstrap, Some(listener.address()))?;
+        answer(
+            &mut io,
+            &bootstrap,
+            Some(listener.address()),
+            Some(&initial_session_id),
+        )?;
     }
+    let initial_session = SessionContext {
+        agent_epoch: bootstrap.agent_epoch.clone(),
+        session_id: initial_session_id,
+        workspace_id: registration.workspace_id,
+    };
     let config = ServerConfig {
         agent_epoch: bootstrap.agent_epoch.clone(),
         scope: registration.scope,
@@ -182,8 +197,9 @@ fn run() -> io::Result<()> {
         idle_grace: bootstrap.idle_grace(),
         handshake_timeout: HANDSHAKE_TIMEOUT,
         max_clients: MAX_CLIENTS,
+        desktop,
     };
-    let result = server::run(channel, listener, config, stop);
+    let result = server::run(channel, initial_session, listener, config, stop);
     drop(scope);
     result?;
     owner.unlock()
@@ -263,8 +279,14 @@ mod tests {
             cursor: Cursor::new(stale),
         };
         let stop = StopSignal::new().unwrap();
+        let desktop = platform::current_session();
+        let ctx = SessionContext {
+            agent_epoch: "current".to_owned(),
+            session_id: "1".repeat(32),
+            workspace_id: "ws-1".to_owned(),
+        };
         assert_eq!(
-            server::serve_session(&mut channel, "current", &stop)
+            server::serve_session(&mut channel, &ctx, desktop.as_ref(), &stop)
                 .unwrap_err()
                 .kind(),
             io::ErrorKind::PermissionDenied
@@ -339,6 +361,7 @@ mod tests {
             let frame: serde_json::Value = read_frame(&mut written).unwrap().unwrap();
             assert_eq!(frame["kind"], "agent.busy");
             assert!(frame.get("address").is_none());
+            assert!(frame.get("session").is_none());
         }
     }
 

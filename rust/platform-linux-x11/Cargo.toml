@@ -1,0 +1,10 @@
+[package]
+name = "deskweave-platform-linux-x11"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+deskweave-platform-api = { path = "../platform-api" }
