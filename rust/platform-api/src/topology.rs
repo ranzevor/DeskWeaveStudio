@@ -3,7 +3,7 @@ use std::fmt;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
-use crate::capabilities::{BackendKind, MAX_SAFE_INT};
+use crate::capabilities::{BackendKind, MAX_SAFE_INT, deserialize_required_nullable};
 use crate::error::PlatformError;
 
 pub const MIN_COORD_I64: i64 = -2_147_483_648;
@@ -338,9 +338,12 @@ pub struct LocalDisplay {
     pub name: String,
     pub output_names: Vec<String>,
     pub pixel_size: PixelSize,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
     pub layout_bounds: Option<LayoutRect>,
     pub rotation: Rotation,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
     pub primary: Option<bool>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
     pub pixel_to_native: Option<AffineTransform2D>,
 }
 

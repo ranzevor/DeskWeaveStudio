@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::capabilities::{CapabilitySnapshot, FeatureState, MAX_SAFE_INT, TrajectoryVersion};
+use crate::capabilities::{
+    CapabilitySnapshot, FeatureState, MAX_SAFE_INT, TrajectoryVersion,
+    deserialize_optional_non_null, deserialize_required_nullable,
+};
 use crate::error::PlatformError;
 use crate::topology::{
     DisplayLocalTopology, DisplayPoint, DisplayTopology, InputProfile, LocalTopologyCoverage,
@@ -41,8 +44,13 @@ pub struct PhysicalSource {
     pub scope: RecordingScope,
     pub topology: PhysicalTopologyWrapper,
     pub display_ids: Vec<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
     pub initial_pointer: Option<PhysicalPoint>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_non_null",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub input_profile: Option<InputProfile>,
 }
 
@@ -67,6 +75,7 @@ pub struct DisplaySource {
     pub scope: RecordingScope,
     pub topology: DisplayLocalTopologyWrapper,
     pub display_ids: Vec<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
     pub initial_pointer: Option<DisplayPoint>,
     pub input_profile: InputProfile,
 }
@@ -273,7 +282,11 @@ pub enum TrajectoryEvent {
         at_us: u64,
         x: f64,
         y: f64,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(
+            default,
+            deserialize_with = "deserialize_optional_non_null",
+            skip_serializing_if = "Option::is_none"
+        )]
         display_id: Option<String>,
     },
     #[serde(rename = "pointer.delta", rename_all = "camelCase")]
@@ -314,7 +327,11 @@ pub struct TrajectoryDocument {
     pub format_version: TrajectoryVersion,
     pub coordinate_mode: CoordinateMode,
     pub events: Vec<TrajectoryEvent>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_non_null",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub source: Option<RecordingSource>,
 }
 
@@ -518,6 +535,13 @@ impl TrajectoryDocument {
                         || !(-10_000.0..=10_000.0).contains(dy)
                     {
                         return Err(PlatformError::invalid_argument("滚轮增量超出范围。"));
+                    }
+                    if self.format_version == TrajectoryVersion::V1_0
+                        && (!is_json_integer(*dx) || !is_json_integer(*dy))
+                    {
+                        return Err(PlatformError::schema_unsupported(
+                            "轨迹 1.0 不允许小数滚轮增量。",
+                        ));
                     }
                 }
                 TrajectoryEvent::KeyDown { key, .. } => {
@@ -908,10 +932,9 @@ pub fn validate_replay(
                     .iter()
                     .find(|d| d.display_id == target_id)
                     .ok_or_else(|| PlatformError::invalid_argument("目标显示屏不存在。"))?;
-                let translated_x = local_x + target.bounds.x as f64;
-                let translated_y = local_y + target.bounds.y as f64;
                 if src_rot != target.rotation
-                    || !target.bounds.contains_f64(translated_x, translated_y)
+                    || !(0.0..target.bounds.width as f64).contains(&local_x)
+                    || !(0.0..target.bounds.height as f64).contains(&local_y)
                 {
                     return Err(PlatformError::invalid_argument(
                         "映射屏幕方向不同或实际轨迹位置超出映射目标。",

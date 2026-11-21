@@ -40,13 +40,73 @@ _STARTUP = ".agent-start.lock"
 _DISCOVERY = "agent.json"
 _MAX_FRAME = 4096
 _DISCOVERY_LIMIT = 16384
-_LINUX_SESSION_ENV = (
-    "XDG_SESSION_TYPE",
-    "XDG_SESSION_ID",
-    "XDG_RUNTIME_DIR",
-    "WAYLAND_DISPLAY",
-    "DISPLAY",
-)
+
+
+def _is_local_x11_display(value: str) -> bool:
+    trimmed = value.strip()
+    if not 1 <= len(trimmed) <= 64:
+        return False
+    for prefix in ("unix/:", "unix:", ":"):
+        if trimmed.startswith(prefix):
+            rest = trimmed[len(prefix) :]
+            break
+    else:
+        return False
+    num, sep, screen = rest.partition(".")
+    if not num or not num.isascii() or not num.isdigit():
+        return False
+    if sep and (not screen or not screen.isascii() or not screen.isdigit()):
+        return False
+    return int(num) <= 0xFFFFFFFF
+
+
+def _sanitize_linux_session_env(environ) -> dict[str, str]:
+    result: dict[str, str] = {}
+    session_type = environ.get("XDG_SESSION_TYPE")
+    if (
+        type(session_type) is str
+        and (trimmed := session_type.strip())
+        and len(trimmed) <= 32
+        and trimmed.isascii()
+        and trimmed.isalpha()
+    ):
+        result["XDG_SESSION_TYPE"] = trimmed
+    session_id = environ.get("XDG_SESSION_ID")
+    if (
+        type(session_id) is str
+        and (trimmed := session_id.strip())
+        and len(trimmed) <= 64
+        and trimmed.isascii()
+        and all(ch.isalnum() or ch in "-_" for ch in trimmed)
+    ):
+        result["XDG_SESSION_ID"] = trimmed
+    runtime_dir = environ.get("XDG_RUNTIME_DIR")
+    if (
+        type(runtime_dir) is str
+        and (trimmed := runtime_dir.strip())
+        and 1 <= len(trimmed) <= 4096
+        and "\x00" not in trimmed
+        and trimmed.startswith("/")
+        and ".." not in trimmed.split("/")
+    ):
+        result["XDG_RUNTIME_DIR"] = trimmed
+    wayland = environ.get("WAYLAND_DISPLAY")
+    if (
+        type(wayland) is str
+        and (trimmed := wayland.strip())
+        and 1 <= len(trimmed) <= 255
+        and "\x00" not in trimmed
+        and trimmed not in {".", ".."}
+        and (
+            (trimmed.startswith("/") and ".." not in trimmed.split("/") and "\\" not in trimmed)
+            or ("/" not in trimmed and "\\" not in trimmed)
+        )
+    ):
+        result["WAYLAND_DISPLAY"] = trimmed
+    display = environ.get("DISPLAY")
+    if type(display) is str and "\x00" not in display and _is_local_x11_display(display):
+        result["DISPLAY"] = display.strip()
+    return result
 
 
 def _scope(local):
@@ -763,10 +823,7 @@ class AgentProcess(Resource):
                 if name in os.environ:
                     environment[name] = os.environ[name]
         elif sys.platform == "linux":
-            for name in _LINUX_SESSION_ENV:
-                value = os.environ.get(name)
-                if value and "\x00" not in value:
-                    environment[name] = value
+            environment.update(_sanitize_linux_session_env(os.environ))
         launch = {}
         if sys.platform == "linux":
             descriptor = image.fileno()
@@ -820,8 +877,16 @@ class AgentProcess(Resource):
         finally:
             self._io.release()
 
-    def call(self, method: str, params: dict | None = None, *, timeout=10, cancel=None):
-        if type(method) is not str or not method:
+    def call(
+        self,
+        method: str,
+        params: dict | None = None,
+        *,
+        timeout=10,
+        cancel=None,
+        validator=None,
+    ):
+        if type(method) is not str or not 1 <= len(method) <= 128 or "\x00" in method:
             raise ValueError("Agent 方法名无效。")
         payload = {} if params is None else params
         if type(payload) is not dict:
@@ -829,25 +894,32 @@ class AgentProcess(Resource):
         if self._stopping.is_set() or self.session is None:
             raise closed()
         budget = Budget(timeout, Cancellation(cancel, self._stopping))
+        request_id = secrets.token_hex(16)
+        deadline_seconds = min(remaining(budget), 86_400)
+        deadline_ms = max(1, min(86_400_000, math.ceil(deadline_seconds * 1000)))
+        request = {
+            "protocolVersion": "1.0",
+            "kind": "request",
+            "id": request_id,
+            "session": self.session,
+            "workspace": self.workspace_id,
+            "method": method,
+            "deadlineMs": deadline_ms,
+            "params": payload,
+        }
+        try:
+            dumps(request, max_bytes=_MAX_CONTROL_FRAME, checkpoint=budget.check_time)
+        except (TypeError, ValueError) as error:
+            raise DeskWeaveError("INVALID_ARGUMENT", "Agent 请求参数无法编码。") from error
         budget.acquire(self._io)
         agent_error = None
         try:
+            if self._stopping.is_set() or self._channel is None or self.session is None:
+                raise closed()
             _check_owner(self._runtime_dir, self._owner_identity)
-            request_id = secrets.token_hex(16)
-            deadline_ms = max(1, min(86_400_000, math.ceil(remaining(budget) * 1000)))
-            self._channel.send(
-                {
-                    "protocolVersion": "1.0",
-                    "kind": "request",
-                    "id": request_id,
-                    "session": self.session,
-                    "workspace": self.workspace_id,
-                    "method": method,
-                    "deadlineMs": deadline_ms,
-                    "params": payload,
-                },
-                budget=budget,
-            )
+            deadline_seconds = min(remaining(budget), 86_400)
+            request["deadlineMs"] = max(1, min(86_400_000, math.ceil(deadline_seconds * 1000)))
+            self._channel.send(request, budget=budget)
             response = self._channel.receive(budget=budget)
             _check_owner(self._runtime_dir, self._owner_identity)
             if (
@@ -861,7 +933,17 @@ class AgentProcess(Resource):
             if response["ok"]:
                 if response.keys() != {"protocolVersion", "kind", "replyTo", "ok", "result"}:
                     raise rejected()
-                return response["result"]
+                result = response["result"]
+                if validator is not None:
+                    try:
+                        return validator(result, checkpoint=budget.check_time)
+                    except DeskWeaveError as error:
+                        if error.code != "INVALID_ARGUMENT":
+                            raise
+                        raise DeskWeaveError(
+                            "INTERNAL_ERROR", "Desktop Agent 返回的平台数据不符合契约。"
+                        ) from error
+                return result
             if response.keys() != {"protocolVersion", "kind", "replyTo", "ok", "error"}:
                 raise rejected()
             body = response["error"]
@@ -871,13 +953,18 @@ class AgentProcess(Resource):
                 <= body.keys()
                 <= {"code", "message", "retry", "details"}
                 or type(body["code"]) is not str
+                or not 1 <= len(body["code"]) <= 80
                 or type(body["message"]) is not str
+                or not 1 <= len(body["message"]) <= 1000
                 or body["retry"] not in {"never", "sameRequest", "afterQuery"}
             ):
                 raise rejected()
-            details = body.get("details")
-            if details is not None and type(details) is not dict:
-                raise rejected()
+            if "details" in body:
+                if type(body["details"]) is not dict:
+                    raise rejected()
+                details = body["details"]
+            else:
+                details = None
             agent_error = DeskWeaveError(
                 body["code"], body["message"], retry=body["retry"], details=details
             )
@@ -889,12 +976,22 @@ class AgentProcess(Resource):
         raise agent_error
 
     def desktop_capabilities(self, *, timeout=10, cancel=None) -> dict:
-        result = self.call("desktop.capabilities", {}, timeout=timeout, cancel=cancel)
-        return validate_desktop_capabilities(result)
+        return self.call(
+            "desktop.capabilities",
+            {},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_desktop_capabilities,
+        )
 
     def desktop_topology(self, *, timeout=10, cancel=None) -> dict:
-        result = self.call("desktop.topology", {}, timeout=timeout, cancel=cancel)
-        return validate_desktop_topology(result)
+        return self.call(
+            "desktop.topology",
+            {},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_desktop_topology,
+        )
 
     def _close_resource(self, name):
         resource = getattr(self, name)

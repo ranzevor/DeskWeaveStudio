@@ -310,6 +310,10 @@ impl<'de> DeserializeSeed<'de> for StrictValueSeed {
     }
 }
 
+const MAX_SAFE_JSON_INT: i64 = 9_007_199_254_740_991;
+const MIN_SAFE_JSON_INT: i64 = -9_007_199_254_740_991;
+const MAX_SAFE_JSON_FLOAT: f64 = 9_007_199_254_740_991.0;
+
 struct StrictValueVisitor {
     depth: usize,
 }
@@ -326,14 +330,23 @@ impl<'de> Visitor<'de> for StrictValueVisitor {
     }
 
     fn visit_i64<E: de::Error>(self, v: i64) -> Result<Value, E> {
+        if !(MIN_SAFE_JSON_INT..=MAX_SAFE_JSON_INT).contains(&v) {
+            return Err(E::custom("JSON number outside safe range"));
+        }
         Ok(Value::Number(v.into()))
     }
 
     fn visit_u64<E: de::Error>(self, v: u64) -> Result<Value, E> {
+        if v > MAX_SAFE_JSON_INT as u64 {
+            return Err(E::custom("JSON number outside safe range"));
+        }
         Ok(Value::Number(v.into()))
     }
 
     fn visit_f64<E: de::Error>(self, v: f64) -> Result<Value, E> {
+        if !v.is_finite() || !(-MAX_SAFE_JSON_FLOAT..=MAX_SAFE_JSON_FLOAT).contains(&v) {
+            return Err(E::custom("JSON number outside safe range"));
+        }
         serde_json::Number::from_f64(v)
             .map(Value::Number)
             .ok_or_else(|| E::custom("non-finite JSON number"))
@@ -471,6 +484,12 @@ mod tests {
     #[test]
     fn strict_object_parser_rejects_duplicates_and_excessive_depth() {
         assert!(parse_strict_object(br#"{"a":1,"b":{"c":2}}"#).is_ok());
+        assert!(
+            parse_strict_object(br#"{"max":9007199254740991,"min":-9007199254740991}"#).is_ok()
+        );
+        assert!(parse_strict_object(br#"{"over":9007199254740992}"#).is_err());
+        assert!(parse_strict_object(br#"{"under":-9007199254740992}"#).is_err());
+        assert!(parse_strict_object(br#"{"overf":1e20}"#).is_err());
         assert!(parse_strict_object(br#"{"a":1,"a":2}"#).is_err());
         assert!(parse_strict_object(br#"{"a":{"x":1,"x":2}}"#).is_err());
         assert!(parse_strict_object(br#"{"a":1} trailing"#).is_err());

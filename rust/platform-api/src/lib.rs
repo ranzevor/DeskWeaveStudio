@@ -266,4 +266,66 @@ mod tests {
         fake.credentials().delete_secret("svc", "acct").unwrap();
         assert!(fake.credentials().read_secret("svc", "acct").is_err());
     }
+
+    #[test]
+    fn required_nullable_optional_non_null_scroll_v10_and_roi_overflow_are_enforced() {
+        // Required-nullable fields MUST fail if omitted, succeed if explicit null.
+        let mut caps: serde_json::Value = load_json("compositor-unimplemented.json").unwrap();
+        assert!(serde_json::from_value::<CapabilitySnapshot>(caps.clone()).is_ok());
+        caps.as_object_mut().unwrap().remove("topologyVersion");
+        assert!(serde_json::from_value::<CapabilitySnapshot>(caps).is_err());
+
+        let mut topo: serde_json::Value = load_json("macos-topology.json").unwrap();
+        topo["displays"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("layoutBounds");
+        assert!(serde_json::from_value::<DisplayTopology>(topo).is_err());
+
+        let mut source: serde_json::Value = load_json("macos-source.json").unwrap();
+        source.as_object_mut().unwrap().remove("initialPointer");
+        assert!(serde_json::from_value::<RecordingSource>(source).is_err());
+
+        // Optional-non-null fields MUST fail when explicit null is passed.
+        let null_source = serde_json::json!({
+            "formatVersion": "1.0",
+            "coordinateMode": "physical",
+            "source": null,
+            "events": [{"kind": "pointer.move", "atUs": 0, "x": 1, "y": 2}]
+        });
+        assert!(serde_json::from_value::<TrajectoryDocument>(null_source).is_err());
+
+        let null_display_id = serde_json::json!({
+            "formatVersion": "1.1",
+            "coordinateMode": "physical",
+            "events": [{"kind": "pointer.move", "atUs": 0, "x": 1, "y": 2, "displayId": null}]
+        });
+        assert!(serde_json::from_value::<TrajectoryDocument>(null_display_id).is_err());
+
+        // Trajectory 1.0 rejects fractional pointer.scroll dx/dy.
+        let scroll_v10: TrajectoryDocument = serde_json::from_value(serde_json::json!({
+            "formatVersion": "1.0",
+            "coordinateMode": "physical",
+            "events": [{"kind": "pointer.scroll", "atUs": 0, "dx": 0.5, "dy": 0}]
+        }))
+        .unwrap();
+        assert!(scroll_v10.validate().is_err());
+
+        // roi_inside_bounds handles extreme i64 values without arithmetic overflow.
+        let bounds = PhysicalRect {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        };
+        assert!(!roi_inside_bounds(
+            CaptureRoi {
+                x: i64::MAX,
+                y: 0,
+                width: 10,
+                height: 10,
+            },
+            bounds
+        ));
+    }
 }

@@ -15,8 +15,16 @@ pub fn parse_local_display_number(display: &str) -> Option<u32> {
         .strip_prefix(':')
         .or_else(|| trimmed.strip_prefix("unix/:"))
         .or_else(|| trimmed.strip_prefix("unix:"))?;
-    let num_part = rest.split('.').next()?;
+    let (num_part, screen_part) = match rest.split_once('.') {
+        Some((num, screen)) => (num, Some(screen)),
+        None => (rest, None),
+    };
     if num_part.is_empty() || !num_part.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    if let Some(screen) = screen_part
+        && (screen.is_empty() || !screen.bytes().all(|b| b.is_ascii_digit()))
+    {
         return None;
     }
     num_part.parse::<u32>().ok()
@@ -159,6 +167,9 @@ mod tests {
         assert_eq!(parse_local_display_number("unix/:10.0"), Some(10));
         assert_eq!(parse_local_display_number("127.0.0.1:0"), None);
         assert_eq!(parse_local_display_number("example.com:0.0"), None);
+        assert_eq!(parse_local_display_number(":0.garbage"), None);
+        assert_eq!(parse_local_display_number(":0."), None);
+        assert_eq!(parse_local_display_number(":0.0.1"), None);
         assert_eq!(parse_local_display_number(""), None);
     }
 

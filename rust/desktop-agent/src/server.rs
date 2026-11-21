@@ -254,9 +254,14 @@ fn dispatch_request(
                 ));
             }
             let snapshot = desktop.capabilities();
-            if let Err(error) = snapshot.validate() {
+            if snapshot.validate().is_err() {
                 return Ok((
-                    serialize_error(id, error.code, &error.message, error.retry)?,
+                    serialize_error(
+                        id,
+                        "INTERNAL_ERROR",
+                        "Desktop Agent 生成的平台能力摘要不符合契约。",
+                        "never",
+                    )?,
                     write_budget,
                 ));
             }
@@ -276,9 +281,14 @@ fn dispatch_request(
             }
             match desktop.topology() {
                 Ok(topology) => {
-                    if let Err(error) = topology.validate() {
+                    if topology.validate().is_err() {
                         return Ok((
-                            serialize_error(id, error.code, &error.message, error.retry)?,
+                            serialize_error(
+                                id,
+                                "INTERNAL_ERROR",
+                                "Desktop Agent 生成的显示拓扑不符合契约。",
+                                "never",
+                            )?,
                             write_budget,
                         ));
                     }
@@ -1094,5 +1104,16 @@ mod tests {
         drop(client_b);
         drop(client_a);
         server_thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn serialize_success_falls_back_to_limit_exceeded_when_over_budget() {
+        let oversized = "x".repeat(MAX_CONTROL_FRAME + 32);
+        let bytes = serialize_success("req-big", json!({"blob": oversized})).unwrap();
+        assert!(bytes.len() <= MAX_CONTROL_FRAME);
+        let parsed: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(parsed["ok"], false);
+        assert_eq!(parsed["replyTo"], "req-big");
+        assert_eq!(parsed["error"]["code"], "LIMIT_EXCEEDED");
     }
 }

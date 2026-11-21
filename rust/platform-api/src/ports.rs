@@ -408,8 +408,12 @@ impl CredentialStore for UnimplementedPorts {
 pub fn roi_inside_bounds(roi: CaptureRoi, bounds: PhysicalRect) -> bool {
     roi.width >= 1
         && roi.height >= 1
-        && roi.x >= bounds.x
-        && roi.y >= bounds.y
-        && roi.x + roi.width <= bounds.x + bounds.width
-        && roi.y + roi.height <= bounds.y + bounds.height
+        && bounds.width >= 1
+        && bounds.height >= 1
+        && i128::from(roi.x) >= i128::from(bounds.x)
+        && i128::from(roi.y) >= i128::from(bounds.y)
+        && i128::from(roi.x) + i128::from(roi.width)
+            <= i128::from(bounds.x) + i128::from(bounds.width)
+        && i128::from(roi.y) + i128::from(roi.height)
+            <= i128::from(bounds.y) + i128::from(bounds.height)
 }

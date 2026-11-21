@@ -68,12 +68,108 @@ pub fn select_linux_session(facts: &LinuxSessionFacts) -> SelectedLinuxBackend {
     SelectedLinuxBackend::Inactive
 }
 
+/// Parses `TYPE=` from a systemd logind session file ONLY when `UID=` matches `expected_uid`.
+pub fn parse_systemd_session_type(body: &str, expected_uid: u32) -> Option<String> {
+    let mut uid_matched = false;
+    let mut session_type = None;
+    for line in body.lines() {
+        if let Some(uid_raw) = line.strip_prefix("UID=") {
+            if uid_raw.trim().parse::<u32>().ok() == Some(expected_uid) {
+                uid_matched = true;
+            }
+        } else if let Some(type_raw) = line.strip_prefix("TYPE=") {
+            let trimmed = type_raw.trim();
+            if !trimmed.is_empty() {
+                session_type = Some(trimmed.to_ascii_lowercase());
+            }
+        }
+    }
+    if uid_matched { session_type } else { None }
+}
+
+/// Validates a relative `WAYLAND_DISPLAY` socket name (single normal filename, no traversal).
+pub fn is_safe_relative_wayland_display(display: &str) -> bool {
+    !display.is_empty()
+        && display.len() <= 255
+        && display != "."
+        && display != ".."
+        && !display.bytes().any(|b| matches!(b, b'/' | b'\\' | 0))
+}
+
+#[cfg(target_os = "linux")]
+fn is_private_owned_dir(path: &std::path::Path, expected_uid: u32) -> bool {
+    use std::fs;
+    use std::os::unix::fs::MetadataExt;
+
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return false;
+    }
+    match fs::symlink_metadata(path) {
+        Ok(meta) => {
+            meta.file_type().is_dir()
+                && !meta.file_type().is_symlink()
+                && meta.uid() == expected_uid
+                && (meta.mode() & 0o077) == 0
+        }
+        Err(_) => false,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn verify_wayland_socket(display: &str, runtime_dir: Option<&str>, expected_uid: u32) -> bool {
+    use std::fs;
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    use std::path::{Component, Path, PathBuf};
+
+    if display.is_empty() || display.bytes().any(|b| b == 0) {
+        return false;
+    }
+    let path = if Path::new(display).is_absolute() {
+        let candidate = PathBuf::from(display);
+        if candidate
+            .components()
+            .any(|c| matches!(c, Component::ParentDir))
+        {
+            return false;
+        }
+        let Some(parent) = candidate.parent() else {
+            return false;
+        };
+        if !is_private_owned_dir(parent, expected_uid) {
+            return false;
+        }
+        candidate
+    } else {
+        if !is_safe_relative_wayland_display(display) {
+            return false;
+        }
+        let Some(runtime) = runtime_dir else {
+            return false;
+        };
+        let runtime_path = Path::new(runtime);
+        if !is_private_owned_dir(runtime_path, expected_uid) {
+            return false;
+        }
+        runtime_path.join(display)
+    };
+    fs::symlink_metadata(path)
+        .map(|meta| {
+            meta.file_type().is_socket()
+                && !meta.file_type().is_symlink()
+                && meta.uid() == expected_uid
+        })
+        .unwrap_or(false)
+}
+
 #[cfg(target_os = "linux")]
 pub fn probe_linux_session_facts() -> LinuxSessionFacts {
     use std::env;
     use std::fs;
-    use std::os::unix::fs::FileTypeExt;
-    use std::path::{Path, PathBuf};
+    use std::os::unix::fs::MetadataExt;
 
     let read_env = |key: &str| {
         env::var(key)
@@ -82,44 +178,36 @@ pub fn probe_linux_session_facts() -> LinuxSessionFacts {
             .filter(|v| !v.is_empty())
     };
 
-    let session_id = read_env("XDG_SESSION_ID").or_else(|| {
-        fs::read_to_string("/proc/self/sessionid")
-            .ok()
-            .map(|s| s.trim().to_owned())
-            .filter(|s| !s.is_empty() && s != "0" && s != "4294967295")
-    });
+    let current_euid = fs::metadata("/proc/self").ok().map(|meta| meta.uid());
 
-    let logind_session_type = session_id
-        .as_deref()
-        .filter(|id| {
-            !id.is_empty()
-                && id.len() <= 64
-                && id
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
-        })
-        .and_then(|id| fs::read_to_string(format!("/run/systemd/sessions/{id}")).ok())
-        .and_then(|body| {
-            body.lines().find_map(|line| {
-                line.strip_prefix("TYPE=")
-                    .map(|val| val.trim().to_ascii_lowercase())
+    // Prefer kernel-authoritative `/proc/self/sessionid` over environment `XDG_SESSION_ID`.
+    let session_id = fs::read_to_string("/proc/self/sessionid")
+        .ok()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty() && s != "0" && s != "4294967295")
+        .or_else(|| read_env("XDG_SESSION_ID"));
+
+    let logind_session_type = current_euid.and_then(|euid| {
+        session_id
+            .as_deref()
+            .filter(|id| {
+                !id.is_empty()
+                    && id.len() <= 64
+                    && id
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
             })
-        });
+            .and_then(|id| fs::read_to_string(format!("/run/systemd/sessions/{id}")).ok())
+            .and_then(|body| parse_systemd_session_type(&body, euid))
+    });
 
     let xdg_session_type = read_env("XDG_SESSION_TYPE").map(|v| v.to_ascii_lowercase());
     let wayland_display = read_env("WAYLAND_DISPLAY");
     let xdg_runtime_dir = read_env("XDG_RUNTIME_DIR");
-    let wayland_socket_present = wayland_display.as_deref().is_some_and(|disp| {
-        let path = if Path::new(disp).is_absolute() {
-            PathBuf::from(disp)
-        } else if let Some(runtime) = xdg_runtime_dir.as_deref() {
-            Path::new(runtime).join(disp)
-        } else {
-            return false;
-        };
-        fs::symlink_metadata(path)
-            .map(|meta| meta.file_type().is_socket())
-            .unwrap_or(false)
+    let wayland_socket_present = current_euid.is_some_and(|euid| {
+        wayland_display
+            .as_deref()
+            .is_some_and(|disp| verify_wayland_socket(disp, xdg_runtime_dir.as_deref(), euid))
     });
 
     let x11_display = read_env("DISPLAY");
@@ -484,5 +572,25 @@ mod tests {
                 .iter()
                 .all(|(_, s)| s.state == FeatureState::Unimplemented)
         );
+    }
+
+    #[test]
+    fn systemd_session_parser_requires_matching_uid_and_wayland_display_blocks_traversal() {
+        assert_eq!(
+            parse_systemd_session_type("UID=1000\nTYPE=wayland\n", 1000),
+            Some("wayland".to_owned())
+        );
+        assert_eq!(
+            parse_systemd_session_type("UID=1001\nTYPE=wayland\n", 1000),
+            None
+        );
+        assert_eq!(parse_systemd_session_type("TYPE=wayland\n", 1000), None);
+
+        assert!(is_safe_relative_wayland_display("wayland-0"));
+        assert!(!is_safe_relative_wayland_display(""));
+        assert!(!is_safe_relative_wayland_display("."));
+        assert!(!is_safe_relative_wayland_display(".."));
+        assert!(!is_safe_relative_wayland_display("../dbus"));
+        assert!(!is_safe_relative_wayland_display("sub/wayland-0"));
     }
 }

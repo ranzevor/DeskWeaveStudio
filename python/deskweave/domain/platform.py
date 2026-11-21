@@ -60,9 +60,16 @@ def _local_point_valid(point: dict, displays: list[dict]) -> bool:
     )
 
 
-def _validate_matrix(matrix: list[float]) -> None:
-    if len(matrix) != 6 or any(
-        type(item) not in (int, float) or not math.isfinite(item) for item in matrix
+def _validate_matrix(matrix: object) -> None:
+    if (
+        type(matrix) not in (list, tuple)
+        or len(matrix) != 6
+        or any(
+            type(item) not in (int, float)
+            or not math.isfinite(item)
+            or not -1_000_000_000_000.0 <= item <= 1_000_000_000_000.0
+            for item in matrix
+        )
     ):
         raise DeskWeaveError("INVALID_ARGUMENT", "像素到原生坐标变换分量无效。")
     a, b, c, d, _tx, _ty = matrix
@@ -497,10 +504,38 @@ def validate_trajectory(value: object, *, checkpoint: Callable[[], None] = lambd
 
 
 def validate_replay(
-    mapping: object, context: dict, *, checkpoint: Callable[[], None] = lambda: None
+    mapping: object, context: object, *, checkpoint: Callable[[], None] = lambda: None
 ) -> dict:
     validate("urn:deskweave:recording:1#/$defs/displayMapping", mapping, checkpoint=checkpoint)
     assert isinstance(mapping, dict)
+    if type(context) is not dict or not {
+        "trajectory",
+        "topology",
+        "allowedDisplayIds",
+        "targetKind",
+    } <= context.keys() <= {
+        "trajectory",
+        "topology",
+        "allowedDisplayIds",
+        "targetKind",
+        "inputProfile",
+    }:
+        raise DeskWeaveError("INVALID_ARGUMENT", "回放上下文缺少必要字段或包含未知字段。")
+    validate_desktop_topology(context["topology"], checkpoint=checkpoint)
+    validate_trajectory(context["trajectory"], checkpoint=checkpoint)
+    allowed = context["allowedDisplayIds"]
+    if type(allowed) is not list or any(
+        type(item) is not str or not 1 <= len(item) <= 256 for item in allowed
+    ):
+        raise DeskWeaveError("INVALID_ARGUMENT", "回放上下文允许的显示屏集合无效。")
+    if type(context["targetKind"]) is not str or not 1 <= len(context["targetKind"]) <= 64:
+        raise DeskWeaveError("INVALID_ARGUMENT", "回放上下文目标类型无效。")
+    if "inputProfile" in context and context["inputProfile"] is not None:
+        validate(
+            "urn:deskweave:platform:1#/$defs/inputProfile",
+            context["inputProfile"],
+            checkpoint=checkpoint,
+        )
     issues = replay_errors(mapping, context)
     if issues:
         raise DeskWeaveError("INVALID_ARGUMENT", issues[0])
@@ -508,7 +543,7 @@ def validate_replay(
 
 
 def validate_record_start(
-    request: object, context: dict, *, checkpoint: Callable[[], None] = lambda: None
+    request: object, context: object, *, checkpoint: Callable[[], None] = lambda: None
 ) -> dict:
     validate(
         "urn:deskweave:service:1#/$defs/record.start/properties/params",
@@ -516,6 +551,25 @@ def validate_record_start(
         checkpoint=checkpoint,
     )
     assert isinstance(request, dict)
+    if type(context) is not dict or not {
+        "targetToken",
+        "targetKind",
+        "topology",
+        "permissions",
+    } <= context.keys() <= {"targetToken", "targetKind", "topology", "permissions", "capabilities"}:
+        raise DeskWeaveError("INVALID_ARGUMENT", "录制上下文缺少必要字段或包含未知字段。")
+    if type(context["targetToken"]) is not str or not 1 <= len(context["targetToken"]) <= 256:
+        raise DeskWeaveError("INVALID_ARGUMENT", "录制上下文目标令牌无效。")
+    if type(context["targetKind"]) is not str or not 1 <= len(context["targetKind"]) <= 64:
+        raise DeskWeaveError("INVALID_ARGUMENT", "录制上下文目标类型无效。")
+    permissions = context["permissions"]
+    if type(permissions) is not list or any(
+        type(item) is not str or not 1 <= len(item) <= 64 for item in permissions
+    ):
+        raise DeskWeaveError("INVALID_ARGUMENT", "录制上下文权限集合无效。")
+    validate_desktop_topology(context["topology"], checkpoint=checkpoint)
+    if "capabilities" in context and context["capabilities"] is not None:
+        validate_desktop_capabilities(context["capabilities"], checkpoint=checkpoint)
     issues = record_start_errors(request, context)
     if issues:
         raise DeskWeaveError("INVALID_ARGUMENT", issues[0])

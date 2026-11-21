@@ -41,7 +41,7 @@
 | 3 | 客户端 → Engine | `connection.authenticate`：proof；服务端验证客户端应答，原子消费票据 |
 | 4 | Engine → 客户端 | `connection.ready`：session、workspace、clientId、authorizationVersion、selected、proof；客户端核对会话绑定和最终应答 |
 
-双方 profile 包含 protocolVersion、componentVersion、instanceEpoch、schemaDigest、capabilities 和 limits。主版本相同才可连接，次版本取较小值；能力取交集，帧预算取较小值。当前协议为 1.0，能力为 `contentRefsV1`。协商结果不能授予业务权限。
+双方 profile 包含 protocolVersion、componentVersion、instanceEpoch、schemaDigest、capabilities 和 limits。主版本相同才可连接，次版本取较小值；能力取交集，帧预算取较小值。当前协议为 1.0，能力包含 `contentRefsV1`、`platform-capabilities-v1` 和 `display-coordinates-v1`。协商结果不能授予业务权限。
 
 schemaDigest 要求相同。摘要输入由所有公共 Schema 和目录 JSON 组成：Schema 键为 `schema:` 加 `$id`，其他 JSON 键为 `catalog:` 加文件名，值为解析后的文档；整体按 RFC 8785 编码，再计算 SHA-256。源码与 wheel 使用相同集合。profile 的组件版本来自安装包元数据，安装真实性由原生端点核验。
 

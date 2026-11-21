@@ -1,10 +1,32 @@
 use std::collections::HashSet;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::error::PlatformError;
 
 pub const MAX_SAFE_INT: u64 = 9_007_199_254_740_991;
+
+/// Deserializes a JSON field that is REQUIRED to be present, yet allowed to be `null`.
+pub(crate) fn deserialize_required_nullable<'de, D, T>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
+}
+
+/// Deserializes a JSON field that may be OMITTED, yet when present MUST NOT be `null`.
+pub(crate) fn deserialize_optional_non_null<'de, D, T>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -305,6 +327,7 @@ pub struct CapabilitySnapshot {
     pub backend: BackendKind,
     pub backend_version: String,
     pub generation: u64,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
     pub topology_version: Option<u64>,
     pub topology_coverage: TopologyCoverage,
     pub trajectory_versions: Vec<TrajectoryVersion>,
