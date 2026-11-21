@@ -526,7 +526,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let stop = StopSignal::new().unwrap();
         let client_stop = StopSignal::new().unwrap();
-        let config = test_config(&key, Duration::from_millis(120), 4);
+        let config = test_config(&key, Duration::from_millis(300), 4);
         let server_thread =
             thread::spawn(move || run(server_init, MemListener { rx }, config, stop));
 
@@ -544,7 +544,7 @@ mod tests {
 
         // Closing launcher client A must NOT stop the shared server while B is active.
         drop(client_a);
-        thread::sleep(Duration::from_millis(180));
+        thread::sleep(Duration::from_millis(360));
         assert_eq!(
             client_ping(&mut client_b, &client_stop).unwrap()["kind"],
             "agent.pong"
@@ -552,13 +552,13 @@ mod tests {
 
         // Closing client B triggers idle grace; attaching client C within idle grace cancels exit.
         drop(client_b);
-        thread::sleep(Duration::from_millis(40));
+        thread::sleep(Duration::from_millis(50));
         let (server_c, mut client_c) = MemStream::pair();
         tx.send((server_c, 3003)).unwrap();
         let ready_c =
             client_attach(&mut client_c, &key, 3003, "ws-3", ["1", "2"], &client_stop).unwrap();
         assert_eq!(ready_c["workspaceId"], "ws-3");
-        thread::sleep(Duration::from_millis(150));
+        thread::sleep(Duration::from_millis(350));
         assert_eq!(
             client_ping(&mut client_c, &client_stop).unwrap()["kind"],
             "agent.pong"

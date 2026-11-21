@@ -150,7 +150,7 @@ fn run() -> io::Result<()> {
         let mut io = DeadlineIo::new(&mut channel, deadline, &stop);
         authenticate(&mut io, &bootstrap, &owner_identity, &verification_key)?
     };
-    let _scope = {
+    let scope = {
         let mut io = DeadlineIo::new(&mut channel, deadline, &stop);
         match acquire_scope(
             &registration.scope,
@@ -184,6 +184,7 @@ fn run() -> io::Result<()> {
         max_clients: MAX_CLIENTS,
     };
     let result = server::run(channel, listener, config, stop);
+    drop(scope);
     result?;
     owner.unlock()
 }

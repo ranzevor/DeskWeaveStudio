@@ -444,7 +444,15 @@ impl StopSignal {
             #[cfg(unix)]
             unsafe {
                 let byte = 1_u8;
-                let _ = libc::write(self.inner.write.as_raw_fd(), (&raw const byte).cast(), 1);
+                loop {
+                    let rc = libc::write(self.inner.write.as_raw_fd(), (&raw const byte).cast(), 1);
+                    if rc >= 0 {
+                        break;
+                    }
+                    if io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
+                        break;
+                    }
+                }
             }
             #[cfg(windows)]
             win_ipc::set_event(&self.inner.event);
@@ -827,6 +835,16 @@ impl Listener {
 }
 
 #[cfg(unix)]
+fn is_transient_accept_error(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::Interrupted
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionReset
+    ) || error.raw_os_error() == Some(libc::EPROTO)
+}
+
+#[cfg(unix)]
 impl SessionListener for Listener {
     type Stream = NativeStream;
 
@@ -842,12 +860,13 @@ impl SessionListener for Listener {
             self.check_paths()?;
             match listener.accept() {
                 Ok((stream, _)) => match peer(&stream) {
-                    Ok((pid, uid)) if uid == self.uid => {
-                        return Ok((NativeStream::from_unix(stream)?, pid));
-                    }
+                    Ok((pid, uid)) if uid == self.uid => match NativeStream::from_unix(stream) {
+                        Ok(native) => return Ok((native, pid)),
+                        Err(_) => continue,
+                    },
                     Ok(_) | Err(_) => continue,
                 },
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) if is_transient_accept_error(&error) => continue,
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     poll_fd(listener.as_raw_fd(), libc::POLLIN, stop, None)?;
                 }
@@ -1228,7 +1247,7 @@ mod win_ipc {
         let wait = unsafe { WaitForMultipleObjects(2, handles.as_ptr(), 0, wait_ms) };
         if wait == WAIT_OBJECT_0 {
             let mut transferred = 0_u32;
-            if unsafe { GetOverlappedResult(handle, overlapped, &mut transferred, 0) } == 0 {
+            if unsafe { GetOverlappedResult(handle, overlapped, &mut transferred, 1) } == 0 {
                 let err = unsafe { GetLastError() };
                 if is_read && matches!(err, ERROR_BROKEN_PIPE | ERROR_NO_DATA) {
                     return Ok(0);
@@ -1237,6 +1256,11 @@ mod win_ipc {
             }
             return Ok(transferred as usize);
         }
+        let wait_err = if wait != WAIT_OBJECT_1 && wait != WAIT_TIMEOUT {
+            Some(io::Error::last_os_error())
+        } else {
+            None
+        };
         unsafe {
             let _ = CancelIoEx(handle, overlapped);
             let mut transferred = 0_u32;
@@ -1245,7 +1269,7 @@ mod win_ipc {
         match wait {
             WAIT_OBJECT_1 => Err(io::ErrorKind::ConnectionAborted.into()),
             WAIT_TIMEOUT => Err(io::ErrorKind::TimedOut.into()),
-            _ => Err(io::Error::last_os_error()),
+            _ => Err(wait_err.unwrap_or_else(|| io::Error::from(io::ErrorKind::Other))),
         }
     }
 
@@ -1334,7 +1358,7 @@ mod win_ipc {
             return Ok(transferred as usize);
         }
         let err = unsafe { GetLastError() };
-        if err == ERROR_BROKEN_PIPE {
+        if matches!(err, ERROR_BROKEN_PIPE | ERROR_NO_DATA) {
             return Ok(0);
         }
         if err != ERROR_IO_PENDING {
@@ -1555,7 +1579,21 @@ impl SessionListener for Listener {
                     }
                 }
                 Err(error) if stop.is_triggered() => return Err(error),
-                Err(error) if error.kind() == io::ErrorKind::BrokenPipe => continue,
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::BrokenPipe
+                            | io::ErrorKind::ConnectionAborted
+                            | io::ErrorKind::ConnectionReset
+                    ) =>
+                {
+                    self.pending = Some(win_ipc::create_pipe_instance(
+                        &self.address_utf16,
+                        &self.sddl_utf16,
+                        false,
+                    )?);
+                    continue;
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -1706,6 +1744,85 @@ mod tests {
         assert!(sid.starts_with("S-1-5-5-"));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_listener_accepts_peer_recovers_from_abort_and_wakes_on_stop() {
+        use super::{DeadlineIo, Listener, SessionListener, StopSignal, connect};
+        use std::io::{Read, Write};
+        use std::thread;
+        use std::time::{Duration, Instant};
+
+        let mut listener = Listener::bind().unwrap();
+        let address = listener.address().to_owned();
+        let aborted = connect(&address, std::process::id()).unwrap();
+        drop(aborted);
+
+        let stop = StopSignal::new().unwrap();
+        let accept_stop = stop.clone();
+        let server = thread::spawn(move || {
+            let deadline = Some(Instant::now() + Duration::from_secs(2));
+            loop {
+                let (mut stream, pid) = listener.accept(&accept_stop).unwrap();
+                assert_eq!(pid, std::process::id());
+                let mut buf = [0_u8; 4];
+                match DeadlineIo::new(&mut stream, deadline, &accept_stop).read_exact(&mut buf) {
+                    Ok(()) => {
+                        assert_eq!(&buf, b"ping");
+                        DeadlineIo::new(&mut stream, deadline, &accept_stop)
+                            .write_all(b"pong")
+                            .unwrap();
+                        break;
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => continue,
+                    Err(error) => panic!("unexpected server read error: {error}"),
+                }
+            }
+            assert_eq!(
+                listener.accept(&accept_stop).err().unwrap().kind(),
+                io::ErrorKind::ConnectionAborted
+            );
+            drop(listener);
+        });
+
+        let mut client = connect(&address, std::process::id()).unwrap();
+        let client_stop = StopSignal::new().unwrap();
+        let deadline = Some(Instant::now() + Duration::from_secs(2));
+        DeadlineIo::new(&mut client, deadline, &client_stop)
+            .write_all(b"ping")
+            .unwrap();
+        let mut reply = [0_u8; 4];
+        DeadlineIo::new(&mut client, deadline, &client_stop)
+            .read_exact(&mut reply)
+            .unwrap();
+        assert_eq!(&reply, b"pong");
+        drop(client);
+        stop.trigger();
+        server.join().unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_transient_accept_errors_are_classified() {
+        assert!(super::is_transient_accept_error(&io::Error::from(
+            io::ErrorKind::Interrupted
+        )));
+        assert!(super::is_transient_accept_error(&io::Error::from(
+            io::ErrorKind::ConnectionAborted
+        )));
+        assert!(super::is_transient_accept_error(&io::Error::from(
+            io::ErrorKind::ConnectionReset
+        )));
+        assert!(super::is_transient_accept_error(
+            &io::Error::from_raw_os_error(libc::EPROTO)
+        ));
+        assert!(!super::is_transient_accept_error(&io::Error::from(
+            io::ErrorKind::PermissionDenied
+        )));
+        assert!(!super::is_transient_accept_error(&io::Error::from(
+            io::ErrorKind::InvalidInput
+        )));
+    }
+
     #[cfg(unix)]
     #[test]
     fn unix_listener_accepts_peer_wakes_on_stop_and_cleans_socket() {
@@ -1719,20 +1836,29 @@ mod tests {
         let address = listener.address().to_owned();
         let sock_path = PathBuf::from(&address);
         let dir_path = sock_path.parent().unwrap().to_path_buf();
+        let aborted = connect(&address, std::process::id()).unwrap();
+        drop(aborted);
+
         let stop = StopSignal::new().unwrap();
         let accept_stop = stop.clone();
         let server = thread::spawn(move || {
-            let (mut stream, pid) = listener.accept(&accept_stop).unwrap();
-            assert_eq!(pid, std::process::id());
-            let mut buf = [0_u8; 4];
             let deadline = Some(Instant::now() + Duration::from_secs(2));
-            DeadlineIo::new(&mut stream, deadline, &accept_stop)
-                .read_exact(&mut buf)
-                .unwrap();
-            assert_eq!(&buf, b"ping");
-            DeadlineIo::new(&mut stream, deadline, &accept_stop)
-                .write_all(b"pong")
-                .unwrap();
+            loop {
+                let (mut stream, pid) = listener.accept(&accept_stop).unwrap();
+                assert_eq!(pid, std::process::id());
+                let mut buf = [0_u8; 4];
+                match DeadlineIo::new(&mut stream, deadline, &accept_stop).read_exact(&mut buf) {
+                    Ok(()) => {
+                        assert_eq!(&buf, b"ping");
+                        DeadlineIo::new(&mut stream, deadline, &accept_stop)
+                            .write_all(b"pong")
+                            .unwrap();
+                        break;
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => continue,
+                    Err(error) => panic!("unexpected server read error: {error}"),
+                }
+            }
             assert_eq!(
                 listener.accept(&accept_stop).err().unwrap().kind(),
                 io::ErrorKind::ConnectionAborted

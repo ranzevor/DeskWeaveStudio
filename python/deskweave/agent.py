@@ -546,6 +546,7 @@ class AgentProcess(Resource):
         if (
             challenge.keys() != {"kind", "version", "agentEpoch", "scope", "nonce"}
             or challenge["kind"] != "agent.attach.challenge"
+            or type(challenge["version"]) is not int
             or challenge["version"] != 1
         ):
             raise rejected()
@@ -823,6 +824,7 @@ def start_agent(
     cancel=None,
     idle_grace=2.0,
 ):
+    check_idle(idle_grace)
     budget = Budget(timeout, Cancellation(cancel, engine._desktop_stopping))
     budget.acquire(engine._desktop_lock)
     try:

@@ -23,7 +23,8 @@ pub(crate) fn is_hex(value: &str) -> bool {
 }
 
 pub(crate) fn valid_workspace_id(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 128 && !value.bytes().any(|byte| byte == 0)
+    let chars = value.chars().count();
+    (1..=128).contains(&chars) && !value.bytes().any(|byte| byte == 0)
 }
 
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
@@ -242,4 +243,18 @@ pub(crate) fn write_frame(stream: &mut impl Write, value: &impl Serialize) -> io
     }
     stream.write_all(&(payload.len() as u32).to_le_bytes())?;
     stream.write_all(&payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_workspace_id;
+
+    #[test]
+    fn workspace_id_counts_unicode_code_points_and_rejects_nul() {
+        assert!(!valid_workspace_id(""));
+        assert!(valid_workspace_id("workspace"));
+        assert!(valid_workspace_id(&"工".repeat(128)));
+        assert!(!valid_workspace_id(&"工".repeat(129)));
+        assert!(!valid_workspace_id("ws\0bad"));
+    }
 }

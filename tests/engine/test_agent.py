@@ -186,6 +186,8 @@ class DesktopAgentTests(unittest.TestCase):
             self.assertNotEqual(instance.pid, os.getpid())
             self.assertEqual(instance.probe(), instance.epoch)
             self.assertIs(instance, self._start_with_engine(engine))
+            with self.assertRaises(ValueError):
+                self._start_with_engine(engine, idle_grace=0.01)
         finally:
             engine.close()
         self.assertEqual(process.wait(timeout=5), 0)
@@ -636,9 +638,28 @@ class DesktopAgentTests(unittest.TestCase):
                 spawn.assert_not_called()
             with runtime_directory(self.local, self.runtime) as runtime:
                 runtime.write(agent._DISCOVERY, original_bytes)
-            with self._start(authority=other, workspace_id="ws-attach-ok") as attached:
+            bool_challenge = SimpleNamespace(
+                max_frame_bytes=0,
+                receive=lambda **_: {
+                    "kind": "agent.attach.challenge",
+                    "version": True,
+                    "agentEpoch": recovered.epoch,
+                    "scope": agent._scope(self.local),
+                    "nonce": [1] * 32,
+                },
+                close=lambda: None,
+            )
+            with (
+                patch.object(agent, "connect", return_value=bool_challenge),
+                patch.object(agent.subprocess, "Popen") as spawn,
+            ):
+                self._read_error("AUTHENTICATION_FAILED", lambda: self._start(authority=other))
+                spawn.assert_not_called()
+            unicode_workspace = "工作空间-" + ("甲" * 60)
+            with self._start(authority=other, workspace_id=unicode_workspace) as attached:
                 self.assertFalse(attached.created)
                 self.assertEqual(attached.pid, recovered.pid)
+                self.assertEqual(attached.workspace_id, unicode_workspace)
                 self.assertEqual(attached.probe(), recovered.epoch)
 
     @unittest.skipUnless(sys.platform == "win32", "Windows 登录 SID 命名空间场景。")
