@@ -93,7 +93,7 @@ def _agent_installation():
     return Installation(image, (schema,), requirement)
 
 
-def _contender(root, start, finish, results):
+def _contender(root, start, finish, results, workspace_id="contender-ws", idle_grace=0.15):
     scope = hashlib.sha256(os.fsencode(root)).hexdigest()
     with (
         ProcessBinding(os.getpid(), installation(), instance_epoch="contender") as local,
@@ -105,9 +105,11 @@ def _contender(root, start, finish, results):
             raise TimeoutError("未收到启动信号。")
         try:
             authority = agent.AgentAuthority((local,), _SignatureRequest)
-            with agent.AgentProcess(local, peer, authority) as instance:
-                instance.probe()
-                results.put(("ready", instance.pid))
+            with agent.AgentProcess(
+                local, peer, authority, workspace_id=workspace_id, idle_grace=idle_grace
+            ) as instance:
+                epoch = instance.probe()
+                results.put(("ready", (instance.pid, epoch, instance.created)))
                 if not finish.wait(30):
                     raise TimeoutError("未收到关闭信号。")
         except DeskWeaveError as error:
@@ -142,16 +144,31 @@ class DesktopAgentTests(unittest.TestCase):
         self.stack.enter_context(patch.object(agent, "_scope", return_value=scope))
         self.authority = agent.AgentAuthority((self.local,), _SignatureRequest)
 
-    def _start(self, *, installation=None, authority=None, cancel=None):
+    def _start(
+        self,
+        *,
+        installation=None,
+        authority=None,
+        cancel=None,
+        workspace_id="workspace",
+        idle_grace=0.15,
+    ):
         return agent.AgentProcess(
             self.local,
             installation if installation is not None else self.agent_installation,
             authority if authority is not None else self.authority,
+            workspace_id=workspace_id,
             cancel=cancel,
+            idle_grace=idle_grace,
         )
 
-    def _start_with_engine(self, engine):
-        return engine.start_desktop_agent(self.local, self.agent_installation, self.authority)
+    def _start_with_engine(self, engine, *, authority=None, idle_grace=0.15):
+        return engine.start_desktop_agent(
+            self.local,
+            self.agent_installation,
+            authority if authority is not None else self.authority,
+            idle_grace=idle_grace,
+        )
 
     def _read_error(self, code, function):
         with self.assertRaises(DeskWeaveError) as caught:
@@ -164,6 +181,8 @@ class DesktopAgentTests(unittest.TestCase):
             self.assertNotIn("agent.ping", engine.methods)
             instance = self._start_with_engine(engine)
             process = instance._process
+            self.assertTrue(instance.created)
+            self.assertEqual(instance.workspace_id, engine.workspace.id)
             self.assertNotEqual(instance.pid, os.getpid())
             self.assertEqual(instance.probe(), instance.epoch)
             self.assertIs(instance, self._start_with_engine(engine))
@@ -172,12 +191,15 @@ class DesktopAgentTests(unittest.TestCase):
         self.assertEqual(process.wait(timeout=5), 0)
         self._read_error("TRANSPORT_CLOSED", instance.probe)
 
-    def test_concurrent_engines_allow_only_one_owner(self):
+    def test_concurrent_engines_share_single_agent(self):
         context = multiprocessing.get_context("spawn")
         start, finish, results = context.Event(), context.Event(), context.Queue()
         contenders = [
-            context.Process(target=_contender, args=(self.runtime, start, finish, results))
-            for _index in range(2)
+            context.Process(
+                target=_contender,
+                args=(self.runtime, start, finish, results, f"ws-{index}", 0.15),
+            )
+            for index in range(2)
         ]
         with runtime_directory(self.local, self.runtime):
             pass
@@ -189,7 +211,13 @@ class DesktopAgentTests(unittest.TestCase):
                 active.append(contender)
             start.set()
             records = [results.get(timeout=25), results.get(timeout=25)]
-            self.assertCountEqual([record[0] for record in records], ["ready", "DESKTOP_BUSY"])
+            self.assertEqual([record[0] for record in records], ["ready", "ready"])
+            pids = {record[1][0] for record in records}
+            epochs = {record[1][1] for record in records}
+            created_flags = [record[1][2] for record in records]
+            self.assertEqual(len(pids), 1)
+            self.assertEqual(len(epochs), 1)
+            self.assertCountEqual(created_flags, [True, False])
         finally:
             finish.set()
             start.set()
@@ -207,18 +235,67 @@ class DesktopAgentTests(unittest.TestCase):
         with self._start() as instance:
             self.assertEqual(instance.probe(), instance.epoch)
 
+    def test_shared_agent_survives_launcher_exit_and_exits_after_idle_grace(self):
+        engine_a = Engine(Workspace(self.root / "workspace-a", create=True))
+        engine_b = Engine(Workspace(self.root / "workspace-b", create=True))
+        authority_b = agent.AgentAuthority((self.local,), _SignatureRequest)
+        try:
+            first = self._start_with_engine(engine_a, idle_grace=0.15)
+            process = first._process
+            second = self._start_with_engine(engine_b, authority=authority_b, idle_grace=0.15)
+            self.assertTrue(first.created)
+            self.assertFalse(second.created)
+            self.assertEqual(second.pid, first.pid)
+            self.assertEqual(second.epoch, first.epoch)
+            self.assertEqual(second.workspace_id, engine_b.workspace.id)
+            engine_a.close()
+            threading.Event().wait(0.35)
+            self.assertIsNone(process.poll())
+            self.assertEqual(second.probe(), first.epoch)
+        finally:
+            engine_a.close()
+            engine_b.close()
+        self.assertEqual(process.wait(timeout=5), 0)
+
+    def test_reattach_within_idle_grace_cancels_exit(self):
+        engine_a = Engine(Workspace(self.root / "workspace-a", create=True))
+        engine_b = Engine(Workspace(self.root / "workspace-b", create=True))
+        try:
+            first = self._start_with_engine(engine_a, idle_grace=2.0)
+            process = first._process
+            original_pid, original_epoch = first.pid, first.epoch
+            engine_a.close()
+            threading.Event().wait(0.2)
+            self.assertIsNone(process.poll())
+            second = self._start_with_engine(engine_b, idle_grace=2.0)
+            self.assertFalse(second.created)
+            self.assertEqual(second.pid, original_pid)
+            self.assertEqual(second.epoch, original_epoch)
+            threading.Event().wait(2.1)
+            self.assertIsNone(process.poll())
+            self.assertEqual(second.probe(), original_epoch)
+        finally:
+            engine_a.close()
+            engine_b.close()
+        self.assertEqual(process.wait(timeout=8), 0)
+
     def test_disconnect_and_restart_reject_old_epoch(self):
         with self._start() as first:
             old_epoch = first.probe()
             first._process.kill()
             first._process.wait(timeout=5)
             with self._start() as second:
+                process = second._process
                 self.assertNotEqual(second.probe(), old_epoch)
                 with self.assertRaises(DeskWeaveError) as caught:
                     first.probe()
                 self.assertIn(caught.exception.code, {"AUTHENTICATION_FAILED", "TRANSPORT_CLOSED"})
-                second._channel.send({"kind": "agent.ping", "agentEpoch": old_epoch})
-                self.assertNotEqual(second._process.wait(timeout=5), 0)
+                with self._start(workspace_id="ws-healthy") as healthy:
+                    self.assertEqual(healthy.pid, second.pid)
+                    second._channel.send({"kind": "agent.ping", "agentEpoch": old_epoch})
+                    self._read_error("TRANSPORT_CLOSED", lambda: second._channel.receive(timeout=5))
+                    self.assertEqual(healthy.probe(), second.epoch)
+            self.assertEqual(process.wait(timeout=5), 0)
         with self._start() as third:
             self.assertEqual(third.probe(), third.epoch)
 
@@ -521,6 +598,7 @@ class DesktopAgentTests(unittest.TestCase):
     @unittest.skipIf(sys.platform == "win32", "POSIX 运行目录替换场景。")
     def test_replaced_runtime_directory_still_blocks_second_process(self):
         with self._start() as first:
+            process = first._process
             self.runtime.rename(self.root / "moved-runtime")
             with (
                 runtime_directory(self.local, self.runtime) as runtime,
@@ -530,9 +608,38 @@ class DesktopAgentTests(unittest.TestCase):
             self._assert_contender_busy()
             self._read_error("RESOURCE_DENIED", first.probe)
             self.assertFalse(first.running)
+        self.assertEqual(process.wait(timeout=5), 0)
         other = agent.AgentAuthority((self.local,), _SignatureRequest)
         with self._start(authority=other) as second:
             self.assertEqual(second.probe(), second.epoch)
+
+    def test_tampered_discovery_and_incompatible_protocol_do_not_spawn_duplicate(self):
+        with runtime_directory(self.local, self.runtime) as runtime:
+            runtime.write(agent._DISCOVERY, dumps({"version": "2.0"}))
+        with self._start() as recovered:
+            self.assertTrue(recovered.created)
+            self.assertEqual(recovered.probe(), recovered.epoch)
+            other = agent.AgentAuthority((self.local,), _SignatureRequest)
+            with runtime_directory(self.local, self.runtime) as runtime:
+                original_bytes = runtime.read(agent._DISCOVERY)
+                runtime.write(agent._DISCOVERY, dumps({"version": "2.0"}))
+            with patch.object(agent.subprocess, "Popen") as spawn:
+                self._read_error("PROTOCOL_UNSUPPORTED", lambda: self._start(authority=other))
+                spawn.assert_not_called()
+            with runtime_directory(self.local, self.runtime) as runtime:
+                forged = loads(original_bytes)
+                forged["peer"] = self.local.identity.as_dict()
+                forged["peer"]["instanceEpoch"] = forged["agentEpoch"]
+                runtime.write(agent._DISCOVERY, dumps(forged))
+            with patch.object(agent.subprocess, "Popen") as spawn:
+                self._read_error("AUTHENTICATION_FAILED", lambda: self._start(authority=other))
+                spawn.assert_not_called()
+            with runtime_directory(self.local, self.runtime) as runtime:
+                runtime.write(agent._DISCOVERY, original_bytes)
+            with self._start(authority=other, workspace_id="ws-attach-ok") as attached:
+                self.assertFalse(attached.created)
+                self.assertEqual(attached.pid, recovered.pid)
+                self.assertEqual(attached.probe(), recovered.epoch)
 
     @unittest.skipUnless(sys.platform == "win32", "Windows 登录 SID 命名空间场景。")
     def test_windows_reused_session_number_does_not_reuse_acl_directory(self):

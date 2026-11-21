@@ -1,24 +1,24 @@
 mod native;
+mod protocol;
+mod server;
 
 use ed25519_dalek::{Signature, VerifyingKey};
-use hmac::{Hmac, Mac};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use sha2::Sha256;
+use hmac::Mac;
 use std::io::{self, Read, Write};
 use std::process::{self, ExitCode};
+use std::time::{Duration, Instant};
 
-const VERSION: u8 = 1;
-const MAX_FRAME: usize = 4096;
+use native::{DeadlineIo, Listener, StopSignal};
+use protocol::{
+    Bootstrap, Challenge, Hello, Ready, Registration, is_hex, parse_object, read_frame,
+    valid_workspace_id, write_frame,
+};
+use server::{HANDSHAKE_TIMEOUT, MAX_CLIENTS, ServerConfig};
+
+const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[cfg(all(feature = "test-authority", not(debug_assertions)))]
 compile_error!("test-authority requires a debug test build");
-
-fn is_hex(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
 
 fn verification_key() -> io::Result<VerifyingKey> {
     #[cfg(feature = "test-authority")]
@@ -39,125 +39,10 @@ fn verification_key() -> io::Result<VerifyingKey> {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Bootstrap {
-    version: u8,
-    engine_pid: u32,
-    address: String,
-    agent_epoch: String,
-    secret: [u8; 32],
-}
-
-impl Bootstrap {
-    fn check(&self) -> io::Result<()> {
-        if self.version != VERSION || self.engine_pid == 0 || !is_hex(&self.agent_epoch) {
-            return Err(io::ErrorKind::InvalidData.into());
-        }
-        Ok(())
-    }
-
-    fn proof(&self, role: &[u8]) -> Hmac<Sha256> {
-        let mut proof = Hmac::<Sha256>::new_from_slice(&self.secret).expect("fixed key size");
-        proof.update(b"deskweave/desktop-agent/v1\0");
-        proof.update(role);
-        proof.update(b"\0");
-        proof.update(&self.engine_pid.to_le_bytes());
-        proof.update(&process::id().to_le_bytes());
-        proof.update(self.agent_epoch.as_bytes());
-        proof
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Hello {
-    kind: String,
-    proof: [u8; 32],
-    registration: String,
-    signature: Vec<u8>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Registration {
-    kind: String,
-    engine_pid: u32,
-    agent_pid: u32,
-    agent_epoch: String,
-    owner: [String; 2],
-    scope: String,
-    nonce: [u8; 32],
-}
-
-#[derive(Serialize)]
-struct Challenge {
-    kind: &'static str,
-    nonce: [u8; 32],
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Ready<'epoch> {
-    kind: &'static str,
-    agent_epoch: &'epoch str,
-    proof: [u8; 32],
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Probe {
-    kind: String,
-    agent_epoch: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Pong<'epoch> {
-    kind: &'static str,
-    agent_epoch: &'epoch str,
-}
-
-fn read_frame<Frame: DeserializeOwned>(stream: &mut impl Read) -> io::Result<Option<Frame>> {
-    let mut prefix = [0; 4];
-    loop {
-        match stream.read(&mut prefix[..1]) {
-            Ok(0) => return Ok(None),
-            Ok(_) => break,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(error),
-        }
-    }
-    stream.read_exact(&mut prefix[1..])?;
-    let size = u32::from_le_bytes(prefix) as usize;
-    if !(1..=MAX_FRAME).contains(&size) {
-        return Err(io::ErrorKind::InvalidData.into());
-    }
-    let mut payload = vec![0; size];
-    stream.read_exact(&mut payload)?;
-    parse_object(&payload).map(Some)
-}
-
-fn parse_object<Frame: DeserializeOwned>(payload: &[u8]) -> io::Result<Frame> {
-    if payload.iter().find(|byte| !byte.is_ascii_whitespace()) != Some(&b'{') {
-        return Err(io::ErrorKind::InvalidData.into());
-    }
-    serde_json::from_slice(payload).map_err(|_| io::ErrorKind::InvalidData.into())
-}
-
-fn write_frame(stream: &mut impl Write, value: &impl Serialize) -> io::Result<()> {
-    let payload = serde_json::to_vec(value)?;
-    if !(1..=MAX_FRAME).contains(&payload.len()) {
-        return Err(io::ErrorKind::InvalidData.into());
-    }
-    stream.write_all(&(payload.len() as u32).to_le_bytes())?;
-    stream.write_all(&payload)
-}
-
 fn authenticate(
     channel: &mut (impl Read + Write),
     bootstrap: &Bootstrap,
-    owner: [String; 2],
+    owner: &[String; 2],
     verification_key: &VerifyingKey,
 ) -> io::Result<Registration> {
     let mut nonce = [0; 32];
@@ -174,7 +59,7 @@ fn authenticate(
         return Err(io::ErrorKind::PermissionDenied.into());
     }
     bootstrap
-        .proof(b"engine")
+        .proof(b"engine", None)
         .verify_slice(&hello.proof)
         .map_err(|_| io::ErrorKind::PermissionDenied)?;
     let signature =
@@ -187,7 +72,8 @@ fn authenticate(
         || registration.agent_pid != process::id()
         || registration.engine_pid != bootstrap.engine_pid
         || registration.agent_epoch != bootstrap.agent_epoch
-        || registration.owner != owner
+        || !valid_workspace_id(&registration.workspace_id)
+        || registration.owner != *owner
         || !is_hex(&registration.scope)
         || registration.nonce != nonce
     {
@@ -196,40 +82,32 @@ fn authenticate(
     Ok(registration)
 }
 
-fn probe(channel: &mut (impl Read + Write), epoch: &str) -> io::Result<()> {
-    while let Some(request) = read_frame::<Probe>(channel)? {
-        if request.kind != "agent.ping" || request.agent_epoch != epoch {
-            return Err(io::ErrorKind::PermissionDenied.into());
-        }
-        write_frame(
-            channel,
-            &Pong {
-                kind: "agent.pong",
-                agent_epoch: epoch,
-            },
-        )?;
-    }
-    Ok(())
-}
-
-fn answer(channel: &mut impl Write, bootstrap: &Bootstrap, ready: bool) -> io::Result<()> {
-    let (kind, role) = if ready {
-        ("agent.ready", b"agent".as_slice())
-    } else {
-        ("agent.busy", b"busy".as_slice())
+fn answer(
+    channel: &mut impl Write,
+    bootstrap: &Bootstrap,
+    address: Option<&str>,
+) -> io::Result<()> {
+    let (kind, role) = match address {
+        Some(_) => ("agent.ready", b"agent".as_slice()),
+        None => ("agent.busy", b"busy".as_slice()),
     };
     write_frame(
         channel,
         &Ready {
             kind,
             agent_epoch: &bootstrap.agent_epoch,
-            proof: bootstrap.proof(role).finalize().into_bytes().into(),
+            address,
+            proof: bootstrap
+                .proof(role, address)
+                .finalize()
+                .into_bytes()
+                .into(),
         },
     )
 }
 
 fn busy(channel: &mut (impl Read + Write), bootstrap: &Bootstrap) -> io::Result<()> {
-    answer(channel, bootstrap, false)?;
+    answer(channel, bootstrap, None)?;
     if channel.read(&mut [0])? == 0 {
         Ok(())
     } else {
@@ -264,31 +142,48 @@ fn run() -> io::Result<()> {
         read_frame(&mut io::stdin().lock())?.ok_or(io::ErrorKind::UnexpectedEof)?;
     bootstrap.check()?;
     let owner = native::owner_file()?;
+    let owner_identity = native::owner_identity(&owner)?;
+    let stop = StopSignal::new()?;
     let mut channel = native::connect(&bootstrap.address, bootstrap.engine_pid)?;
-    let registration = authenticate(
-        &mut channel,
-        &bootstrap,
-        native::owner_identity(&owner)?,
-        &verification_key,
-    )?;
-    let Some(_scope) = acquire_scope(
-        &registration.scope,
-        native::claim_scope,
-        &mut channel,
-        &bootstrap,
-    )?
-    else {
-        return Ok(());
+    let deadline = Some(Instant::now() + BOOTSTRAP_TIMEOUT);
+    let registration = {
+        let mut io = DeadlineIo::new(&mut channel, deadline, &stop);
+        authenticate(&mut io, &bootstrap, &owner_identity, &verification_key)?
+    };
+    let _scope = {
+        let mut io = DeadlineIo::new(&mut channel, deadline, &stop);
+        match acquire_scope(
+            &registration.scope,
+            native::claim_scope,
+            &mut io,
+            &bootstrap,
+        )? {
+            Some(scope) => scope,
+            None => return Ok(()),
+        }
     };
     if let Err(error) = owner.try_lock().map_err(io::Error::from) {
         if error.kind() == io::ErrorKind::WouldBlock {
-            return busy(&mut channel, &bootstrap);
+            let mut io = DeadlineIo::new(&mut channel, deadline, &stop);
+            return busy(&mut io, &bootstrap);
         }
         return Err(error);
     }
-    answer(&mut channel, &bootstrap, true)?;
-    let result = probe(&mut channel, &bootstrap.agent_epoch);
-    drop(channel);
+    let listener = Listener::bind()?;
+    {
+        let mut io = DeadlineIo::new(&mut channel, deadline, &stop);
+        answer(&mut io, &bootstrap, Some(listener.address()))?;
+    }
+    let config = ServerConfig {
+        agent_epoch: bootstrap.agent_epoch.clone(),
+        scope: registration.scope,
+        owner_identity,
+        verification_key,
+        idle_grace: bootstrap.idle_grace(),
+        handshake_timeout: HANDSHAKE_TIMEOUT,
+        max_clients: MAX_CLIENTS,
+    };
+    let result = server::run(channel, listener, config, stop);
     result?;
     owner.unlock()
 }
@@ -303,8 +198,34 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::native::SessionStream;
+    use crate::protocol::{DEFAULT_IDLE_GRACE_MS, MAX_FRAME, Probe, VERSION};
     use serde_json::json;
     use std::io::Cursor;
+
+    struct CursorStream {
+        cursor: Cursor<Vec<u8>>,
+    }
+
+    impl SessionStream for CursorStream {
+        fn read_chunk(
+            &mut self,
+            buf: &mut [u8],
+            _deadline: Option<Instant>,
+            _stop: &StopSignal,
+        ) -> io::Result<usize> {
+            self.cursor.read(buf)
+        }
+
+        fn write_chunk(
+            &mut self,
+            buf: &[u8],
+            _deadline: Option<Instant>,
+            _stop: &StopSignal,
+        ) -> io::Result<usize> {
+            self.cursor.write(buf)
+        }
+    }
 
     fn frame(payload: &[u8]) -> Vec<u8> {
         let mut data = (payload.len() as u32).to_le_bytes().to_vec();
@@ -337,9 +258,14 @@ mod tests {
         let duplicate = frame(br#"{"kind":"agent.ping","kind":"agent.ping","agentEpoch":"old"}"#);
         assert!(read_frame::<Probe>(&mut duplicate.as_slice()).is_err());
         let stale = frame(br#"{"kind":"agent.ping","agentEpoch":"old"}"#);
-        let mut channel = Cursor::new(stale);
+        let mut channel = CursorStream {
+            cursor: Cursor::new(stale),
+        };
+        let stop = StopSignal::new().unwrap();
         assert_eq!(
-            probe(&mut channel, "current").unwrap_err().kind(),
+            server::serve_session(&mut channel, "current", &stop)
+                .unwrap_err()
+                .kind(),
             io::ErrorKind::PermissionDenied
         );
     }
@@ -363,6 +289,7 @@ mod tests {
             address: String::from("endpoint"),
             agent_epoch: "a".repeat(64),
             secret: [0x11; 32],
+            idle_grace_ms: DEFAULT_IDLE_GRACE_MS,
         }
     }
 
@@ -410,6 +337,7 @@ mod tests {
             let mut written = Cursor::new(channel.into_inner());
             let frame: serde_json::Value = read_frame(&mut written).unwrap().unwrap();
             assert_eq!(frame["kind"], "agent.busy");
+            assert!(frame.get("address").is_none());
         }
     }
 
