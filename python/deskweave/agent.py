@@ -68,7 +68,7 @@ def _sanitize_linux_session_env(environ) -> dict[str, str]:
         and (trimmed := session_type.strip())
         and len(trimmed) <= 32
         and trimmed.isascii()
-        and trimmed.isalpha()
+        and trimmed.isalnum()
     ):
         result["XDG_SESSION_TYPE"] = trimmed
     session_id = environ.get("XDG_SESSION_ID")

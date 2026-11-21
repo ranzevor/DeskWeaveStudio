@@ -953,12 +953,17 @@ class Engine:
                 future = Future()
                 self._desktop_caps_future = future
                 self._desktop_caps_agent = desktop_agent
-                threading.Thread(
-                    target=self._run_desktop_capabilities,
-                    args=(desktop_agent, future),
-                    name="deskweave-agent-capabilities",
-                    daemon=True,
-                ).start()
+                try:
+                    threading.Thread(
+                        target=self._run_desktop_capabilities,
+                        args=(desktop_agent, future),
+                        name="deskweave-agent-capabilities",
+                        daemon=True,
+                    ).start()
+                except BaseException:
+                    self._desktop_caps_future = None
+                    self._desktop_caps_agent = None
+                    raise
         while True:
             authorize()
             if self._desktop_stopping.is_set():

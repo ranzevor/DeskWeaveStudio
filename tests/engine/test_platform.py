@@ -242,6 +242,9 @@ class PlatformContractTests(unittest.TestCase):
             },
         )
 
+        x11_clean = agent._sanitize_linux_session_env({"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"})
+        self.assertEqual(x11_clean, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"})
+
         dirty = agent._sanitize_linux_session_env(
             {
                 "XDG_SESSION_TYPE": "wayland;id",
@@ -254,7 +257,11 @@ class PlatformContractTests(unittest.TestCase):
         self.assertEqual(dirty, {})
 
         dirty_screen = agent._sanitize_linux_session_env(
-            {"WAYLAND_DISPLAY": "sub/wayland-0", "DISPLAY": ":0.garbage"}
+            {
+                "XDG_SESSION_TYPE": "x11/bad",
+                "WAYLAND_DISPLAY": "sub/wayland-0",
+                "DISPLAY": ":0.garbage",
+            }
         )
         self.assertEqual(dirty_screen, {})
 
@@ -368,6 +375,44 @@ class PlatformContractTests(unittest.TestCase):
                 self.assertEqual(good_resp["result"]["desktop"]["backendVersion"], long_version)
                 self.assertNotIn("agent", good_resp["result"]["componentVersions"])
                 self.assertEqual(stub.calls, 1)
+
+                # If Thread.start fails, _desktop_caps_future MUST be cleared for future callers.
+                with (
+                    patch.object(
+                        threading.Thread, "start", side_effect=RuntimeError("thread exhausted")
+                    ),
+                    self.assertRaises(RuntimeError),
+                ):
+                    engine.dispatch(
+                        sess_good.id,
+                        {
+                            "protocolVersion": "1.0",
+                            "kind": "request",
+                            "id": "req-thread-fail",
+                            "session": sess_good.id,
+                            "workspace": engine.workspace.id,
+                            "method": "system.capabilities",
+                            "deadlineMs": 5000,
+                            "params": {},
+                        },
+                    )
+                self.assertIsNone(engine._desktop_caps_future)
+                self.assertIsNone(engine._desktop_caps_agent)
+                recovered = engine.dispatch(
+                    sess_good.id,
+                    {
+                        "protocolVersion": "1.0",
+                        "kind": "request",
+                        "id": "req-recovered",
+                        "session": sess_good.id,
+                        "workspace": engine.workspace.id,
+                        "method": "system.capabilities",
+                        "deadlineMs": 5000,
+                        "params": {},
+                    },
+                )
+                self.assertTrue(recovered["ok"], recovered)
+                self.assertEqual(stub.calls, 2)
             finally:
                 release.set()
                 engine.close()
