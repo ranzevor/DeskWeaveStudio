@@ -918,17 +918,21 @@ class Engine:
         return {"closed": True}
 
     def _run_desktop_capabilities(self, desktop_agent, future: Future) -> None:
+        result = None
+        error = None
         try:
             result = desktop_agent.desktop_capabilities(timeout=5, cancel=self._desktop_stopping)
-        except BaseException as error:
-            future.set_exception(error)
-        else:
-            future.set_result(result)
+        except BaseException as exc:
+            error = exc
         finally:
             with self._desktop_lock:
                 if self._desktop_caps_future is future:
                     self._desktop_caps_future = None
                     self._desktop_caps_agent = None
+            if error is not None:
+                future.set_exception(error)
+            else:
+                future.set_result(result)
 
     def _query_desktop_capabilities(
         self, deadline: float, authorize: Callable[[], None]
