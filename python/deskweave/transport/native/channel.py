@@ -151,8 +151,9 @@ class NativeChannel(Resource):
 
 
 class NativeListener(Resource):
-    def __init__(self, local: ProcessBinding, *, directory=None, backlog=64):
-        local_binding(local)
+    def __init__(self, local: ProcessBinding, *, directory=None, backlog=64, budget=None):
+        checkpoint = budget.check_time if budget is not None else lambda: None
+        local_binding(local, checkpoint)
         if type(backlog) is not int or not 1 <= backlog <= 4096:
             raise ValueError("监听队列容量应为 1～4096。")
         self.local = local
@@ -160,6 +161,11 @@ class NativeListener(Resource):
             backend.address_name(secrets.token_hex(24)), local.process, directory, backlog
         )
         self.address = self._raw.address
+        try:
+            checkpoint()
+        except BaseException as error:
+            self._abort_initialization(error)
+            raise
 
     def accept(self, peers: Mapping[int, ProcessBinding], *, timeout=30.0, cancel=None):
         budget = Budget(timeout, cancel)

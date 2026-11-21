@@ -27,6 +27,24 @@ uv build
 
 构建输出位于 `dist/`，wheel 包含运行模块和公共契约；源码包包含测试与契约源文件。
 
+## Desktop Agent 连接基础
+
+受信的 Engine 宿主使用 `Engine.start_desktop_agent(local, installation, authority)` 启动 Rust Agent。`local` 是调用进程现有的 `ProcessBinding`，`installation` 是受信安装清单，`AgentAuthority` 由启动控制面持有已登记的 Engine 和签名入口。签名入口提交可轮询的请求；请求的 `poll()` 不阻塞，`close()` 结束等待并回收请求资源。安装清单在启动前核验，生产控制面从受信且不由工作空间用户进程改写的安装位置选取运行映像和组件；启动不继承工作空间的目录或用户提供的加载器环境。Windows 在创建进程时保留禁止写入和删除的映像句柄，Linux 从已核验的文件描述符执行。受信安装器若要原地更新映像，须在 `AgentAuthority.installation_update(local)` 内进行；此入口与启动的核验、派生共用同一把锁。
+
+Agent 通过 Engine 创建的 Windows 命名管道或 Unix socket 连接，核对实际端点与进程。Rust 对随机挑战、双端进程、实例 `epoch` 和实际文件身份核验 Ed25519 启动登记；签名私钥留在受信签名入口，不进入 Agent。发行构建由控制面的 `DESKWEAVE_AGENT_AUTHORITY_KEY` 编译配置提供对应的 32 字节小写十六进制公钥，未配置时不进入就绪；合成测试构建只接受测试签名。Agent 的标准输出句柄只继承所有权文件，不写数据。`probe()` 核对当前实例，不是公开 Engine 或 Agent 方法。
+
+启动竞争按原生用户和登录会话分组，不用工作空间、显示后端或安装版本分组。Windows 运行目录使用与 ACL 一致的登录 SID；Windows（命名 Mutex）、Linux（抽象域套接字）和 macOS（登录会话 Mach bootstrap 端口）均持有生命周期内不随文件或目录替换而分裂的非文件会话级所有权对象。Linux 准入要求 Engine 与 Agent 使用受信控制面的挂载和网络命名空间。受信控制面在同一桌面授权周期内固定所有权文件身份，不为被替换的文件签发启动登记。父 Engine 在就绪后关闭继承的锁句柄，Agent 退出即释放运行锁；重启分配新 `epoch`，旧连接在失联或所有权对象变化时关闭。同一个 Engine 复用已连接实例，另一个 Engine 遇到有效所有者收到 `DESKTOP_BUSY`。跨 Engine 的共享控制面、平台能力、租约和急停尚未接入。
+
+在仓库根目录构建并验证：
+
+```bash
+cargo test --locked --workspace
+cargo build --locked --workspace --features test-authority --bins --examples --target-dir target/agent-fixture
+uv run --frozen python tools/test_engine.py tests.engine.test_agent -q
+```
+
+macOS 测试构建后先用 `codesign --force --sign - target/agent-fixture/debug/deskweave-agent` 签名测试二进制。Linux 测试需要原生登录会话，CI 通过 PAM 建立该会话。合成测试使用临时工作空间和私有运行目录，核对端点身份、双方认证、登记、启动竞争、退出和重启，不发送输入。
+
 ## 测试时钟
 
 服务功能测试通过 `EngineCase.make_engine()` 注入可控的墙上时间与单调时钟，重开工作空间沿用同一时钟来源。容量、分页、内容和持久化用例按数据与状态断言；超时用例显式推进单调时钟，检查截止前、截止点、回滚和恢复。并发用例通过锁竞争事件确认第二个请求已经等待，再推进第一个请求的预算。查询响应阶段的回归覆盖首屏与续页、结果校验与完整响应编码，并核对快照及游标回滚、配额恢复与原游标重试。

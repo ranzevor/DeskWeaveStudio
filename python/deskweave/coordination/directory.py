@@ -216,9 +216,9 @@ class Directory(Resource):
 
 
 class StartupLock(Resource):
-    def __init__(self, directory, budget):
+    def __init__(self, directory, budget, *, name=".engine-start.lock"):
         self.directory = directory
-        self.stream = directory.open(".engine-start.lock", write=True, create=True)
+        self.stream = directory.open(name, write=True, create=True)
         self.acquired = False
         wake = budget.cancel or threading.Event()
         try:
@@ -229,7 +229,7 @@ class StartupLock(Resource):
                     break
                 wake.wait(budget.check_time())
             directory.check()
-            with directory.open(".engine-start.lock") as current:
+            with directory.open(name) as current:
                 if backend.file_identity(current) != backend.file_identity(self.stream):
                     raise DeskWeaveError("RESOURCE_DENIED", "启动锁对象已改变。")
             budget.check_time()

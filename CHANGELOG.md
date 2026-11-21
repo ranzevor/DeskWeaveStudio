@@ -4,6 +4,7 @@
 
 ### 新增
 
+- 增加 Rust Desktop Agent 连接基础：受控启动、原生对端核验、登录会话独占、存活探测和实例更换。
 - 接入公共运行服务与生命周期管理：新增 `run.prepare`、`run.start`、`run.pause`、`run.resume`、`run.stop`、`run.snapshot`、`debug.variables.read`、`event.subscribe`、`event.read`、`event.unsubscribe`、`workspace.catalog(kind="run")` 与 `query.read` 运行集合，支持原生异步事件帧推送、客户端与宿主退出生命周期协调及数据库格式 6 启动恢复。
 - 增加纯逻辑解释器、显式调用帧与协作调度，支持子流程、循环、全树控制、敏感标签及显式错误恢复；数据库格式 5 持久化执行位置、变量版本和调用结果。
 

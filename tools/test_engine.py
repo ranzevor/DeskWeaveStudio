@@ -21,6 +21,11 @@ def main():
         else [sys.executable, "-m", "unittest", *arguments]
     )
     if sys.platform == "linux" and os.environ.get("CI") == "true":
+        agent_environment = (
+            ["--setenv=DESKWEAVE_AGENT_TEST_REQUIRED=1"]
+            if os.environ.get("DESKWEAVE_AGENT_TEST_REQUIRED") == "1"
+            else []
+        )
         command = [
             "sudo",
             "systemd-run",
@@ -33,6 +38,7 @@ def main():
             f"--working-directory={Path.cwd()}",
             "--setenv=PYTHONUTF8=1",
             "--setenv=PYTHONIOENCODING=utf-8",
+            *agent_environment,
             *command,
         ]
     return subprocess.run(command, check=False).returncode
