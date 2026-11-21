@@ -29,11 +29,11 @@ uv build
 
 ## Desktop Agent 连接基础
 
-受信的 Engine 宿主使用 `Engine.start_desktop_agent(local, installation, authority)` 启动 Rust Agent。`local` 是调用进程现有的 `ProcessBinding`，`installation` 是受信安装清单，`AgentAuthority` 由启动控制面持有已登记的 Engine 和签名入口。签名入口提交可轮询的请求；请求的 `poll()` 不阻塞，`close()` 结束等待并回收请求资源。安装清单在启动前核验，生产控制面从受信且不由工作空间用户进程改写的安装位置选取运行映像和组件；启动不继承工作空间的目录或用户提供的加载器环境。Windows 在创建进程时保留禁止写入和删除的映像句柄，Linux 从已核验的文件描述符执行。受信安装器若要原地更新映像，须在 `AgentAuthority.installation_update(local)` 内进行；此入口与启动的核验、派生共用同一把锁。
+受信的 Engine 宿主使用 `Engine.start_desktop_agent(local, installation, authority, *, timeout=10, cancel=None, idle_grace=2.0)` 接入或启动 Rust Agent。`local` 是调用进程现有的 `ProcessBinding`，`installation` 是受信安装清单，`AgentAuthority` 由启动控制面持有已登记的 Engine 和签名入口。签名入口提交可轮询的请求；请求的 `poll()` 不阻塞，`close()` 结束等待并回收请求资源。安装清单在启动前核验，生产控制面从受信且不由工作空间用户进程改写的安装位置选取运行映像和组件；启动不继承工作空间的目录或用户提供的加载器环境。Windows 在创建进程时保留禁止写入和删除的映像句柄，Linux 从已核验的文件描述符执行。受信安装器若要原地更新映像，须在 `AgentAuthority.installation_update(local)` 内进行；此入口与启动的核验、派生共用同一把锁。
 
-Agent 通过 Engine 创建的 Windows 命名管道或 Unix socket 连接，核对实际端点与进程。Rust 对随机挑战、双端进程、实例 `epoch` 和实际文件身份核验 Ed25519 启动登记；签名私钥留在受信签名入口，不进入 Agent。发行构建由控制面的 `DESKWEAVE_AGENT_AUTHORITY_KEY` 编译配置提供对应的 32 字节小写十六进制公钥，未配置时不进入就绪；合成测试构建只接受测试签名。Agent 的标准输出句柄只继承所有权文件，不写数据。`probe()` 核对当前实例，不是公开 Engine 或 Agent 方法。
+首次启动时，候选 Agent 通过启动 Engine 创建的临时 Windows 命名管道或 Unix socket 反向连接，核对实际端点与进程；Rust 对随机挑战、双端进程、实例 `epoch`、`workspaceId` 和实际文件身份核验 Ed25519 启动登记后，建立自有原生监听端点（Windows 登录 SID DACL 命名管道，Linux/macOS `0700`/`0600` 私有 Unix socket，macOS 同步核验 audit session），并在 `agent.ready` 认证证明中返回监听地址。启动方持 `.agent-start.lock` 原子发布仅含非秘密定位信息的 `agent.json` 发现记录。签名私钥留在受信签名入口，不进入 Agent。发行构建由控制面的 `DESKWEAVE_AGENT_AUTHORITY_KEY` 编译配置提供对应的 32 字节小写十六进制公钥，未配置时不进入就绪；合成测试构建只接受测试签名。Agent 的标准输出句柄只继承所有权文件，不写数据。`probe()` 核对当前实例，不是公开 Engine 或 Agent 方法。
 
-启动竞争按原生用户和登录会话分组，不用工作空间、显示后端或安装版本分组。Windows 运行目录使用与 ACL 一致的登录 SID；Windows（命名 Mutex）、Linux（抽象域套接字）和 macOS（登录会话 Mach bootstrap 端口）均持有生命周期内不随文件或目录替换而分裂的非文件会话级所有权对象。Linux 准入要求 Engine 与 Agent 使用受信控制面的挂载和网络命名空间。受信控制面在同一桌面授权周期内固定所有权文件身份，不为被替换的文件签发启动登记。父 Engine 在就绪后关闭继承的锁句柄，Agent 退出即释放运行锁；重启分配新 `epoch`，旧连接在失联或所有权对象变化时关闭。同一个 Engine 复用已连接实例，另一个 Engine 遇到有效所有者收到 `DESKTOP_BUSY`。跨 Engine 的共享控制面、平台能力、租约和急停尚未接入。
+启动竞争与共享发现按原生用户和登录会话分组，不用工作空间、显示后端或安装版本分组。Windows 运行目录使用与 ACL 一致的登录 SID；Windows（命名 Mutex）、Linux（抽象域套接字）和 macOS（登录会话 Mach bootstrap 端口）均持有生命周期内不随文件或目录替换而分裂的非文件会话级所有权对象。Linux 准入要求 Engine 与 Agent 使用受信控制面的挂载和网络命名空间。受信控制面在同一桌面授权周期内固定所有权文件身份，不为被替换的文件签发启动或接入登记。后续 Engine 优先读取 `agent.json` 并通过 `ProcessBinding`、原生端点核验以及 Ed25519 `deskweave/agent-attach/v1` + 每次连接随机密钥 HMAC 双向认证共享接入同一 Agent（最多 32 个并发连接，未认证握手限时 10 秒）；非法或未共享的第二个候选仍由会话级所有权对象以 `DESKTOP_BUSY` 阻断。父 Engine 在发布就绪后关闭继承的锁句柄，单个 Engine 退出不终止仍在为其他工作空间服务的共享 Agent；最后一个已认证连接断开且经过空闲宽限（`idle_grace` 默认 2 秒，范围 0.05～300 秒）后，Agent 原子转入排空并正常退出，宽限期内的新接入取消退出。重启分配新 `epoch`，旧连接在失联、旧代次请求或所有权对象变化时关闭。平台端口、桌面租约和急停尚未接入。
 
 在仓库根目录构建并验证：
 

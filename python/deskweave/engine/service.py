@@ -248,10 +248,20 @@ class Engine:
             self._desktop_stopping.set()
             return True
 
-    def start_desktop_agent(self, local, installation, authority, *, timeout=10, cancel=None):
+    def start_desktop_agent(
+        self, local, installation, authority, *, timeout=10, cancel=None, idle_grace=2.0
+    ):
         from deskweave.agent import start_agent
 
-        return start_agent(self, local, installation, authority, timeout=timeout, cancel=cancel)
+        return start_agent(
+            self,
+            local,
+            installation,
+            authority,
+            timeout=timeout,
+            cancel=cancel,
+            idle_grace=idle_grace,
+        )
 
     def close(self) -> None:
         with self._mutex:
