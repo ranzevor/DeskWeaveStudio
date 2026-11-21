@@ -318,14 +318,26 @@ class PlatformContractTests(unittest.TestCase):
                         "session": sess_short.id,
                         "workspace": engine.workspace.id,
                         "method": "system.capabilities",
-                        "deadlineMs": 40,
+                        "deadlineMs": 250,
                         "params": {},
                     },
                 )
                 self.assertFalse(short_resp["ok"])
                 self.assertEqual(short_resp["error"]["code"], "DEADLINE_EXCEEDED")
+                self.assertTrue(entered.wait(2))
                 self.assertTrue(stub.running)
                 self.assertFalse(stub.closed)
+
+                in_flight = engine._desktop_caps_future
+                self.assertIsNotNone(in_flight)
+                waiter_entered = threading.Event()
+                orig_result = in_flight.result
+
+                def _watched_result(timeout=None):
+                    waiter_entered.set()
+                    return orig_result(timeout=timeout)
+
+                in_flight.result = _watched_result
 
                 # Revoking a waiting client fails only that client promptly; Agent stays alive.
                 revoked_out = {}
@@ -347,7 +359,7 @@ class PlatformContractTests(unittest.TestCase):
 
                 worker = threading.Thread(target=_run_revoked, daemon=True)
                 worker.start()
-                self.assertTrue(entered.wait(2))
+                self.assertTrue(waiter_entered.wait(2))
                 engine.revoke_client("revoked-client")
                 worker.join(timeout=2)
                 self.assertFalse(worker.is_alive())
@@ -356,21 +368,32 @@ class PlatformContractTests(unittest.TestCase):
                 self.assertTrue(stub.running)
                 self.assertFalse(stub.closed)
 
-                # Release the coalesced Engine-owned Agent query; healthy caller succeeds.
+                # Attach healthy caller to the same in-flight query before releasing it.
+                waiter_entered.clear()
+                good_out = {}
+
+                def _run_good():
+                    good_out["resp"] = engine.dispatch(
+                        sess_good.id,
+                        {
+                            "protocolVersion": "1.0",
+                            "kind": "request",
+                            "id": "req-good",
+                            "session": sess_good.id,
+                            "workspace": engine.workspace.id,
+                            "method": "system.capabilities",
+                            "deadlineMs": 5000,
+                            "params": {},
+                        },
+                    )
+
+                good_worker = threading.Thread(target=_run_good, daemon=True)
+                good_worker.start()
+                self.assertTrue(waiter_entered.wait(2))
                 release.set()
-                good_resp = engine.dispatch(
-                    sess_good.id,
-                    {
-                        "protocolVersion": "1.0",
-                        "kind": "request",
-                        "id": "req-good",
-                        "session": sess_good.id,
-                        "workspace": engine.workspace.id,
-                        "method": "system.capabilities",
-                        "deadlineMs": 5000,
-                        "params": {},
-                    },
-                )
+                good_worker.join(timeout=5)
+                self.assertFalse(good_worker.is_alive())
+                good_resp = good_out["resp"]
                 self.assertTrue(good_resp["ok"], good_resp)
                 self.assertEqual(good_resp["result"]["desktop"]["backendVersion"], long_version)
                 self.assertNotIn("agent", good_resp["result"]["componentVersions"])
