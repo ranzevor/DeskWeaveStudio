@@ -98,7 +98,14 @@ def _is_safe_dbus_unix_address(value: str) -> bool:
         if not sep or not key or not item:
             return False
         if key == "path":
-            if not item.startswith("/") or "\\" in item or "%" in item or ".." in item.split("/"):
+            if (
+                found_path
+                or not item.startswith("/")
+                or not item.isprintable()
+                or "\\" in item
+                or "%" in item
+                or ".." in item.split("/")
+            ):
                 return False
             found_path = True
         elif not (key.isascii() and key.isalnum() and item.isascii() and item.isprintable()):

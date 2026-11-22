@@ -115,13 +115,19 @@ impl LinuxX11Backend {
     }
 
     pub fn invalidate(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.invalidated = true;
     }
 
     fn refresh(&self) -> (bool, u64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let active = (self.probe)();
-        let mut state = self.state.lock().unwrap();
         match state.last_active {
             None => {
                 state.last_active = Some(active);

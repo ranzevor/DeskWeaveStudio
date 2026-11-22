@@ -170,6 +170,23 @@ pub fn parse_dbus_unix_socket_path(address: &str) -> Option<&str> {
     None
 }
 
+/// Resolves whether a D-Bus session bus socket for Wayland Portal is available.
+///
+/// Mirrors standard D-Bus client semantics: when `DBUS_SESSION_BUS_ADDRESS` is explicitly set,
+/// only that address is checked (never silently falling back to `$XDG_RUNTIME_DIR/bus` if the
+/// explicit session bus closes); `$XDG_RUNTIME_DIR/bus` is consulted only when
+/// `DBUS_SESSION_BUS_ADDRESS` is unset.
+pub fn resolve_portal_bus_available(
+    dbus_address: Option<&str>,
+    check_explicit_path: impl FnOnce(&str) -> bool,
+    check_runtime_bus: impl FnOnce() -> bool,
+) -> bool {
+    match dbus_address {
+        Some(addr) => parse_dbus_unix_socket_path(addr).is_some_and(check_explicit_path),
+        None => check_runtime_bus(),
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn is_private_owned_dir(path: &std::path::Path, expected_uid: u32) -> bool {
     use std::fs;
@@ -288,12 +305,11 @@ pub fn probe_linux_session_facts_with_mode(
 
     let dbus_address = read_env("DBUS_SESSION_BUS_ADDRESS");
     let portal_available = current_euid.is_some_and(|euid| {
-        let dbus_path_ok = dbus_address
-            .as_deref()
-            .and_then(parse_dbus_unix_socket_path)
-            .is_some_and(|path| verify_wayland_socket(path, None, euid));
-        let runtime_bus_ok = verify_wayland_socket("bus", xdg_runtime_dir.as_deref(), euid);
-        dbus_path_ok || runtime_bus_ok
+        resolve_portal_bus_available(
+            dbus_address.as_deref(),
+            |path| verify_wayland_socket(path, None, euid),
+            || verify_wayland_socket("bus", xdg_runtime_dir.as_deref(), euid),
+        )
     });
 
     let compositor_socket = read_env("DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET");
@@ -444,13 +460,19 @@ impl LinuxWaylandPortalBackend {
     }
 
     pub fn invalidate(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.invalidated = true;
     }
 
     fn refresh(&self) -> (bool, bool, u64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let current = (self.probe)();
-        let mut state = self.state.lock().unwrap();
         match state.last_state {
             None => {
                 state.last_state = Some(current);
@@ -572,13 +594,19 @@ impl LinuxWaylandCompositorBackend {
     }
 
     pub fn invalidate(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.invalidated = true;
     }
 
     fn refresh(&self) -> (bool, u64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let active = (self.probe)();
-        let mut state = self.state.lock().unwrap();
         match state.last_active {
             None => {
                 state.last_active = Some(active);
@@ -700,14 +728,20 @@ impl LinuxDesktopSession {
     }
 
     pub fn invalidate(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.invalidated = true;
     }
 
     fn refresh(&self) -> (SelectedLinuxBackend, u64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let facts = (self.probe)();
         let selection = select_linux_session(&facts);
-        let mut state = self.state.lock().unwrap();
         match state.last_selection {
             None => {
                 state.last_selection = Some(selection);
@@ -1140,5 +1174,119 @@ mod tests {
         assert!(!is_safe_relative_wayland_display(".."));
         assert!(!is_safe_relative_wayland_display("../dbus"));
         assert!(!is_safe_relative_wayland_display("sub/wayland-0"));
+
+        // Explicit DBUS_SESSION_BUS_ADDRESS must not silently fall back to $XDG_RUNTIME_DIR/bus.
+        assert!(!resolve_portal_bus_available(
+            Some("unix:path=/run/user/1000/custom-bus"),
+            |_| false,
+            || panic!("must not fall back to runtime bus when explicit D-Bus address is set"),
+        ));
+        assert!(resolve_portal_bus_available(
+            Some("unix:path=/run/user/1000/custom-bus"),
+            |p| p == "/run/user/1000/custom-bus",
+            || panic!("must not consult runtime bus when explicit D-Bus address is set"),
+        ));
+        assert!(!resolve_portal_bus_available(
+            Some("tcp:host=127.0.0.1"),
+            |_| true,
+            || panic!("explicit non-unix D-Bus address must not fall back to runtime bus"),
+        ));
+        assert!(resolve_portal_bus_available(None, |_| false, || true));
+        assert!(!resolve_portal_bus_available(None, |_| true, || false));
+    }
+
+    #[test]
+    fn linux_desktop_session_serializes_concurrent_probes_and_recovers_from_poison() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex, mpsc};
+        use std::thread;
+
+        let facts = Arc::new(Mutex::new(LinuxSessionFacts {
+            logind_session_type: Some("wayland".to_owned()),
+            wayland_display: Some("wayland-0".to_owned()),
+            wayland_socket_present: true,
+            portal_available: true,
+            wayland_backend_mode: WaylandBackendMode::Portal,
+            ..LinuxSessionFacts::default()
+        }));
+        let in_probe = Arc::new(AtomicBool::new(false));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let panic_next = Arc::new(AtomicBool::new(false));
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Arc::new(Mutex::new(release_rx));
+
+        let facts_p = Arc::clone(&facts);
+        let in_probe_p = Arc::clone(&in_probe);
+        let calls_p = Arc::clone(&calls);
+        let panic_p = Arc::clone(&panic_next);
+        let release_p = Arc::clone(&release_rx);
+        let session = Arc::new(LinuxDesktopSession::with_probe(
+            PlatformArch::X64,
+            move || {
+                assert!(
+                    !in_probe_p.swap(true, Ordering::SeqCst),
+                    "concurrent Linux probe overlapped outside lock"
+                );
+                struct Guard(Arc<AtomicBool>);
+                impl Drop for Guard {
+                    fn drop(&mut self) {
+                        self.0.store(false, Ordering::SeqCst);
+                    }
+                }
+                let _guard = Guard(Arc::clone(&in_probe_p));
+
+                if panic_p.swap(false, Ordering::SeqCst) {
+                    panic!("simulated transient Linux probe failure");
+                }
+
+                let call_no = calls_p.fetch_add(1, Ordering::SeqCst);
+                let snapshot = facts_p.lock().unwrap().clone();
+                if call_no == 0 {
+                    entered_tx.send(()).unwrap();
+                    release_p.lock().unwrap().recv().unwrap();
+                }
+                snapshot
+            },
+        ));
+
+        let s1 = Arc::clone(&session);
+        let t1 = thread::spawn(move || s1.capabilities());
+        entered_rx.recv().unwrap();
+
+        // Close Portal bus while Thread 1 holds the state lock inside the initial active probe.
+        facts.lock().unwrap().portal_available = false;
+        let s2 = Arc::clone(&session);
+        let t2 = thread::spawn(move || s2.capabilities());
+
+        release_tx.send(()).unwrap();
+        let c1 = t1.join().unwrap();
+        let c2 = t2.join().unwrap();
+
+        assert_eq!(c1.generation, 1);
+        assert_eq!(
+            c1.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+        assert_eq!(c2.generation, 2);
+        assert_eq!(
+            c2.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+        assert_eq!(session.capabilities().generation, 2);
+
+        // Poison recovery must preserve generation continuity and recover cleanly.
+        panic_next.store(true, Ordering::SeqCst);
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| session.capabilities()))
+                .is_err()
+        );
+        session.invalidate();
+        let recovered = session.capabilities();
+        assert_eq!(recovered.generation, 3);
+        assert_eq!(
+            recovered.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
     }
 }

@@ -196,13 +196,19 @@ impl WindowsBackend {
 
     /// Marks the current capability snapshot stale so the next observation increments generation.
     pub fn invalidate(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.invalidated = true;
     }
 
     fn refresh(&self) -> (WindowsSessionFacts, u64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let facts = (self.probe)();
-        let mut state = self.state.lock().unwrap();
         match &state.last_facts {
             None => {
                 state.last_facts = Some(facts.clone());
@@ -390,6 +396,103 @@ mod tests {
         // Explicit invalidation bumps generation on next read.
         backend.invalidate();
         assert_eq!(backend.capabilities().generation, 5);
+    }
+
+    #[test]
+    fn windows_backend_serializes_concurrent_probes_and_recovers_from_poison() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex, mpsc};
+        use std::thread;
+
+        let facts = Arc::new(Mutex::new(WindowsSessionFacts {
+            interactive_session: true,
+            desktop_name: Some("Default".to_owned()),
+        }));
+        let in_probe = Arc::new(AtomicBool::new(false));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let panic_next = Arc::new(AtomicBool::new(false));
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Arc::new(Mutex::new(release_rx));
+
+        let facts_p = Arc::clone(&facts);
+        let in_probe_p = Arc::clone(&in_probe);
+        let calls_p = Arc::clone(&calls);
+        let panic_p = Arc::clone(&panic_next);
+        let release_p = Arc::clone(&release_rx);
+        let backend = Arc::new(WindowsBackend::with_probe(PlatformArch::X64, move || {
+            assert!(
+                !in_probe_p.swap(true, Ordering::SeqCst),
+                "concurrent probe overlapped outside lock"
+            );
+            struct Guard(Arc<AtomicBool>);
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    self.0.store(false, Ordering::SeqCst);
+                }
+            }
+            let _guard = Guard(Arc::clone(&in_probe_p));
+
+            if panic_p.swap(false, Ordering::SeqCst) {
+                panic!("simulated transient probe failure");
+            }
+
+            let call_no = calls_p.fetch_add(1, Ordering::SeqCst);
+            let snapshot = facts_p.lock().unwrap().clone();
+            if call_no == 0 {
+                entered_tx.send(()).unwrap();
+                release_p.lock().unwrap().recv().unwrap();
+            }
+            snapshot
+        }));
+
+        let b1 = Arc::clone(&backend);
+        let t1 = thread::spawn(move || b1.capabilities());
+        entered_rx.recv().unwrap();
+
+        // Transition desktop state while Thread 1 is still inside probe holding the state lock.
+        *facts.lock().unwrap() = WindowsSessionFacts {
+            interactive_session: false,
+            desktop_name: None,
+        };
+        let b2 = Arc::clone(&backend);
+        let t2 = thread::spawn(move || b2.capabilities());
+
+        release_tx.send(()).unwrap();
+        let c1 = t1.join().unwrap();
+        let c2 = t2.join().unwrap();
+
+        assert_eq!(c1.generation, 1);
+        assert_eq!(
+            c1.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+        assert_eq!(c2.generation, 2);
+        assert_eq!(
+            c2.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+        // No stale overwrite or spurious generation jump on subsequent read.
+        let c3 = backend.capabilities();
+        assert_eq!(c3.generation, 2);
+        assert_eq!(
+            c3.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+
+        // Poison recovery: a panic inside probe must not permanently brick the backend.
+        panic_next.store(true, Ordering::SeqCst);
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| backend.capabilities()))
+                .is_err()
+        );
+        backend.invalidate();
+        let recovered = backend.capabilities();
+        assert_eq!(recovered.generation, 3);
+        assert_eq!(
+            recovered.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
     }
 
     #[cfg(windows)]

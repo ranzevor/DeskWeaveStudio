@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -276,6 +276,16 @@ class PlatformContractTests(unittest.TestCase):
             }
         )
         self.assertEqual(dirty_screen, {})
+
+        dirty_dbus = agent._sanitize_linux_session_env(
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/a,path=/run/user/1000/b"}
+        )
+        self.assertEqual(dirty_dbus, {})
+
+        dirty_dbus_ctrl = agent._sanitize_linux_session_env(
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/\x07bus"}
+        )
+        self.assertEqual(dirty_dbus_ctrl, {})
 
     def test_record_start_bidirectional_topology_mode_v11_window_source_and_float_rotation(self):
         # 1. Float integer rotation (90.0) accepted, fractional (90.5) rejected.
@@ -894,7 +904,9 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
             priv_dir = Path(raw_dir)
             os.chmod(priv_dir, 0o700)
             wayland_path = priv_dir / "wayland-test-0"
-            bus_path = priv_dir / "bus"
+            runtime_bus_path = priv_dir / "bus"
+            custom_bus_path = priv_dir / "custom-bus"
+            compositor_sock_path = priv_dir / "dw-compositor-0"
 
             def _bind_unix(path: Path) -> socket.socket:
                 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -902,11 +914,27 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 sock.listen(1)
                 return sock
 
-            env_patch = {
+            @contextmanager
+            def _patched_session_env(overrides: dict[str, str]):
+                with patch.dict(os.environ, {}, clear=False):
+                    for key in (
+                        "DISPLAY",
+                        "XDG_SESSION_ID",
+                        "XDG_SESSION_TYPE",
+                        "XDG_RUNTIME_DIR",
+                        "WAYLAND_DISPLAY",
+                        "DBUS_SESSION_BUS_ADDRESS",
+                        "DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET",
+                        "DESKWEAVE_WAYLAND_BACKEND",
+                    ):
+                        os.environ.pop(key, None)
+                    os.environ.update(overrides)
+                    yield
+
+            base_env = {
                 "XDG_SESSION_TYPE": "wayland",
                 "XDG_RUNTIME_DIR": str(priv_dir),
                 "WAYLAND_DISPLAY": wayland_path.name,
-                "DBUS_SESSION_BUS_ADDRESS": f"unix:path={bus_path}",
             }
 
             # Case 1: Wayland Compositor selection + socket loss/recovery increments generation.
@@ -915,7 +943,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
             engine_comp = Engine(Workspace(self.root / "ws-comp", create=True))
             proc_comp = None
             try:
-                with patch.dict(os.environ, env_patch, clear=False):
+                with _patched_session_env(base_env):
                     proc_handle = engine_comp.start_desktop_agent(
                         self.local,
                         self.agent_installation,
@@ -954,42 +982,105 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 if wayland_path.exists():
                     wayland_path.unlink()
 
-            # Case 2: Wayland Portal selection + Portal bus close degrades features & bumps gen.
-            wl_sock2 = _bind_unix(wayland_path)
-            bus_sock = _bind_unix(bus_path)
-            engine_portal = Engine(Workspace(self.root / "ws-portal", create=True))
-            authority_portal = agent.AgentAuthority((self.local,), _SignatureRequest)
-            proc_portal = None
-            try:
-                with patch.dict(os.environ, env_patch, clear=False):
-                    proc_handle = engine_portal.start_desktop_agent(
-                        self.local,
-                        self.agent_installation,
-                        authority_portal,
-                        idle_grace=0.2,
-                        wayland_backend="portal",
-                    )
-                proc_portal = proc_handle._process
-                p1 = proc_handle.desktop_capabilities()
-                self.assertEqual(p1["backend"], "linux-wayland-portal")
-                self.assertEqual(p1["generation"], 1)
-                self.assertEqual(p1["features"]["record.allDisplays"]["state"], "unsupported")
-                self.assertEqual(p1["features"]["input.keyboard"]["state"], "unimplemented")
+            # Case 2: Explicit DBUS_SESSION_BUS_ADDRESS closes even while $XDG_RUNTIME_DIR/bus stays
+            # alive -> Portal capabilities must degrade and generation must bump.
+            with _bind_unix(runtime_bus_path):
+                wl_sock2 = _bind_unix(wayland_path)
+                custom_bus_sock = _bind_unix(custom_bus_path)
+                engine_portal = Engine(Workspace(self.root / "ws-portal", create=True))
+                authority_portal = agent.AgentAuthority((self.local,), _SignatureRequest)
+                proc_portal = None
+                try:
+                    portal_env = {
+                        **base_env,
+                        "DBUS_SESSION_BUS_ADDRESS": f"unix:path={custom_bus_path}",
+                    }
+                    with _patched_session_env(portal_env):
+                        proc_handle = engine_portal.start_desktop_agent(
+                            self.local,
+                            self.agent_installation,
+                            authority_portal,
+                            idle_grace=0.2,
+                            wayland_backend="portal",
+                        )
+                    proc_portal = proc_handle._process
+                    p1 = proc_handle.desktop_capabilities()
+                    self.assertEqual(p1["backend"], "linux-wayland-portal")
+                    self.assertEqual(p1["generation"], 1)
+                    self.assertEqual(p1["features"]["record.allDisplays"]["state"], "unsupported")
+                    self.assertEqual(p1["features"]["input.keyboard"]["state"], "unimplemented")
 
-                # Closing Portal D-Bus socket degrades Portal capabilities and bumps generation.
-                bus_sock.close()
-                bus_path.unlink()
-                p2 = proc_handle.desktop_capabilities()
-                self.assertEqual(p2["backend"], "linux-wayland-portal")
-                self.assertEqual(p2["generation"], 2)
-                self.assertEqual(p2["features"]["record.allDisplays"]["state"], "unsupported")
-                self.assertEqual(p2["features"]["input.keyboard"]["state"], "sessionUnavailable")
-            finally:
-                engine_portal.close()
-                if proc_portal is not None:
-                    self.assertEqual(proc_portal.wait(timeout=5), 0)
-                wl_sock2.close()
-                bus_sock.close()
+                    # Close ONLY the explicit custom session bus; default runtime bus stays alive.
+                    custom_bus_sock.close()
+                    custom_bus_path.unlink()
+                    p2 = proc_handle.desktop_capabilities()
+                    self.assertEqual(p2["backend"], "linux-wayland-portal")
+                    self.assertEqual(p2["generation"], 2)
+                    self.assertEqual(p2["features"]["record.allDisplays"]["state"], "unsupported")
+                    self.assertEqual(
+                        p2["features"]["input.keyboard"]["state"], "sessionUnavailable"
+                    )
+                finally:
+                    engine_portal.close()
+                    if proc_portal is not None:
+                        self.assertEqual(proc_portal.wait(timeout=5), 0)
+                    wl_sock2.close()
+                    custom_bus_sock.close()
+                    if wayland_path.exists():
+                        wayland_path.unlink()
+                    if custom_bus_path.exists():
+                        custom_bus_path.unlink()
+
+                # Case 3: Auto mode switches between compositor and portal as compositor socket
+                # toggles (with DBUS_SESSION_BUS_ADDRESS unset, using $XDG_RUNTIME_DIR/bus).
+                wl_sock3 = _bind_unix(wayland_path)
+                comp_sock = _bind_unix(compositor_sock_path)
+                comp_sock_rebound = None
+                engine_auto = Engine(Workspace(self.root / "ws-auto", create=True))
+                authority_auto = agent.AgentAuthority((self.local,), _SignatureRequest)
+                proc_auto = None
+                try:
+                    auto_env = {
+                        **base_env,
+                        "DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET": compositor_sock_path.name,
+                    }
+                    with _patched_session_env(auto_env):
+                        proc_handle = engine_auto.start_desktop_agent(
+                            self.local,
+                            self.agent_installation,
+                            authority_auto,
+                            idle_grace=0.2,
+                            wayland_backend="auto",
+                        )
+                    proc_auto = proc_handle._process
+                    a1 = proc_handle.desktop_capabilities()
+                    self.assertEqual(a1["backend"], "linux-wayland-compositor")
+                    self.assertEqual(a1["generation"], 1)
+                    self.assertEqual(a1["features"]["record.allDisplays"]["state"], "unimplemented")
+
+                    # Removing compositor socket falls back to active Portal via runtime bus.
+                    comp_sock.close()
+                    compositor_sock_path.unlink()
+                    a2 = proc_handle.desktop_capabilities()
+                    self.assertEqual(a2["backend"], "linux-wayland-portal")
+                    self.assertEqual(a2["generation"], 2)
+                    self.assertEqual(a2["features"]["record.allDisplays"]["state"], "unsupported")
+                    self.assertEqual(a2["features"]["input.keyboard"]["state"], "unimplemented")
+
+                    # Re-creating compositor socket switches back to compositor and bumps gen.
+                    comp_sock_rebound = _bind_unix(compositor_sock_path)
+                    a3 = proc_handle.desktop_capabilities()
+                    self.assertEqual(a3["backend"], "linux-wayland-compositor")
+                    self.assertEqual(a3["generation"], 3)
+                    self.assertEqual(a3["features"]["record.allDisplays"]["state"], "unimplemented")
+                finally:
+                    engine_auto.close()
+                    if proc_auto is not None:
+                        self.assertEqual(proc_auto.wait(timeout=5), 0)
+                    wl_sock3.close()
+                    comp_sock.close()
+                    if comp_sock_rebound is not None:
+                        comp_sock_rebound.close()
 
 
 if __name__ == "__main__":

@@ -266,7 +266,10 @@ impl MacOsBackend {
         let tracker = Mutex::new(MacOsPermissionTracker::new());
         Self::with_probe(PlatformArch::current(), move || {
             let raw = MacOsRawProbe::probe();
-            tracker.lock().unwrap().observe(raw)
+            tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .observe(raw)
         })
     }
 
@@ -293,7 +296,10 @@ impl MacOsBackend {
         let tracker = Mutex::new(MacOsPermissionTracker::new());
         Self::with_probe(arch, move || {
             let raw = probe();
-            tracker.lock().unwrap().observe(raw)
+            tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .observe(raw)
         })
     }
 
@@ -311,13 +317,19 @@ impl MacOsBackend {
 
     /// Marks the current capability snapshot stale so the next observation increments generation.
     pub fn invalidate(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.invalidated = true;
     }
 
     fn refresh(&self) -> (MacOsProbeState, u64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let probed = (self.probe)();
-        let mut state = self.state.lock().unwrap();
         match state.last_state {
             None => {
                 state.last_state = Some(probed);
@@ -553,6 +565,101 @@ mod tests {
         // Step 5: Explicit invalidation bumps generation.
         backend.invalidate();
         assert_eq!(backend.capabilities().generation, 5);
+    }
+
+    #[test]
+    fn macos_backend_serializes_concurrent_raw_probes_and_recovers_from_poison() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex, mpsc};
+        use std::thread;
+
+        let raw = Arc::new(Mutex::new(MacOsRawProbe {
+            graphical_session: true,
+            screen_recording: true,
+            input_monitoring: true,
+            accessibility: true,
+        }));
+        let in_probe = Arc::new(AtomicBool::new(false));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let panic_next = Arc::new(AtomicBool::new(false));
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Arc::new(Mutex::new(release_rx));
+
+        let raw_p = Arc::clone(&raw);
+        let in_probe_p = Arc::clone(&in_probe);
+        let calls_p = Arc::clone(&calls);
+        let panic_p = Arc::clone(&panic_next);
+        let release_p = Arc::clone(&release_rx);
+        let backend = Arc::new(MacOsBackend::with_raw_probe(
+            PlatformArch::Arm64,
+            move || {
+                assert!(
+                    !in_probe_p.swap(true, Ordering::SeqCst),
+                    "concurrent macOS TCC probe overlapped outside lock"
+                );
+                struct Guard(Arc<AtomicBool>);
+                impl Drop for Guard {
+                    fn drop(&mut self) {
+                        self.0.store(false, Ordering::SeqCst);
+                    }
+                }
+                let _guard = Guard(Arc::clone(&in_probe_p));
+
+                if panic_p.swap(false, Ordering::SeqCst) {
+                    panic!("simulated transient TCC probe failure");
+                }
+
+                let call_no = calls_p.fetch_add(1, Ordering::SeqCst);
+                let snapshot = *raw_p.lock().unwrap();
+                if call_no == 0 {
+                    entered_tx.send(()).unwrap();
+                    release_p.lock().unwrap().recv().unwrap();
+                }
+                snapshot
+            },
+        ));
+
+        let b1 = Arc::clone(&backend);
+        let t1 = thread::spawn(move || b1.capabilities());
+        entered_rx.recv().unwrap();
+
+        // Revoke Accessibility while Thread 1 holds the state lock inside the initial granted probe.
+        raw.lock().unwrap().accessibility = false;
+        let b2 = Arc::clone(&backend);
+        let t2 = thread::spawn(move || b2.capabilities());
+
+        release_tx.send(()).unwrap();
+        let c1 = t1.join().unwrap();
+        let c2 = t2.join().unwrap();
+
+        assert_eq!(c1.generation, 1);
+        assert_eq!(
+            c1.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+        // Because Thread 1 strictly serialized before Thread 2, tracker observed Granted -> Denied!
+        assert_eq!(c2.generation, 2);
+        assert_eq!(c2.features.input_keyboard.state, FeatureState::Denied);
+        assert_eq!(
+            c2.features.input_keyboard.reason,
+            FeatureReason::PermissionDenied
+        );
+        assert_eq!(backend.capabilities().generation, 2);
+
+        // Poison recovery preserves ever-granted Denied state and recovers cleanly.
+        panic_next.store(true, Ordering::SeqCst);
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| backend.capabilities()))
+                .is_err()
+        );
+        backend.invalidate();
+        let recovered = backend.capabilities();
+        assert_eq!(recovered.generation, 3);
+        assert_eq!(
+            recovered.features.input_keyboard.state,
+            FeatureState::Denied
+        );
     }
 
     #[cfg(target_os = "macos")]
