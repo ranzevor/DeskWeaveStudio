@@ -1,8 +1,10 @@
+use std::sync::Mutex;
+
 use deskweave_platform_api::{
     BackendKind, CapabilitySnapshot, CaptureSource, CredentialStore, DesktopSession,
     DisplayTopology, EmergencyControl, FeatureSet, FeatureStatus, InputClock, InputEmitter,
-    InputRecorder, PlatformArch, PlatformError, PlatformOs, TargetBinding, TopologyCoverage,
-    TrajectoryVersion, UnimplementedPorts,
+    InputRecorder, MAX_SAFE_INT, PlatformArch, PlatformError, PlatformOs, TargetBinding,
+    TopologyCoverage, TrajectoryVersion, UnimplementedPorts,
 };
 
 pub const BACKEND_VERSION: &str = "0.1.0";
@@ -76,19 +78,63 @@ pub fn build_capabilities(
     }
 }
 
+struct TrackedX11State {
+    last_active: Option<bool>,
+    generation: u64,
+    invalidated: bool,
+}
+
+type X11ProbeFn = Box<dyn Fn() -> bool + Send + Sync>;
+
 pub struct LinuxX11Backend {
     arch: PlatformArch,
-    session_active: bool,
+    probe: X11ProbeFn,
+    state: Mutex<TrackedX11State>,
     ports: UnimplementedPorts,
 }
 
 impl LinuxX11Backend {
     pub fn new(arch: PlatformArch, session_active: bool) -> Self {
+        Self::with_probe(arch, move || session_active)
+    }
+
+    pub fn with_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> Self {
         Self {
             arch,
-            session_active,
+            probe: Box::new(probe),
+            state: Mutex::new(TrackedX11State {
+                last_active: None,
+                generation: 1,
+                invalidated: false,
+            }),
             ports: UnimplementedPorts::new(PlatformOs::Linux),
         }
+    }
+
+    pub fn invalidate(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.invalidated = true;
+    }
+
+    fn refresh(&self) -> (bool, u64) {
+        let active = (self.probe)();
+        let mut state = self.state.lock().unwrap();
+        match state.last_active {
+            None => {
+                state.last_active = Some(active);
+                state.invalidated = false;
+            }
+            Some(prev) if prev != active || state.invalidated => {
+                state.generation = state.generation.saturating_add(1).min(MAX_SAFE_INT);
+                state.last_active = Some(active);
+                state.invalidated = false;
+            }
+            Some(_) => {}
+        }
+        (active, state.generation)
     }
 }
 
@@ -110,11 +156,13 @@ impl DesktopSession for LinuxX11Backend {
     }
 
     fn capabilities(&self) -> CapabilitySnapshot {
-        build_capabilities(self.arch, self.session_active, 1)
+        let (active, generation) = self.refresh();
+        build_capabilities(self.arch, active, generation)
     }
 
     fn topology(&self) -> Result<DisplayTopology, PlatformError> {
-        if self.session_active {
+        let (active, _) = self.refresh();
+        if active {
             Err(PlatformError::capability_not_implemented(
                 "Linux X11 显示拓扑枚举尚未实现。",
             ))
@@ -156,6 +204,9 @@ impl DesktopSession for LinuxX11Backend {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     use super::*;
     use deskweave_platform_api::FeatureState;
 
@@ -178,6 +229,7 @@ mod tests {
         let active = LinuxX11Backend::new(PlatformArch::X64, true);
         let caps = active.capabilities();
         caps.validate().unwrap();
+        assert_eq!(caps.generation, 1);
         assert!(
             caps.features
                 .entries()
@@ -200,5 +252,38 @@ mod tests {
                 .all(|(_, s)| s.state == FeatureState::SessionUnavailable)
         );
         assert_eq!(inactive.topology().unwrap_err().code, "SESSION_UNAVAILABLE");
+    }
+
+    #[test]
+    fn x11_backend_refreshes_and_bumps_generation_on_session_change() {
+        let active = Arc::new(AtomicBool::new(true));
+        let reader = Arc::clone(&active);
+        let backend =
+            LinuxX11Backend::with_probe(PlatformArch::X64, move || reader.load(Ordering::Acquire));
+
+        assert_eq!(backend.capabilities().generation, 1);
+        assert_eq!(backend.capabilities().generation, 1);
+
+        active.store(false, Ordering::Release);
+        let c2 = backend.capabilities();
+        c2.validate().unwrap();
+        assert_eq!(c2.generation, 2);
+        assert_eq!(
+            c2.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+        assert_eq!(backend.topology().unwrap_err().code, "SESSION_UNAVAILABLE");
+
+        active.store(true, Ordering::Release);
+        let c3 = backend.capabilities();
+        c3.validate().unwrap();
+        assert_eq!(c3.generation, 3);
+        assert_eq!(
+            c3.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+
+        backend.invalidate();
+        assert_eq!(backend.capabilities().generation, 4);
     }
 }

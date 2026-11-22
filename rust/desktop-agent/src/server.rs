@@ -13,12 +13,13 @@ use crate::protocol::{
     AttachChallenge, AttachHello, AttachReady, AttachRegistration, ErrorBody, ErrorResponse,
     MAX_CONTROL_FRAME, Pong, SuccessResponse, VERSION, attach_ready_proof, constant_time_eq,
     generate_session_id, is_hex, looks_like_protocol_version, parse_object, parse_strict_object,
-    read_frame, read_frame_bytes, sha256_hex, valid_envelope_id, valid_method_name,
-    valid_workspace_id, write_frame, write_frame_bounded,
+    read_frame, sha256_hex, valid_envelope_id, valid_method_name, valid_workspace_id, write_frame,
+    write_frame_bounded,
 };
 
 pub(crate) const MAX_CLIENTS: usize = 32;
 pub(crate) const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const FRAME_READ_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_DEADLINE_MS: u64 = 86_400_000;
 
@@ -29,6 +30,7 @@ pub(crate) struct ServerConfig {
     pub(crate) verification_key: VerifyingKey,
     pub(crate) idle_grace: Duration,
     pub(crate) handshake_timeout: Duration,
+    pub(crate) frame_read_timeout: Duration,
     pub(crate) max_clients: usize,
     pub(crate) desktop: Arc<dyn DesktopSession>,
 }
@@ -307,22 +309,54 @@ fn dispatch_request(
     }
 }
 
+fn read_session_frame_bytes<S: SessionStream>(
+    stream: &mut S,
+    max_bytes: usize,
+    assembly_timeout: Duration,
+    stop: &StopSignal,
+) -> io::Result<Option<Vec<u8>>> {
+    use std::io::Read as _;
+
+    let mut prefix = [0_u8; 4];
+    {
+        let mut idle_io = DeadlineIo::new(stream, None, stop);
+        loop {
+            match idle_io.read(&mut prefix[..1]) {
+                Ok(0) => return Ok(None),
+                Ok(_) => break,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    let deadline = Some(Instant::now() + assembly_timeout);
+    let mut framed_io = DeadlineIo::new(stream, deadline, stop);
+    framed_io.read_exact(&mut prefix[1..])?;
+    let size = u32::from_le_bytes(prefix) as usize;
+    if !(1..=max_bytes).contains(&size) {
+        return Err(io::ErrorKind::InvalidData.into());
+    }
+    let mut payload = vec![0_u8; size];
+    framed_io.read_exact(&mut payload)?;
+    Ok(Some(payload))
+}
+
 pub(crate) fn serve_session<S: SessionStream>(
     stream: &mut S,
     ctx: &SessionContext,
     desktop: &dyn DesktopSession,
+    frame_read_timeout: Duration,
     stop: &StopSignal,
 ) -> io::Result<()> {
     use std::io::Write as _;
 
     loop {
-        let raw = {
-            let mut io = DeadlineIo::new(stream, None, stop);
-            read_frame_bytes(&mut io, MAX_CONTROL_FRAME)?
-        };
-        let Some(raw) = raw else {
+        let Some(raw) =
+            read_session_frame_bytes(stream, MAX_CONTROL_FRAME, frame_read_timeout, stop)?
+        else {
             return Ok(());
         };
+        let request_started = Instant::now();
         let map = parse_strict_object(&raw)?;
         match map.get("kind").and_then(Value::as_str) {
             Some("agent.ping") => {
@@ -345,7 +379,7 @@ pub(crate) fn serve_session<S: SessionStream>(
             }
             Some("request") => {
                 let (payload, budget) = dispatch_request(&map, ctx, desktop)?;
-                let deadline = Some(Instant::now() + budget);
+                let deadline = Some((request_started + budget).min(Instant::now() + WRITE_TIMEOUT));
                 let mut io = DeadlineIo::new(stream, deadline, stop);
                 io.write_all(&(payload.len() as u32).to_le_bytes())?;
                 io.write_all(&payload)?;
@@ -464,6 +498,7 @@ fn handle_attached<S: SessionStream>(
         &mut stream,
         &ctx,
         shared.config.desktop.as_ref(),
+        shared.config.frame_read_timeout,
         &shared.stop,
     );
 }
@@ -498,6 +533,7 @@ pub(crate) fn run<S: SessionStream + 'static, L: SessionListener + 'static>(
             &mut initial,
             &initial_session,
             initial_shared.config.desktop.as_ref(),
+            initial_shared.config.frame_read_timeout,
             &initial_shared.stop,
         );
     })?;
@@ -559,9 +595,10 @@ pub(crate) fn run<S: SessionStream + 'static, L: SessionListener + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::read_frame_bytes;
     use deskweave_platform_api::{
         BackendKind, CapabilitySnapshot, DisplayTopology, FakeDesktopSession, FeatureSet,
-        FeatureStatus, PlatformArch, PlatformError, PlatformOs, TopologyCoverage,
+        FeatureState, FeatureStatus, PlatformArch, PlatformError, PlatformOs, TopologyCoverage,
         TrajectoryVersion,
     };
     use ed25519_dalek::{Signer, SigningKey};
@@ -742,6 +779,7 @@ mod tests {
             verification_key: signing_key.verifying_key(),
             idle_grace,
             handshake_timeout: Duration::from_millis(200),
+            frame_read_timeout: Duration::from_millis(200),
             max_clients,
             desktop,
         }
@@ -1115,5 +1153,211 @@ mod tests {
         assert_eq!(parsed["ok"], false);
         assert_eq!(parsed["replyTo"], "req-big");
         assert_eq!(parsed["error"]["code"], "LIMIT_EXCEEDED");
+    }
+
+    #[test]
+    fn stalled_partial_header_and_partial_payload_time_out_and_release_slot() {
+        let key = SigningKey::from_bytes(&[0x5a; 32]);
+        let (server_init, mut client_idle) = MemStream::pair();
+        let (tx, rx) = mpsc::channel();
+        let stop = StopSignal::new().unwrap();
+        let client_stop = StopSignal::new().unwrap();
+        let desktop = fake_desktop(Err(PlatformError::capability_not_implemented("none")));
+        let mut config = test_config(&key, Duration::from_millis(250), 2, desktop);
+        config.frame_read_timeout = Duration::from_millis(120);
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
+
+        // 1. Partial 1-byte frame header stalls -> server times out frame assembly and releases slot.
+        let (server_hdr, mut client_hdr) = MemStream::pair();
+        tx.send((server_hdr, 3001)).unwrap();
+        let _ = client_attach(
+            &mut client_hdr,
+            &key,
+            3001,
+            "ws-hdr",
+            ["1", "2"],
+            &client_stop,
+        )
+        .unwrap();
+        client_hdr.write_chunk(&[0x20], None, &client_stop).unwrap();
+        // Wait for the server side to close the stalled connection and free the 2nd slot.
+        let mut probe = [0_u8; 1];
+        let closed_hdr = client_hdr
+            .read_chunk(
+                &mut probe,
+                Some(Instant::now() + Duration::from_secs(2)),
+                &client_stop,
+            )
+            .unwrap();
+        assert_eq!(closed_hdr, 0);
+
+        // 2. Partial payload after full 4-byte length prefix stalls -> server times out and releases slot.
+        let (server_body, mut client_body) = MemStream::pair();
+        tx.send((server_body, 3002)).unwrap();
+        let _ = client_attach(
+            &mut client_body,
+            &key,
+            3002,
+            "ws-body",
+            ["1", "2"],
+            &client_stop,
+        )
+        .unwrap();
+        let mut partial = 128_u32.to_le_bytes().to_vec();
+        partial.extend_from_slice(br#"{"protocolVersion":"1.0""#);
+        client_body
+            .write_chunk(&partial, None, &client_stop)
+            .unwrap();
+        let closed_body = client_body
+            .read_chunk(
+                &mut probe,
+                Some(Instant::now() + Duration::from_secs(2)),
+                &client_stop,
+            )
+            .unwrap();
+        assert_eq!(closed_body, 0);
+
+        // 3. Slot is free again AND the idle healthy connection stayed alive beyond frame_read_timeout!
+        thread::sleep(Duration::from_millis(180));
+        let (server_ok, mut client_ok) = MemStream::pair();
+        tx.send((server_ok, 3003)).unwrap();
+        let ready_ok = client_attach(
+            &mut client_ok,
+            &key,
+            3003,
+            "ws-ok",
+            ["1", "2"],
+            &client_stop,
+        )
+        .unwrap();
+        let sess_ok = ready_ok["session"].as_str().unwrap();
+        let resp_ok = client_rpc(
+            &mut client_ok,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-ok",
+                "session": sess_ok,
+                "workspace": "ws-ok",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(resp_ok["ok"], true);
+
+        let idle_resp = client_rpc(
+            &mut client_idle,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-idle",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(idle_resp["ok"], true);
+
+        drop(client_hdr);
+        drop(client_body);
+        drop(client_ok);
+        drop(client_idle);
+        server_thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn desktop_capabilities_serves_live_refreshed_snapshot_and_generation() {
+        let key = SigningKey::from_bytes(&[0x5a; 32]);
+        let (server_init, mut client_a) = MemStream::pair();
+        let (_tx, rx) = mpsc::channel();
+        let stop = StopSignal::new().unwrap();
+        let client_stop = StopSignal::new().unwrap();
+
+        let initial_caps = CapabilitySnapshot {
+            os: PlatformOs::Macos,
+            arch: PlatformArch::Arm64,
+            backend: BackendKind::MacosQuartz,
+            backend_version: "0.1.0".to_owned(),
+            generation: 1,
+            topology_version: None,
+            topology_coverage: TopologyCoverage::Unknown,
+            trajectory_versions: vec![TrajectoryVersion::V1_0, TrajectoryVersion::V1_1],
+            features: FeatureSet::all(FeatureStatus::unimplemented()),
+        };
+        let fake = Arc::new(FakeDesktopSession::new(
+            initial_caps.clone(),
+            Err(PlatformError::capability_not_implemented("none")),
+        ));
+        let desktop: Arc<dyn DesktopSession> = fake.clone();
+        let config = test_config(&key, Duration::from_millis(200), 2, desktop);
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
+
+        let r1 = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-gen-1",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(r1["ok"], true);
+        assert_eq!(r1["result"]["generation"], 1);
+        assert_eq!(
+            r1["result"]["features"]["input.keyboard"]["state"],
+            "unimplemented"
+        );
+
+        // Simulate runtime permission revocation / session change on the shared DesktopSession.
+        let mut updated = initial_caps;
+        updated.generation = 2;
+        updated.features = FeatureSet::all(FeatureStatus::session_unavailable());
+        assert_eq!(
+            updated.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+        fake.set_capabilities(updated);
+
+        let r2 = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-gen-2",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(r2["ok"], true);
+        assert_eq!(r2["result"]["generation"], 2);
+        assert_eq!(
+            r2["result"]["features"]["input.keyboard"]["state"],
+            "sessionUnavailable"
+        );
+
+        drop(client_a);
+        server_thread.join().unwrap().unwrap();
     }
 }

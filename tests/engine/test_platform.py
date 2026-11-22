@@ -4,9 +4,11 @@ import copy
 import hashlib
 import os
 import secrets
+import socket
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
@@ -228,6 +230,9 @@ class PlatformContractTests(unittest.TestCase):
                 "XDG_SESSION_ID": "c12_a-b",
                 "XDG_RUNTIME_DIR": "/run/user/1000",
                 "WAYLAND_DISPLAY": "wayland-0",
+                "DESKWEAVE_WAYLAND_BACKEND": "Compositor",
+                "DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET": "dw-compositor-0",
+                "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus,guid=abc123",
                 "DISPLAY": "unix/:1.0",
             }
         )
@@ -238,6 +243,9 @@ class PlatformContractTests(unittest.TestCase):
                 "XDG_SESSION_ID": "c12_a-b",
                 "XDG_RUNTIME_DIR": "/run/user/1000",
                 "WAYLAND_DISPLAY": "wayland-0",
+                "DESKWEAVE_WAYLAND_BACKEND": "compositor",
+                "DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET": "dw-compositor-0",
+                "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus,guid=abc123",
                 "DISPLAY": "unix/:1.0",
             },
         )
@@ -251,6 +259,9 @@ class PlatformContractTests(unittest.TestCase):
                 "XDG_SESSION_ID": "../1",
                 "XDG_RUNTIME_DIR": "/run/../tmp",
                 "WAYLAND_DISPLAY": "../dbus",
+                "DESKWEAVE_WAYLAND_BACKEND": "x11",
+                "DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET": "../comp",
+                "DBUS_SESSION_BUS_ADDRESS": "tcp:host=127.0.0.1,port=1234",
                 "DISPLAY": "127.0.0.1:0",
             }
         )
@@ -260,10 +271,187 @@ class PlatformContractTests(unittest.TestCase):
             {
                 "XDG_SESSION_TYPE": "x11/bad",
                 "WAYLAND_DISPLAY": "sub/wayland-0",
+                "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/../tmp/bus",
                 "DISPLAY": ":0.garbage",
             }
         )
         self.assertEqual(dirty_screen, {})
+
+    def test_record_start_bidirectional_topology_mode_v11_window_source_and_float_rotation(self):
+        # 1. Float integer rotation (90.0) accepted, fractional (90.5) rejected.
+        topo_ok = copy.deepcopy(_load_example("macos-topology.json"))
+        topo_ok["displays"][0]["rotation"] = 90.0
+        validate_desktop_topology(topo_ok)
+
+        topo_bad = copy.deepcopy(_load_example("macos-topology.json"))
+        topo_bad["displays"][0]["rotation"] = 90.5
+        with self.assertRaises(DeskWeaveError) as caught:
+            validate_desktop_topology(topo_bad)
+        self.assertEqual(caught.exception.code, "INVALID_ARGUMENT")
+
+        # 2. Display-local window source requires full available display set in topology.
+        window_full = copy.deepcopy(_load_example("macos-source.json"))
+        window_full["scope"] = "window"
+        validate_recording_source(window_full)
+
+        window_selected_cov = copy.deepcopy(window_full)
+        window_selected_cov["topology"]["coverage"] = "selected"
+        validate_recording_source(window_selected_cov)
+
+        window_partial = copy.deepcopy(window_full)
+        window_partial["displayIds"] = ["main"]
+        with self.assertRaises(DeskWeaveError) as caught:
+            validate_recording_source(window_partial)
+        self.assertEqual(caught.exception.code, "INVALID_ARGUMENT")
+
+        # Valid neighbor: single display scope selects one display.
+        single_display = copy.deepcopy(_load_example("macos-source.json"))
+        single_display["scope"] = "display"
+        single_display["displayIds"] = ["main"]
+        validate_recording_source(single_display)
+
+        # 3. Bidirectional topology <-> coordinateMode and trajectory 1.1 admission matrix.
+        local_ctx = copy.deepcopy(_load_example("context-record-start-display.json"))
+        base_req = copy.deepcopy(_load_example("record-start-display.json"))
+
+        # displayLocalPixels + physical -> rejected.
+        req_phys = {**base_req, "coordinateMode": "physical"}
+        with self.assertRaises(DeskWeaveError):
+            validate_record_start(req_phys, local_ctx)
+
+        # displayLocalPixels + display / event / relative with 1.1 -> valid neighbor cases.
+        for mode in ("display", "event", "relative"):
+            validate_record_start({**base_req, "coordinateMode": mode}, local_ctx)
+
+        # displayLocalPixels without 1.1 -> rejected for display, event, AND relative!
+        local_v10_ctx = copy.deepcopy(local_ctx)
+        local_v10_ctx["capabilities"]["trajectoryVersions"] = ["1.0"]
+        for mode in ("display", "event", "relative"):
+            with self.subTest(local_v10_mode=mode):
+                with self.assertRaises(DeskWeaveError):
+                    validate_record_start({**base_req, "coordinateMode": mode}, local_v10_ctx)
+
+        # desktopPhysicalPixels context with trajectory 1.0 only.
+        physical_caps = copy.deepcopy(local_ctx["capabilities"])
+        physical_caps["os"] = "windows"
+        physical_caps["backend"] = "windows-win32"
+        physical_caps["trajectoryVersions"] = ["1.0"]
+        physical_ctx = {
+            "targetToken": base_req["targetToken"],
+            "targetKind": "desktop",
+            "permissions": ["record"],
+            "capabilities": physical_caps,
+            "topology": {
+                "version": 7,
+                "coordinateSpace": "desktopPhysicalPixels",
+                "virtualBounds": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+                "displays": [
+                    {
+                        "displayId": "main",
+                        "name": "主屏",
+                        "outputNames": ["DP-1"],
+                        "bounds": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+                        "rotation": 0,
+                        "dpiX": 96,
+                        "dpiY": 96,
+                        "primary": True,
+                    }
+                ],
+            },
+        }
+
+        # desktopPhysicalPixels + display -> rejected!
+        with self.assertRaises(DeskWeaveError):
+            validate_record_start({**base_req, "coordinateMode": "display"}, physical_ctx)
+
+        # desktopPhysicalPixels + physical / event / relative with 1.0 only -> valid neighbor cases!
+        for mode in ("physical", "event", "relative"):
+            with self.subTest(physical_v10_mode=mode):
+                validate_record_start({**base_req, "coordinateMode": mode}, physical_ctx)
+
+    def test_system_capabilities_bounds_desktop_lock_wait_by_deadline_and_revocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = Engine(Workspace(Path(directory) / "ws", create=True))
+            try:
+                sess_short = engine.open_session(
+                    "lock-short", set(), capabilities={"platform-capabilities-v1"}
+                )
+                sess_revoked = engine.open_session(
+                    "lock-revoked", set(), capabilities={"platform-capabilities-v1"}
+                )
+
+                # Hold _desktop_lock (simulating slow start_desktop_agent) for 300ms.
+                locked = threading.Event()
+                unlock = threading.Event()
+
+                def _hold_lock():
+                    with engine._desktop_lock:
+                        locked.set()
+                        unlock.wait(2)
+
+                holder = threading.Thread(target=_hold_lock, daemon=True)
+                holder.start()
+                self.assertTrue(locked.wait(2))
+                try:
+                    # 1. Caller with 40ms deadline must time out promptly, not wait 300ms.
+                    started = time.monotonic()
+                    short_resp = engine.dispatch(
+                        sess_short.id,
+                        {
+                            "protocolVersion": "1.0",
+                            "kind": "request",
+                            "id": "req-lock-short",
+                            "session": sess_short.id,
+                            "workspace": engine.workspace.id,
+                            "method": "system.capabilities",
+                            "deadlineMs": 40,
+                            "params": {},
+                        },
+                    )
+                    elapsed = time.monotonic() - started
+                    self.assertFalse(short_resp["ok"])
+                    self.assertEqual(short_resp["error"]["code"], "DEADLINE_EXCEEDED")
+                    self.assertLess(elapsed, 0.25)
+
+                    # 2. Revoking a caller blocked on _desktop_lock fails while lock stays held.
+                    revoked_out = {}
+                    entered_query = threading.Event()
+                    orig_query = engine._query_desktop_capabilities
+
+                    def _watched_query(deadline, authorize):
+                        entered_query.set()
+                        return orig_query(deadline, authorize)
+
+                    engine._query_desktop_capabilities = _watched_query
+
+                    def _run_revoked():
+                        revoked_out["resp"] = engine.dispatch(
+                            sess_revoked.id,
+                            {
+                                "protocolVersion": "1.0",
+                                "kind": "request",
+                                "id": "req-lock-revoked",
+                                "session": sess_revoked.id,
+                                "workspace": engine.workspace.id,
+                                "method": "system.capabilities",
+                                "deadlineMs": 5000,
+                                "params": {},
+                            },
+                        )
+
+                    worker = threading.Thread(target=_run_revoked, daemon=True)
+                    worker.start()
+                    self.assertTrue(entered_query.wait(2))
+                    engine.revoke_client("lock-revoked")
+                    worker.join(timeout=1)
+                    self.assertFalse(worker.is_alive())
+                    self.assertFalse(revoked_out["resp"]["ok"])
+                    self.assertEqual(revoked_out["resp"]["error"]["code"], "ACCESS_DENIED")
+                finally:
+                    unlock.set()
+                    holder.join(timeout=2)
+            finally:
+                engine.close()
 
     def test_system_capabilities_isolates_client_timeout_revocation_and_long_backend_version(self):
         entered = threading.Event()
@@ -699,6 +887,109 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
             engine_b.close()
             if process is not None:
                 self.assertEqual(process.wait(timeout=5), 0)
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux Wayland/Portal live transitions")
+    def test_linux_live_wayland_compositor_portal_selection_and_dynamic_generation(self):
+        with tempfile.TemporaryDirectory(prefix="dw-wl-") as raw_dir:
+            priv_dir = Path(raw_dir)
+            os.chmod(priv_dir, 0o700)
+            wayland_path = priv_dir / "wayland-test-0"
+            bus_path = priv_dir / "bus"
+
+            def _bind_unix(path: Path) -> socket.socket:
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.bind(str(path))
+                sock.listen(1)
+                return sock
+
+            env_patch = {
+                "XDG_SESSION_TYPE": "wayland",
+                "XDG_RUNTIME_DIR": str(priv_dir),
+                "WAYLAND_DISPLAY": wayland_path.name,
+                "DBUS_SESSION_BUS_ADDRESS": f"unix:path={bus_path}",
+            }
+
+            # Case 1: Wayland Compositor selection + socket loss/recovery increments generation.
+            wl_sock = _bind_unix(wayland_path)
+            wl_rebound = None
+            engine_comp = Engine(Workspace(self.root / "ws-comp", create=True))
+            proc_comp = None
+            try:
+                with patch.dict(os.environ, env_patch, clear=False):
+                    proc_handle = engine_comp.start_desktop_agent(
+                        self.local,
+                        self.agent_installation,
+                        self.authority,
+                        idle_grace=0.2,
+                        wayland_backend="compositor",
+                    )
+                proc_comp = proc_handle._process
+                c1 = proc_handle.desktop_capabilities()
+                self.assertEqual(c1["backend"], "linux-wayland-compositor")
+                self.assertEqual(c1["generation"], 1)
+                self.assertEqual(c1["features"]["record.allDisplays"]["state"], "unimplemented")
+
+                # Simulate compositor crash/restart by removing live Wayland socket.
+                wl_sock.close()
+                wayland_path.unlink()
+                c2 = proc_handle.desktop_capabilities()
+                self.assertEqual(c2["generation"], 2)
+                self.assertEqual(
+                    c2["features"]["record.allDisplays"]["state"], "sessionUnavailable"
+                )
+
+                # Re-bind Wayland socket -> recovers to active compositor and bumps generation.
+                wl_rebound = _bind_unix(wayland_path)
+                c3 = proc_handle.desktop_capabilities()
+                self.assertEqual(c3["backend"], "linux-wayland-compositor")
+                self.assertEqual(c3["generation"], 3)
+                self.assertEqual(c3["features"]["record.allDisplays"]["state"], "unimplemented")
+            finally:
+                engine_comp.close()
+                if proc_comp is not None:
+                    self.assertEqual(proc_comp.wait(timeout=5), 0)
+                wl_sock.close()
+                if wl_rebound is not None:
+                    wl_rebound.close()
+                if wayland_path.exists():
+                    wayland_path.unlink()
+
+            # Case 2: Wayland Portal selection + Portal bus close degrades features & bumps gen.
+            wl_sock2 = _bind_unix(wayland_path)
+            bus_sock = _bind_unix(bus_path)
+            engine_portal = Engine(Workspace(self.root / "ws-portal", create=True))
+            authority_portal = agent.AgentAuthority((self.local,), _SignatureRequest)
+            proc_portal = None
+            try:
+                with patch.dict(os.environ, env_patch, clear=False):
+                    proc_handle = engine_portal.start_desktop_agent(
+                        self.local,
+                        self.agent_installation,
+                        authority_portal,
+                        idle_grace=0.2,
+                        wayland_backend="portal",
+                    )
+                proc_portal = proc_handle._process
+                p1 = proc_handle.desktop_capabilities()
+                self.assertEqual(p1["backend"], "linux-wayland-portal")
+                self.assertEqual(p1["generation"], 1)
+                self.assertEqual(p1["features"]["record.allDisplays"]["state"], "unsupported")
+                self.assertEqual(p1["features"]["input.keyboard"]["state"], "unimplemented")
+
+                # Closing Portal D-Bus socket degrades Portal capabilities and bumps generation.
+                bus_sock.close()
+                bus_path.unlink()
+                p2 = proc_handle.desktop_capabilities()
+                self.assertEqual(p2["backend"], "linux-wayland-portal")
+                self.assertEqual(p2["generation"], 2)
+                self.assertEqual(p2["features"]["record.allDisplays"]["state"], "unsupported")
+                self.assertEqual(p2["features"]["input.keyboard"]["state"], "sessionUnavailable")
+            finally:
+                engine_portal.close()
+                if proc_portal is not None:
+                    self.assertEqual(proc_portal.wait(timeout=5), 0)
+                wl_sock2.close()
+                bus_sock.close()
 
 
 if __name__ == "__main__":

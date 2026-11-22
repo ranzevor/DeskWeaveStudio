@@ -228,6 +228,11 @@ impl DisplaySource {
                 ));
             }
         }
+        if self.scope == RecordingScope::Window && selected != all_ids {
+            return Err(PlatformError::invalid_argument(
+                "窗口录制来源未覆盖当时可用显示集合。",
+            ));
+        }
         if self.scope == RecordingScope::Display && selected.len() != 1 {
             return Err(PlatformError::invalid_argument(
                 "单屏录制只能选择一个显示区域。",
@@ -989,11 +994,15 @@ pub fn validate_record_start(
     ) {
         return Err(PlatformError::invalid_argument("此目标不支持录制。"));
     }
-    if matches!(context.topology, DisplayTopology::DisplayLocal(_))
-        && request.coordinate_mode == CoordinateMode::Physical
-    {
+    let is_local_topology = matches!(context.topology, DisplayTopology::DisplayLocal(_));
+    if is_local_topology && request.coordinate_mode == CoordinateMode::Physical {
         return Err(PlatformError::invalid_argument(
             "当前拓扑需要屏内像素坐标。",
+        ));
+    }
+    if !is_local_topology && request.coordinate_mode == CoordinateMode::Display {
+        return Err(PlatformError::invalid_argument(
+            "全局物理拓扑不能使用屏内像素坐标模式。",
         ));
     }
     if let Some(capabilities) = &context.capabilities {
@@ -1011,7 +1020,8 @@ pub fn validate_record_start(
                 "当前会话缺少此范围的录制能力。",
             ));
         }
-        if request.coordinate_mode == CoordinateMode::Display
+        let requires_v11 = is_local_topology || request.coordinate_mode == CoordinateMode::Display;
+        if requires_v11
             && !capabilities
                 .trajectory_versions
                 .contains(&TrajectoryVersion::V1_1)

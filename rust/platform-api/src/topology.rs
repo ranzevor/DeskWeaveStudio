@@ -68,6 +68,23 @@ impl<'de> Deserialize<'de> for Rotation {
                     other => Err(E::custom(format!("invalid rotation: {other}"))),
                 }
             }
+
+            fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
+                if !value.is_finite() || value.fract() != 0.0 {
+                    return Err(E::custom(format!("invalid rotation: {value}")));
+                }
+                if value == 0.0 {
+                    Ok(Rotation::Deg0)
+                } else if value == 90.0 {
+                    Ok(Rotation::Deg90)
+                } else if value == 180.0 {
+                    Ok(Rotation::Deg180)
+                } else if value == 270.0 {
+                    Ok(Rotation::Deg270)
+                } else {
+                    Err(E::custom(format!("invalid rotation: {value}")))
+                }
+            }
         }
 
         deserializer.deserialize_any(RotationVisitor)

@@ -221,8 +221,11 @@ def recording_errors(value, kind, context=None):
             errors.append("显示拓扑已变化")
         if context["targetKind"] not in {"desktop", "display", "window"}:
             errors.append("此目标不支持录制")
-        if context["topology"]["coordinateSpace"] == "displayLocalPixels" and value["coordinateMode"] == "physical":
+        is_local = context["topology"]["coordinateSpace"] == "displayLocalPixels"
+        if is_local and value["coordinateMode"] == "physical":
             errors.append("当前拓扑需要屏内像素坐标")
+        if not is_local and value["coordinateMode"] == "display":
+            errors.append("全局物理拓扑不能使用屏内像素坐标模式")
         capabilities = context.get("capabilities")
         if capabilities is not None:
             errors.extend(capability_errors(capabilities))
@@ -231,7 +234,7 @@ def recording_errors(value, kind, context=None):
                 required.append("record.allDisplays")
             if any(capabilities["features"][key]["state"] != "available" for key in required):
                 errors.append("当前会话缺少此范围的录制能力")
-            if value["coordinateMode"] == "display" and "1.1" not in capabilities["trajectoryVersions"]:
+            if (is_local or value["coordinateMode"] == "display") and "1.1" not in capabilities["trajectoryVersions"]:
                 errors.append("当前后端未协商屏内坐标轨迹版本")
         return errors
     if kind == "snapshot":

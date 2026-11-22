@@ -328,4 +328,176 @@ mod tests {
             bounds
         ));
     }
+
+    #[test]
+    fn rotation_deserializes_integer_valued_floats_and_rejects_fractional() {
+        for (raw, expected) in [
+            ("0", Rotation::Deg0),
+            ("0.0", Rotation::Deg0),
+            ("-0.0", Rotation::Deg0),
+            ("90", Rotation::Deg90),
+            ("90.0", Rotation::Deg90),
+            ("180.0", Rotation::Deg180),
+            ("270.0", Rotation::Deg270),
+        ] {
+            let parsed: Rotation = serde_json::from_str(raw)
+                .unwrap_or_else(|err| panic!("expected rotation {raw} valid, got {err}"));
+            assert_eq!(parsed, expected);
+        }
+
+        for invalid in ["90.5", "-90.0", "360.0", "1.0", "1e20"] {
+            assert!(
+                serde_json::from_str::<Rotation>(invalid).is_err(),
+                "expected rotation {invalid} to fail"
+            );
+        }
+
+        // Valid float rotation inside a full LocalDisplay topology document.
+        let mut topo: serde_json::Value = load_json("macos-topology.json").unwrap();
+        topo["displays"][0]["rotation"] = serde_json::json!(90.0);
+        let parsed: DisplayTopology = serde_json::from_value(topo).unwrap();
+        parsed.validate().unwrap();
+    }
+
+    #[test]
+    fn record_start_enforces_bidirectional_topology_mode_and_v11_admission() {
+        let local_ctx: RecordStartContext = load_json("context-record-start-display.json").unwrap();
+        let base_req: RecordStartRequest = load_json("record-start-display.json").unwrap();
+
+        // displayLocalPixels + physical -> rejected.
+        let mut req = base_req.clone();
+        req.coordinate_mode = CoordinateMode::Physical;
+        assert_eq!(
+            validate_record_start(&req, &local_ctx).unwrap_err().code,
+            "INVALID_ARGUMENT"
+        );
+
+        // displayLocalPixels + event / relative / display with 1.1 -> valid neighbor cases.
+        for mode in [
+            CoordinateMode::Display,
+            CoordinateMode::Event,
+            CoordinateMode::Relative,
+        ] {
+            let mut r = base_req.clone();
+            r.coordinate_mode = mode;
+            validate_record_start(&r, &local_ctx)
+                .unwrap_or_else(|err| panic!("expected displayLocalPixels + {mode:?} ok: {err}"));
+        }
+
+        // displayLocalPixels with only trajectory 1.0 -> rejected for display, event, AND relative!
+        let mut local_v10_ctx = local_ctx.clone();
+        local_v10_ctx
+            .capabilities
+            .as_mut()
+            .unwrap()
+            .trajectory_versions = vec![TrajectoryVersion::V1_0];
+        for mode in [
+            CoordinateMode::Display,
+            CoordinateMode::Event,
+            CoordinateMode::Relative,
+        ] {
+            let mut r = base_req.clone();
+            r.coordinate_mode = mode;
+            assert_eq!(
+                validate_record_start(&r, &local_v10_ctx).unwrap_err().code,
+                "SCHEMA_UNSUPPORTED",
+                "expected displayLocalPixels + {mode:?} without 1.1 to fail"
+            );
+        }
+
+        // desktopPhysicalPixels context with trajectory 1.0 only.
+        let physical_topo = DisplayTopology::Physical(PhysicalTopology {
+            version: 7,
+            virtual_bounds: PhysicalRect {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+            displays: vec![PhysicalDisplay {
+                display_id: "main".to_owned(),
+                name: "主屏".to_owned(),
+                output_names: vec!["DP-1".to_owned()],
+                bounds: PhysicalRect {
+                    x: 0,
+                    y: 0,
+                    width: 1920,
+                    height: 1080,
+                },
+                rotation: Rotation::Deg0,
+                dpi_x: 96.0,
+                dpi_y: 96.0,
+                primary: true,
+            }],
+        });
+        let mut physical_caps = local_ctx.capabilities.clone().unwrap();
+        physical_caps.os = PlatformOs::Windows;
+        physical_caps.backend = BackendKind::WindowsWin32;
+        physical_caps.trajectory_versions = vec![TrajectoryVersion::V1_0];
+        let physical_ctx = RecordStartContext {
+            target_token: base_req.target_token.clone(),
+            target_kind: "desktop".to_owned(),
+            topology: physical_topo,
+            permissions: vec!["record".to_owned()],
+            capabilities: Some(physical_caps),
+        };
+
+        // desktopPhysicalPixels + display -> rejected!
+        let mut req_display = base_req.clone();
+        req_display.coordinate_mode = CoordinateMode::Display;
+        assert_eq!(
+            validate_record_start(&req_display, &physical_ctx)
+                .unwrap_err()
+                .code,
+            "INVALID_ARGUMENT"
+        );
+
+        // desktopPhysicalPixels + physical / event / relative with only 1.0 -> valid neighbor cases!
+        for mode in [
+            CoordinateMode::Physical,
+            CoordinateMode::Event,
+            CoordinateMode::Relative,
+        ] {
+            let mut r = base_req.clone();
+            r.coordinate_mode = mode;
+            validate_record_start(&r, &physical_ctx).unwrap_or_else(|err| {
+                panic!("expected desktopPhysicalPixels + {mode:?} with 1.0 ok: {err}")
+            });
+        }
+    }
+
+    #[test]
+    fn display_local_window_source_requires_full_available_display_set() {
+        let valid_all: RecordingSource = load_json("macos-source.json").unwrap();
+        let RecordingSource::Display(base) = valid_all else {
+            panic!("expected display local source");
+        };
+
+        // Window scope with all displays in topology -> valid (even if topology coverage is Selected).
+        let mut window_full = base.clone();
+        window_full.scope = RecordingScope::Window;
+        window_full.validate().unwrap();
+
+        let mut window_selected_cov = window_full.clone();
+        window_selected_cov.topology =
+            DisplayLocalTopologyWrapper::DisplayLocal(DisplayLocalTopology {
+                coverage: LocalTopologyCoverage::Selected,
+                ..window_full.topology.inner().clone()
+            });
+        window_selected_cov.validate().unwrap();
+
+        // Window scope dropping one display from topology -> rejected!
+        let mut window_partial = window_full.clone();
+        window_partial.display_ids = vec!["main".to_owned()];
+        assert_eq!(
+            window_partial.validate().unwrap_err().code,
+            "INVALID_ARGUMENT"
+        );
+
+        // Display scope with single display -> valid neighbor case!
+        let mut single_display = base;
+        single_display.scope = RecordingScope::Display;
+        single_display.display_ids = vec!["main".to_owned()];
+        single_display.validate().unwrap();
+    }
 }

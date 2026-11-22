@@ -14,7 +14,7 @@ use protocol::{
     Bootstrap, Challenge, Hello, Ready, Registration, generate_session_id, is_hex, parse_object,
     read_frame, valid_workspace_id, write_frame,
 };
-use server::{HANDSHAKE_TIMEOUT, MAX_CLIENTS, ServerConfig, SessionContext};
+use server::{FRAME_READ_TIMEOUT, HANDSHAKE_TIMEOUT, MAX_CLIENTS, ServerConfig, SessionContext};
 
 const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -172,7 +172,7 @@ fn run() -> io::Result<()> {
         }
         return Err(error);
     }
-    let desktop = platform::current_session();
+    let desktop = platform::current_session(bootstrap.wayland_backend.as_deref());
     let initial_session_id = generate_session_id()?;
     let listener = Listener::bind()?;
     {
@@ -196,6 +196,7 @@ fn run() -> io::Result<()> {
         verification_key,
         idle_grace: bootstrap.idle_grace(),
         handshake_timeout: HANDSHAKE_TIMEOUT,
+        frame_read_timeout: FRAME_READ_TIMEOUT,
         max_clients: MAX_CLIENTS,
         desktop,
     };
@@ -279,16 +280,22 @@ mod tests {
             cursor: Cursor::new(stale),
         };
         let stop = StopSignal::new().unwrap();
-        let desktop = platform::current_session();
+        let desktop = platform::current_session(None);
         let ctx = SessionContext {
             agent_epoch: "current".to_owned(),
             session_id: "1".repeat(32),
             workspace_id: "ws-1".to_owned(),
         };
         assert_eq!(
-            server::serve_session(&mut channel, &ctx, desktop.as_ref(), &stop)
-                .unwrap_err()
-                .kind(),
+            server::serve_session(
+                &mut channel,
+                &ctx,
+                desktop.as_ref(),
+                FRAME_READ_TIMEOUT,
+                &stop
+            )
+            .unwrap_err()
+            .kind(),
             io::ErrorKind::PermissionDenied
         );
     }
@@ -313,6 +320,7 @@ mod tests {
             agent_epoch: "a".repeat(64),
             secret: [0x11; 32],
             idle_grace_ms: DEFAULT_IDLE_GRACE_MS,
+            wayland_backend: None,
         }
     }
 

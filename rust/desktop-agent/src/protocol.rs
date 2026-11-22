@@ -104,6 +104,8 @@ pub(crate) struct Bootstrap {
     pub(crate) secret: [u8; 32],
     #[serde(default = "default_idle_grace_ms")]
     pub(crate) idle_grace_ms: u64,
+    #[serde(default)]
+    pub(crate) wayland_backend: Option<String>,
 }
 
 impl Bootstrap {
@@ -112,6 +114,11 @@ impl Bootstrap {
             || self.engine_pid == 0
             || !is_hex(&self.agent_epoch)
             || !(MIN_IDLE_GRACE_MS..=MAX_IDLE_GRACE_MS).contains(&self.idle_grace_ms)
+        {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        if let Some(ref mode) = self.wayland_backend
+            && !matches!(mode.as_str(), "auto" | "portal" | "compositor")
         {
             return Err(io::ErrorKind::InvalidData.into());
         }

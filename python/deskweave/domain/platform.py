@@ -217,6 +217,8 @@ def source_errors(value: dict) -> list[str]:
                 for d in topology["displays"]
             ):
                 errors.append("全部显示屏录制缺少完整位置映射")
+        if value["scope"] == "window" and selected != all_ids:
+            errors.append("窗口录制来源未覆盖当时可用显示集合")
         if value["scope"] == "display" and len(selected) != 1:
             errors.append("单屏录制只能选择一个显示区域")
         point = value["initialPointer"]
@@ -435,11 +437,11 @@ def record_start_errors(request: dict, context: dict) -> list[str]:
         errors.append("显示拓扑已变化")
     if context["targetKind"] not in {"desktop", "display", "window"}:
         errors.append("此目标不支持录制")
-    if (
-        context["topology"]["coordinateSpace"] == "displayLocalPixels"
-        and request["coordinateMode"] == "physical"
-    ):
+    is_local = context["topology"]["coordinateSpace"] == "displayLocalPixels"
+    if is_local and request["coordinateMode"] == "physical":
         errors.append("当前拓扑需要屏内像素坐标")
+    if not is_local and request["coordinateMode"] == "display":
+        errors.append("全局物理拓扑不能使用屏内像素坐标模式")
     capabilities = context.get("capabilities")
     if capabilities is not None:
         errors.extend(capability_errors(capabilities))
@@ -453,10 +455,8 @@ def record_start_errors(request: dict, context: dict) -> list[str]:
             required.append("record.allDisplays")
         if any(capabilities["features"][key]["state"] != "available" for key in required):
             errors.append("当前会话缺少此范围的录制能力")
-        if (
-            request["coordinateMode"] == "display"
-            and "1.1" not in capabilities["trajectoryVersions"]
-        ):
+        requires_v11 = is_local or request["coordinateMode"] == "display"
+        if requires_v11 and "1.1" not in capabilities["trajectoryVersions"]:
             errors.append("当前后端未协商屏内坐标轨迹版本")
     return errors
 

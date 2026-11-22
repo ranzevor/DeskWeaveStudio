@@ -60,6 +60,52 @@ def _is_local_x11_display(value: str) -> bool:
     return int(num) <= 0xFFFFFFFF
 
 
+def _check_wayland_backend(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise ValueError("Wayland 后端选择无效。")
+    normalized = value.strip().lower()
+    if normalized not in {"auto", "portal", "compositor"}:
+        raise ValueError("Wayland 后端选择必须为 auto、portal 或 compositor。")
+    return normalized
+
+
+def _is_safe_socket_spec(value: str) -> bool:
+    return (
+        1 <= len(value) <= 255
+        and "\x00" not in value
+        and value not in {".", ".."}
+        and (
+            (value.startswith("/") and ".." not in value.split("/") and "\\" not in value)
+            or ("/" not in value and "\\" not in value)
+        )
+    )
+
+
+def _is_safe_dbus_unix_address(value: str) -> bool:
+    if (
+        not 1 <= len(value) <= 4096
+        or "\x00" in value
+        or ";" in value
+        or not value.startswith("unix:")
+    ):
+        return False
+    rest = value[5:]
+    found_path = False
+    for pair in rest.split(","):
+        key, sep, item = pair.partition("=")
+        if not sep or not key or not item:
+            return False
+        if key == "path":
+            if not item.startswith("/") or "\\" in item or "%" in item or ".." in item.split("/"):
+                return False
+            found_path = True
+        elif not (key.isascii() and key.isalnum() and item.isascii() and item.isprintable()):
+            return False
+    return found_path
+
+
 def _sanitize_linux_session_env(environ) -> dict[str, str]:
     result: dict[str, str] = {}
     session_type = environ.get("XDG_SESSION_TYPE")
@@ -91,18 +137,29 @@ def _sanitize_linux_session_env(environ) -> dict[str, str]:
     ):
         result["XDG_RUNTIME_DIR"] = trimmed
     wayland = environ.get("WAYLAND_DISPLAY")
-    if (
-        type(wayland) is str
-        and (trimmed := wayland.strip())
-        and 1 <= len(trimmed) <= 255
-        and "\x00" not in trimmed
-        and trimmed not in {".", ".."}
-        and (
-            (trimmed.startswith("/") and ".." not in trimmed.split("/") and "\\" not in trimmed)
-            or ("/" not in trimmed and "\\" not in trimmed)
-        )
-    ):
+    if type(wayland) is str and (trimmed := wayland.strip()) and _is_safe_socket_spec(trimmed):
         result["WAYLAND_DISPLAY"] = trimmed
+    compositor_socket = environ.get("DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET")
+    if (
+        type(compositor_socket) is str
+        and (trimmed := compositor_socket.strip())
+        and _is_safe_socket_spec(trimmed)
+    ):
+        result["DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET"] = trimmed
+    wayland_backend = environ.get("DESKWEAVE_WAYLAND_BACKEND")
+    if type(wayland_backend) is str and (trimmed := wayland_backend.strip().lower()) in {
+        "auto",
+        "portal",
+        "compositor",
+    }:
+        result["DESKWEAVE_WAYLAND_BACKEND"] = trimmed
+    dbus_addr = environ.get("DBUS_SESSION_BUS_ADDRESS")
+    if (
+        type(dbus_addr) is str
+        and (trimmed := dbus_addr.strip())
+        and _is_safe_dbus_unix_address(trimmed)
+    ):
+        result["DBUS_SESSION_BUS_ADDRESS"] = trimmed
     display = environ.get("DISPLAY")
     if type(display) is str and "\x00" not in display and _is_local_x11_display(display):
         result["DISPLAY"] = display.strip()
@@ -458,11 +515,13 @@ class AgentProcess(Resource):
         timeout=10,
         cancel=None,
         idle_grace=2.0,
+        wayland_backend: str | None = None,
     ):
         if type(installation) is not Installation or type(authority) is not AgentAuthority:
             raise TypeError("启动 Desktop Agent 需要受信安装清单和启动授权方。")
         _check_workspace_id(workspace_id)
         check_idle(idle_grace)
+        self.wayland_backend = _check_wayland_backend(wayland_backend)
         self.local = local
         self.installation = installation
         self.authority = authority
@@ -726,17 +785,17 @@ class AgentProcess(Resource):
             ):
                 raise rejected()
             self.local.check(budget.check_time)
-            write_frame(
-                process.stdin,
-                {
-                    "version": 1,
-                    "enginePid": engine.process_id,
-                    "agentEpoch": self.epoch,
-                    "address": self._listener.address,
-                    "secret": list(secret),
-                    "idleGraceMs": round(self.idle_grace * 1000),
-                },
-            )
+            bootstrap = {
+                "version": 1,
+                "enginePid": engine.process_id,
+                "agentEpoch": self.epoch,
+                "address": self._listener.address,
+                "secret": list(secret),
+                "idleGraceMs": round(self.idle_grace * 1000),
+            }
+            if self.wayland_backend is not None:
+                bootstrap["waylandBackend"] = self.wayland_backend
+            write_frame(process.stdin, bootstrap)
         self._initialize_resource(
             "_channel",
             self._listener.accept,
@@ -1039,8 +1098,10 @@ def start_agent(
     timeout=10,
     cancel=None,
     idle_grace=2.0,
+    wayland_backend=None,
 ):
     check_idle(idle_grace)
+    checked_wayland = _check_wayland_backend(wayland_backend)
     budget = Budget(timeout, Cancellation(cancel, engine._desktop_stopping))
     budget.acquire(engine._desktop_lock)
     try:
@@ -1051,6 +1112,7 @@ def start_agent(
                     current.local is not local
                     or current.installation != installation
                     or current.authority is not authority
+                    or current.wayland_backend != checked_wayland
                 ):
                     raise rejected()
                 current.probe(timeout=remaining(budget), cancel=budget.cancel)
@@ -1066,6 +1128,7 @@ def start_agent(
                 timeout=remaining(budget),
                 cancel=budget.cancel,
                 idle_grace=idle_grace,
+                wayland_backend=checked_wayland,
             )
         except InitializationError as error:
             if type(error.resource) is AgentProcess:

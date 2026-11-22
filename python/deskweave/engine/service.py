@@ -267,7 +267,15 @@ class Engine:
             return True
 
     def start_desktop_agent(
-        self, local, installation, authority, *, timeout=10, cancel=None, idle_grace=2.0
+        self,
+        local,
+        installation,
+        authority,
+        *,
+        timeout=10,
+        cancel=None,
+        idle_grace=2.0,
+        wayland_backend=None,
     ):
         from deskweave.agent import start_agent
 
@@ -279,6 +287,7 @@ class Engine:
             timeout=timeout,
             cancel=cancel,
             idle_grace=idle_grace,
+            wayland_backend=wayland_backend,
         )
 
     def close(self) -> None:
@@ -937,12 +946,21 @@ class Engine:
     def _query_desktop_capabilities(
         self, deadline: float, authorize: Callable[[], None]
     ) -> dict | None:
-        authorize()
-        if self._desktop_stopping.is_set():
-            raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
-        if deadline - self.monotonic() <= 0:
-            raise DeskWeaveError("DEADLINE_EXCEEDED", "请求已超过截止时间。")
-        with self._desktop_lock:
+        acquired = False
+        while not acquired:
+            authorize()
+            if self._desktop_stopping.is_set():
+                raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
+            left = deadline - self.monotonic()
+            if left <= 0:
+                raise DeskWeaveError("DEADLINE_EXCEEDED", "请求已超过截止时间。")
+            acquired = self._desktop_lock.acquire(timeout=min(left, 0.05))
+        try:
+            authorize()
+            if self._desktop_stopping.is_set():
+                raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
+            if deadline - self.monotonic() <= 0:
+                raise DeskWeaveError("DEADLINE_EXCEEDED", "请求已超过截止时间。")
             desktop_agent = (
                 self._desktop_agent
                 if self._desktop_agent is not None and self._desktop_agent.running
@@ -950,8 +968,6 @@ class Engine:
             )
             if desktop_agent is None:
                 return None
-            if self._desktop_stopping.is_set():
-                raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
             future = self._desktop_caps_future
             if future is None or self._desktop_caps_agent is not desktop_agent:
                 future = Future()
@@ -968,6 +984,8 @@ class Engine:
                     self._desktop_caps_future = None
                     self._desktop_caps_agent = None
                     raise
+        finally:
+            self._desktop_lock.release()
         while True:
             authorize()
             if self._desktop_stopping.is_set():

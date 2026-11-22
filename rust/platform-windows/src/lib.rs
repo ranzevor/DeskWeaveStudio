@@ -1,40 +1,44 @@
+use std::sync::Mutex;
+
 use deskweave_platform_api::{
     BackendKind, CapabilitySnapshot, CaptureSource, CredentialStore, DesktopSession,
     DisplayTopology, EmergencyControl, FeatureSet, FeatureStatus, InputClock, InputEmitter,
-    InputRecorder, PlatformArch, PlatformError, PlatformOs, TargetBinding, TopologyCoverage,
-    TrajectoryVersion, UnimplementedPorts,
+    InputRecorder, MAX_SAFE_INT, PlatformArch, PlatformError, PlatformOs, TargetBinding,
+    TopologyCoverage, TrajectoryVersion, UnimplementedPorts,
 };
 
 pub const BACKEND_VERSION: &str = "0.1.0";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowsSessionFacts {
     pub interactive_session: bool,
+    pub desktop_name: Option<String>,
 }
 
 impl WindowsSessionFacts {
     pub fn probe() -> Self {
         #[cfg(windows)]
         {
-            Self {
-                interactive_session: probe_interactive_window_station(),
-            }
+            probe_windows_session()
         }
         #[cfg(not(windows))]
         {
             Self {
                 interactive_session: false,
+                desktop_name: None,
             }
         }
     }
 }
 
 #[cfg(windows)]
-fn probe_interactive_window_station() -> bool {
+fn probe_windows_session() -> WindowsSessionFacts {
     use std::ffi::c_void;
 
     const UOI_FLAGS: u32 = 1;
+    const UOI_NAME: u32 = 2;
     const WSF_VISIBLE: u32 = 0x0001;
+    const DESKTOP_READOBJECTS: u32 = 0x0001;
 
     #[repr(C)]
     struct UserObjectFlags {
@@ -46,6 +50,8 @@ fn probe_interactive_window_station() -> bool {
     #[link(name = "user32")]
     unsafe extern "system" {
         fn GetProcessWindowStation() -> *mut c_void;
+        fn OpenInputDesktop(flags: u32, inherit: i32, desired_access: u32) -> *mut c_void;
+        fn CloseDesktop(desktop: *mut c_void) -> i32;
         fn GetUserObjectInformationW(
             obj: *mut c_void,
             index: u32,
@@ -57,30 +63,77 @@ fn probe_interactive_window_station() -> bool {
 
     // Read-only query on the current process window station; never closes the returned handle.
     let winsta = unsafe { GetProcessWindowStation() };
-    if winsta.is_null() {
-        return false;
-    }
-    let mut flags = UserObjectFlags {
-        inherit: 0,
-        reserved: 0,
-        flags: 0,
+    let winsta_visible = if winsta.is_null() {
+        false
+    } else {
+        let mut flags = UserObjectFlags {
+            inherit: 0,
+            reserved: 0,
+            flags: 0,
+        };
+        let mut needed = 0_u32;
+        let ok = unsafe {
+            GetUserObjectInformationW(
+                winsta,
+                UOI_FLAGS,
+                (&raw mut flags).cast(),
+                size_of::<UserObjectFlags>() as u32,
+                &raw mut needed,
+            )
+        };
+        ok != 0 && (flags.flags & WSF_VISIBLE) != 0
     };
+
+    if !winsta_visible {
+        return WindowsSessionFacts {
+            interactive_session: false,
+            desktop_name: None,
+        };
+    }
+
+    // Read-only check of the active input desktop; fails on UAC/Winlogon secure desktop or locked/disconnected sessions.
+    let desktop = unsafe { OpenInputDesktop(0, 0, DESKTOP_READOBJECTS) };
+    if desktop.is_null() {
+        return WindowsSessionFacts {
+            interactive_session: false,
+            desktop_name: None,
+        };
+    }
+
+    let mut name_buf = [0_u16; 128];
     let mut needed = 0_u32;
     let ok = unsafe {
         GetUserObjectInformationW(
-            winsta,
-            UOI_FLAGS,
-            (&raw mut flags).cast(),
-            size_of::<UserObjectFlags>() as u32,
+            desktop,
+            UOI_NAME,
+            name_buf.as_mut_ptr().cast(),
+            (name_buf.len() * size_of::<u16>()) as u32,
             &raw mut needed,
         )
     };
-    ok != 0 && (flags.flags & WSF_VISIBLE) != 0
+    unsafe {
+        let _ = CloseDesktop(desktop);
+    }
+
+    let desktop_name = if ok != 0 {
+        let len = name_buf
+            .iter()
+            .position(|&ch| ch == 0)
+            .unwrap_or(name_buf.len());
+        Some(String::from_utf16_lossy(&name_buf[..len]))
+    } else {
+        Some(String::new())
+    };
+
+    WindowsSessionFacts {
+        interactive_session: true,
+        desktop_name,
+    }
 }
 
 pub fn build_capabilities(
     arch: PlatformArch,
-    facts: WindowsSessionFacts,
+    facts: &WindowsSessionFacts,
     generation: u64,
 ) -> CapabilitySnapshot {
     let status = if facts.interactive_session {
@@ -101,23 +154,68 @@ pub fn build_capabilities(
     }
 }
 
+struct TrackedWindowsState {
+    last_facts: Option<WindowsSessionFacts>,
+    generation: u64,
+    invalidated: bool,
+}
+
+type WindowsProbeFn = Box<dyn Fn() -> WindowsSessionFacts + Send + Sync>;
+
 pub struct WindowsBackend {
     arch: PlatformArch,
-    facts: WindowsSessionFacts,
+    probe: WindowsProbeFn,
+    state: Mutex<TrackedWindowsState>,
     ports: UnimplementedPorts,
 }
 
 impl WindowsBackend {
     pub fn detect() -> Self {
-        Self::from_facts(PlatformArch::current(), WindowsSessionFacts::probe())
+        Self::with_probe(PlatformArch::current(), WindowsSessionFacts::probe)
+    }
+
+    pub fn with_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> WindowsSessionFacts + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            arch,
+            probe: Box::new(probe),
+            state: Mutex::new(TrackedWindowsState {
+                last_facts: None,
+                generation: 1,
+                invalidated: false,
+            }),
+            ports: UnimplementedPorts::new(PlatformOs::Windows),
+        }
     }
 
     pub fn from_facts(arch: PlatformArch, facts: WindowsSessionFacts) -> Self {
-        Self {
-            arch,
-            facts,
-            ports: UnimplementedPorts::new(PlatformOs::Windows),
+        Self::with_probe(arch, move || facts.clone())
+    }
+
+    /// Marks the current capability snapshot stale so the next observation increments generation.
+    pub fn invalidate(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.invalidated = true;
+    }
+
+    fn refresh(&self) -> (WindowsSessionFacts, u64) {
+        let facts = (self.probe)();
+        let mut state = self.state.lock().unwrap();
+        match &state.last_facts {
+            None => {
+                state.last_facts = Some(facts.clone());
+                state.invalidated = false;
+            }
+            Some(prev) if *prev != facts || state.invalidated => {
+                state.generation = state.generation.saturating_add(1).min(MAX_SAFE_INT);
+                state.last_facts = Some(facts.clone());
+                state.invalidated = false;
+            }
+            Some(_) => {}
         }
+        (facts, state.generation)
     }
 }
 
@@ -139,11 +237,13 @@ impl DesktopSession for WindowsBackend {
     }
 
     fn capabilities(&self) -> CapabilitySnapshot {
-        build_capabilities(self.arch, self.facts, 1)
+        let (facts, generation) = self.refresh();
+        build_capabilities(self.arch, &facts, generation)
     }
 
     fn topology(&self) -> Result<DisplayTopology, PlatformError> {
-        if self.facts.interactive_session {
+        let (facts, _) = self.refresh();
+        if facts.interactive_session {
             Err(PlatformError::capability_not_implemented(
                 "Windows 原生显示拓扑枚举尚未实现。",
             ))
@@ -185,6 +285,8 @@ impl DesktopSession for WindowsBackend {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use deskweave_platform_api::FeatureState;
 
@@ -194,12 +296,14 @@ mod tests {
             PlatformArch::X64,
             WindowsSessionFacts {
                 interactive_session: true,
+                desktop_name: Some("Default".to_owned()),
             },
         );
         let caps = interactive.capabilities();
         caps.validate().unwrap();
         assert_eq!(caps.os, PlatformOs::Windows);
         assert_eq!(caps.backend, BackendKind::WindowsWin32);
+        assert_eq!(caps.generation, 1);
         assert!(
             caps.features
                 .entries()
@@ -215,6 +319,7 @@ mod tests {
             PlatformArch::X64,
             WindowsSessionFacts {
                 interactive_session: false,
+                desktop_name: None,
             },
         );
         let h_caps = headless.capabilities();
@@ -227,6 +332,64 @@ mod tests {
                 .all(|(_, s)| s.state == FeatureState::SessionUnavailable)
         );
         assert_eq!(headless.topology().unwrap_err().code, "SESSION_UNAVAILABLE");
+    }
+
+    #[test]
+    fn windows_backend_refreshes_on_desktop_switch_and_bumps_generation() {
+        let current = Arc::new(Mutex::new(WindowsSessionFacts {
+            interactive_session: true,
+            desktop_name: Some("Default".to_owned()),
+        }));
+        let reader = Arc::clone(&current);
+        let backend =
+            WindowsBackend::with_probe(PlatformArch::X64, move || reader.lock().unwrap().clone());
+
+        let c1 = backend.capabilities();
+        assert_eq!(c1.generation, 1);
+        assert_eq!(
+            c1.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+        // Stable state keeps generation unchanged.
+        assert_eq!(backend.capabilities().generation, 1);
+
+        // Switching to a secure/locked desktop makes session unavailable and bumps generation.
+        *current.lock().unwrap() = WindowsSessionFacts {
+            interactive_session: false,
+            desktop_name: None,
+        };
+        let c2 = backend.capabilities();
+        c2.validate().unwrap();
+        assert_eq!(c2.generation, 2);
+        assert_eq!(
+            c2.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+        assert_eq!(backend.topology().unwrap_err().code, "SESSION_UNAVAILABLE");
+
+        // Returning to interactive desktop restores unimplemented state and bumps generation again.
+        *current.lock().unwrap() = WindowsSessionFacts {
+            interactive_session: true,
+            desktop_name: Some("Default".to_owned()),
+        };
+        let c3 = backend.capabilities();
+        c3.validate().unwrap();
+        assert_eq!(c3.generation, 3);
+        assert_eq!(
+            c3.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+
+        // Switching between distinct interactive desktops bumps generation even when interactive stays true.
+        *current.lock().unwrap() = WindowsSessionFacts {
+            interactive_session: true,
+            desktop_name: Some("DeskWeaveAlt".to_owned()),
+        };
+        assert_eq!(backend.capabilities().generation, 4);
+
+        // Explicit invalidation bumps generation on next read.
+        backend.invalidate();
+        assert_eq!(backend.capabilities().generation, 5);
     }
 
     #[cfg(windows)]
