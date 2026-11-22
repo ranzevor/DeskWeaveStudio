@@ -341,6 +341,34 @@ class NativeCase(unittest.TestCase):
                     self.error("AUTHENTICATION_FAILED", process.snapshot)
             self.assertEqual(process.snapshot(), process.initial)
 
+    @unittest.skipUnless(sys.platform == "linux", "Linux process snapshots")
+    def test_linux_initial_snapshot_waits_for_exec_image_completion(self):
+        from deskweave.transport.native import _linux
+
+        executable = current_executable()
+        incomplete = ("1000", "audit:1000:1", "boot:1", executable, ("0", "0", "14073", "0", "0"))
+        complete = (
+            "1000",
+            "audit:1000:1",
+            "boot:1",
+            executable,
+            ("9400", "9500", "14072", "14071", "14072"),
+        )
+        with (
+            patch.object(
+                _linux.Process, "snapshot", side_effect=[incomplete, incomplete, complete]
+            ),
+            _linux.Process(os.getpid()) as process,
+        ):
+            self.assertEqual(process.initial, complete)
+
+        ticks = iter((10.0, 10.6))
+        with (
+            patch.object(_linux.Process, "snapshot", return_value=incomplete),
+            patch.object(_linux.time, "monotonic", side_effect=lambda: next(ticks)),
+        ):
+            self.error("AUTHENTICATION_FAILED", lambda: _linux.Process(os.getpid()))
+
     @unittest.skipUnless(sys.platform == "win32", "Windows process snapshots")
     def test_process_exit_during_windows_snapshot_rejects_identity(self):
         import ctypes

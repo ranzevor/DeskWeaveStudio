@@ -6,6 +6,7 @@ import select
 import socket
 import struct
 import threading
+import time
 from pathlib import Path
 
 from ._common import Resource, rejected
@@ -35,10 +36,19 @@ class Process(Resource):
         self._lock = threading.RLock()
         self._fd = os.pidfd_open(pid)
         try:
-            self.initial = self.snapshot()
+            self.initial = self._initial_snapshot()
         except BaseException as error:
             self._abort_initialization(error)
             raise
+
+    def _initial_snapshot(self):
+        deadline = time.monotonic() + 0.5
+        while True:
+            snapshot = self.snapshot()
+            if "0" not in snapshot[4]:
+                return snapshot
+            if time.monotonic() >= deadline or select.select([self._fd], [], [], 0.001)[0]:
+                raise rejected()
 
     def snapshot(self):
         with self._lock:
