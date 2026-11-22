@@ -253,6 +253,39 @@ class PlatformContractTests(unittest.TestCase):
         x11_clean = agent._sanitize_linux_session_env({"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"})
         self.assertEqual(x11_clean, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"})
 
+        # Valid multi-address D-Bus lists preserve safe unix:path entries in order.
+        multi_dbus = agent._sanitize_linux_session_env(
+            {
+                "DBUS_SESSION_BUS_ADDRESS": (
+                    "unix:path=/run/user/1000/a;unix:path=/run/user/1000/b,guid=1234"
+                )
+            }
+        )
+        self.assertEqual(
+            multi_dbus,
+            {
+                "DBUS_SESSION_BUS_ADDRESS": (
+                    "unix:path=/run/user/1000/a;unix:path=/run/user/1000/b,guid=1234"
+                )
+            },
+        )
+        mixed_multi = agent._sanitize_linux_session_env(
+            {
+                "DBUS_SESSION_BUS_ADDRESS": (
+                    "unix:abstract=/tmp/dbus-1;unix:path=/run/user/1000/fallback"
+                )
+            }
+        )
+        self.assertEqual(
+            mixed_multi,
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/fallback"},
+        )
+
+        # Unset or empty DBUS_SESSION_BUS_ADDRESS remains unset (allows $XDG_RUNTIME_DIR/bus).
+        self.assertEqual(agent._sanitize_linux_session_env({"DBUS_SESSION_BUS_ADDRESS": ""}), {})
+
+        # Explicit unsupported or unsafe DBUS_SESSION_BUS_ADDRESS preserves explicit-set state
+        # via an inert sentinel so the agent never silently falls back to $XDG_RUNTIME_DIR/bus.
         dirty = agent._sanitize_linux_session_env(
             {
                 "XDG_SESSION_TYPE": "wayland;id",
@@ -265,7 +298,7 @@ class PlatformContractTests(unittest.TestCase):
                 "DISPLAY": "127.0.0.1:0",
             }
         )
-        self.assertEqual(dirty, {})
+        self.assertEqual(dirty, {"DBUS_SESSION_BUS_ADDRESS": "unsupported:"})
 
         dirty_screen = agent._sanitize_linux_session_env(
             {
@@ -275,17 +308,21 @@ class PlatformContractTests(unittest.TestCase):
                 "DISPLAY": ":0.garbage",
             }
         )
-        self.assertEqual(dirty_screen, {})
+        self.assertEqual(dirty_screen, {"DBUS_SESSION_BUS_ADDRESS": "unsupported:"})
 
-        dirty_dbus = agent._sanitize_linux_session_env(
-            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/a,path=/run/user/1000/b"}
-        )
-        self.assertEqual(dirty_dbus, {})
-
-        dirty_dbus_ctrl = agent._sanitize_linux_session_env(
-            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/\x07bus"}
-        )
-        self.assertEqual(dirty_dbus_ctrl, {})
+        for explicit_unsupported in (
+            "unix:abstract=/tmp/dbus-abc",
+            "unix:abstract=/tmp/a;tcp:host=127.0.0.1,port=1234",
+            "unix:path=/run/user/1000/a,path=/run/user/1000/b",
+            "unix:path=/run/user/1000/\x07bus",
+            "unix:path=/run/user/1000/good;unix:path=/run/../evil",
+            "   ",
+        ):
+            with self.subTest(dbus=explicit_unsupported):
+                sanitized = agent._sanitize_linux_session_env(
+                    {"DBUS_SESSION_BUS_ADDRESS": explicit_unsupported}
+                )
+                self.assertEqual(sanitized, {"DBUS_SESSION_BUS_ADDRESS": "unsupported:"})
 
     def test_record_start_bidirectional_topology_mode_v11_window_source_and_float_rotation(self):
         # 1. Float integer rotation (90.0) accepted, fractional (90.5) rejected.
@@ -914,6 +951,19 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 sock.listen(1)
                 return sock
 
+            def _atomic_replace_unix(target: Path, old_sock: socket.socket) -> socket.socket:
+                staged = target.parent / f".{target.name}.new-{secrets.token_hex(4)}"
+                new_sock = _bind_unix(staged)
+                try:
+                    os.replace(staged, target)
+                except Exception:
+                    new_sock.close()
+                    if staged.exists():
+                        staged.unlink()
+                    raise
+                old_sock.close()
+                return new_sock
+
             @contextmanager
             def _patched_session_env(overrides: dict[str, str]):
                 with patch.dict(os.environ, {}, clear=False):
@@ -937,7 +987,8 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 "WAYLAND_DISPLAY": wayland_path.name,
             }
 
-            # Case 1: Wayland Compositor selection + socket loss/recovery increments generation.
+            # Case 1: Wayland Compositor selection + atomic same-path socket replacement (never
+            # observed absent) + socket loss/recovery increments generation.
             wl_sock = _bind_unix(wayland_path)
             wl_rebound = None
             engine_comp = Engine(Workspace(self.root / "ws-comp", create=True))
@@ -957,11 +1008,22 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 self.assertEqual(c1["generation"], 1)
                 self.assertEqual(c1["features"]["record.allDisplays"]["state"], "unimplemented")
 
+                # Atomic same-path replacement: target stays present continuously, yet generation
+                # must bump because the socket endpoint identity changed.
+                wl_sock = _atomic_replace_unix(wayland_path, wl_sock)
+                c_replaced = proc_handle.desktop_capabilities()
+                self.assertEqual(c_replaced["backend"], "linux-wayland-compositor")
+                self.assertEqual(c_replaced["generation"], 2)
+                self.assertEqual(
+                    c_replaced["features"]["record.allDisplays"]["state"], "unimplemented"
+                )
+                self.assertEqual(proc_handle.desktop_capabilities()["generation"], 2)
+
                 # Simulate compositor crash/restart by removing live Wayland socket.
                 wl_sock.close()
                 wayland_path.unlink()
                 c2 = proc_handle.desktop_capabilities()
-                self.assertEqual(c2["generation"], 2)
+                self.assertEqual(c2["generation"], 3)
                 self.assertEqual(
                     c2["features"]["record.allDisplays"]["state"], "sessionUnavailable"
                 )
@@ -970,7 +1032,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 wl_rebound = _bind_unix(wayland_path)
                 c3 = proc_handle.desktop_capabilities()
                 self.assertEqual(c3["backend"], "linux-wayland-compositor")
-                self.assertEqual(c3["generation"], 3)
+                self.assertEqual(c3["generation"], 4)
                 self.assertEqual(c3["features"]["record.allDisplays"]["state"], "unimplemented")
             finally:
                 engine_comp.close()
@@ -982,8 +1044,8 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 if wayland_path.exists():
                     wayland_path.unlink()
 
-            # Case 2: Explicit DBUS_SESSION_BUS_ADDRESS closes even while $XDG_RUNTIME_DIR/bus stays
-            # alive -> Portal capabilities must degrade and generation must bump.
+            # Case 2: Explicit DBUS_SESSION_BUS_ADDRESS atomic replacement + close while
+            # $XDG_RUNTIME_DIR/bus stays alive -> never falls back to runtime bus.
             with _bind_unix(runtime_bus_path):
                 wl_sock2 = _bind_unix(wayland_path)
                 custom_bus_sock = _bind_unix(custom_bus_path)
@@ -1010,12 +1072,22 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     self.assertEqual(p1["features"]["record.allDisplays"]["state"], "unsupported")
                     self.assertEqual(p1["features"]["input.keyboard"]["state"], "unimplemented")
 
+                    # Atomic same-path replacement of custom D-Bus socket -> generation bumps to 2
+                    # without any intermediate absence.
+                    custom_bus_sock = _atomic_replace_unix(custom_bus_path, custom_bus_sock)
+                    p_replaced = proc_handle.desktop_capabilities()
+                    self.assertEqual(p_replaced["backend"], "linux-wayland-portal")
+                    self.assertEqual(p_replaced["generation"], 2)
+                    self.assertEqual(
+                        p_replaced["features"]["input.keyboard"]["state"], "unimplemented"
+                    )
+
                     # Close ONLY the explicit custom session bus; default runtime bus stays alive.
                     custom_bus_sock.close()
                     custom_bus_path.unlink()
                     p2 = proc_handle.desktop_capabilities()
                     self.assertEqual(p2["backend"], "linux-wayland-portal")
-                    self.assertEqual(p2["generation"], 2)
+                    self.assertEqual(p2["generation"], 3)
                     self.assertEqual(p2["features"]["record.allDisplays"]["state"], "unsupported")
                     self.assertEqual(
                         p2["features"]["input.keyboard"]["state"], "sessionUnavailable"
@@ -1031,8 +1103,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     if custom_bus_path.exists():
                         custom_bus_path.unlink()
 
-                # Case 3: Auto mode switches between compositor and portal as compositor socket
-                # toggles (with DBUS_SESSION_BUS_ADDRESS unset, using $XDG_RUNTIME_DIR/bus).
+                # Case 3: Auto mode atomic compositor-socket replacement + toggle to Portal.
                 wl_sock3 = _bind_unix(wayland_path)
                 comp_sock = _bind_unix(compositor_sock_path)
                 comp_sock_rebound = None
@@ -1058,12 +1129,21 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     self.assertEqual(a1["generation"], 1)
                     self.assertEqual(a1["features"]["record.allDisplays"]["state"], "unimplemented")
 
+                    # Atomic same-path replacement of compositor integration socket -> gen 2.
+                    comp_sock = _atomic_replace_unix(compositor_sock_path, comp_sock)
+                    a_replaced = proc_handle.desktop_capabilities()
+                    self.assertEqual(a_replaced["backend"], "linux-wayland-compositor")
+                    self.assertEqual(a_replaced["generation"], 2)
+                    self.assertEqual(
+                        a_replaced["features"]["record.allDisplays"]["state"], "unimplemented"
+                    )
+
                     # Removing compositor socket falls back to active Portal via runtime bus.
                     comp_sock.close()
                     compositor_sock_path.unlink()
                     a2 = proc_handle.desktop_capabilities()
                     self.assertEqual(a2["backend"], "linux-wayland-portal")
-                    self.assertEqual(a2["generation"], 2)
+                    self.assertEqual(a2["generation"], 3)
                     self.assertEqual(a2["features"]["record.allDisplays"]["state"], "unsupported")
                     self.assertEqual(a2["features"]["input.keyboard"]["state"], "unimplemented")
 
@@ -1071,7 +1151,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     comp_sock_rebound = _bind_unix(compositor_sock_path)
                     a3 = proc_handle.desktop_capabilities()
                     self.assertEqual(a3["backend"], "linux-wayland-compositor")
-                    self.assertEqual(a3["generation"], 3)
+                    self.assertEqual(a3["generation"], 4)
                     self.assertEqual(a3["features"]["record.allDisplays"]["state"], "unimplemented")
                 finally:
                     engine_auto.close()
@@ -1081,6 +1161,103 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     comp_sock.close()
                     if comp_sock_rebound is not None:
                         comp_sock_rebound.close()
+                    if wayland_path.exists():
+                        wayland_path.unlink()
+                    if compositor_sock_path.exists():
+                        compositor_sock_path.unlink()
+
+                # Case 4: Explicit unsupported / abstract / multi-address D-Bus while
+                # $XDG_RUNTIME_DIR/bus is alive -> must NEVER fall back to runtime bus.
+                for idx, bad_dbus in enumerate(
+                    (
+                        "unix:abstract=/tmp/deskweave-nonexistent-bus",
+                        "unix:abstract=/tmp/dw-abs;tcp:host=127.0.0.1,port=1234",
+                    )
+                ):
+                    wl_sock_abs = _bind_unix(wayland_path)
+                    engine_abs = Engine(Workspace(self.root / f"ws-dbus-abs-{idx}", create=True))
+                    authority_abs = agent.AgentAuthority((self.local,), _SignatureRequest)
+                    proc_abs = None
+                    try:
+                        with _patched_session_env(
+                            {**base_env, "DBUS_SESSION_BUS_ADDRESS": bad_dbus}
+                        ):
+                            proc_handle = engine_abs.start_desktop_agent(
+                                self.local,
+                                self.agent_installation,
+                                authority_abs,
+                                idle_grace=0.2,
+                                wayland_backend="portal",
+                            )
+                        proc_abs = proc_handle._process
+                        caps = proc_handle.desktop_capabilities()
+                        self.assertEqual(caps["backend"], "linux-wayland-portal")
+                        self.assertEqual(
+                            caps["features"]["record.allDisplays"]["state"], "unsupported"
+                        )
+                        self.assertEqual(
+                            caps["features"]["input.keyboard"]["state"], "sessionUnavailable"
+                        )
+                    finally:
+                        engine_abs.close()
+                        if proc_abs is not None:
+                            self.assertEqual(proc_abs.wait(timeout=5), 0)
+                        wl_sock_abs.close()
+                        if wayland_path.exists():
+                            wayland_path.unlink()
+
+                # Case 5: Valid multi-address DBUS_SESSION_BUS_ADDRESS (missing first, live second)
+                # resolves second socket, tracks its replacement, and degrades without falling back
+                # to live $XDG_RUNTIME_DIR/bus when closed.
+                wl_sock_multi = _bind_unix(wayland_path)
+                multi_bus_sock = _bind_unix(custom_bus_path)
+                missing_bus_path = priv_dir / "missing-bus"
+                engine_multi = Engine(Workspace(self.root / "ws-dbus-multi", create=True))
+                authority_multi = agent.AgentAuthority((self.local,), _SignatureRequest)
+                proc_multi = None
+                try:
+                    multi_env = {
+                        **base_env,
+                        "DBUS_SESSION_BUS_ADDRESS": (
+                            f"unix:path={missing_bus_path};unix:path={custom_bus_path}"
+                        ),
+                    }
+                    with _patched_session_env(multi_env):
+                        proc_handle = engine_multi.start_desktop_agent(
+                            self.local,
+                            self.agent_installation,
+                            authority_multi,
+                            idle_grace=0.2,
+                            wayland_backend="portal",
+                        )
+                    proc_multi = proc_handle._process
+                    m1 = proc_handle.desktop_capabilities()
+                    self.assertEqual(m1["backend"], "linux-wayland-portal")
+                    self.assertEqual(m1["generation"], 1)
+                    self.assertEqual(m1["features"]["input.keyboard"]["state"], "unimplemented")
+
+                    multi_bus_sock = _atomic_replace_unix(custom_bus_path, multi_bus_sock)
+                    m2 = proc_handle.desktop_capabilities()
+                    self.assertEqual(m2["generation"], 2)
+                    self.assertEqual(m2["features"]["input.keyboard"]["state"], "unimplemented")
+
+                    multi_bus_sock.close()
+                    custom_bus_path.unlink()
+                    m3 = proc_handle.desktop_capabilities()
+                    self.assertEqual(m3["generation"], 3)
+                    self.assertEqual(
+                        m3["features"]["input.keyboard"]["state"], "sessionUnavailable"
+                    )
+                finally:
+                    engine_multi.close()
+                    if proc_multi is not None:
+                        self.assertEqual(proc_multi.wait(timeout=5), 0)
+                    wl_sock_multi.close()
+                    multi_bus_sock.close()
+                    if wayland_path.exists():
+                        wayland_path.unlink()
+                    if custom_bus_path.exists():
+                        custom_bus_path.unlink()
 
 
 if __name__ == "__main__":

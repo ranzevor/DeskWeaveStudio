@@ -83,15 +83,15 @@ def _is_safe_socket_spec(value: str) -> bool:
     )
 
 
-def _is_safe_dbus_unix_address(value: str) -> bool:
-    if (
-        not 1 <= len(value) <= 4096
-        or "\x00" in value
-        or ";" in value
-        or not value.startswith("unix:")
-    ):
+_UNSUPPORTED_DBUS_ADDRESS = "unsupported:"
+
+
+def _is_safe_dbus_unix_entry(entry: str) -> bool:
+    if not entry.startswith("unix:"):
         return False
-    rest = value[5:]
+    rest = entry[5:]
+    if not rest:
+        return False
     found_path = False
     for pair in rest.split(","):
         key, sep, item = pair.partition("=")
@@ -111,6 +111,67 @@ def _is_safe_dbus_unix_address(value: str) -> bool:
         elif not (key.isascii() and key.isalnum() and item.isascii() and item.isprintable()):
             return False
     return found_path
+
+
+def _is_well_formed_dbus_entry(entry: str) -> bool:
+    transport, sep, rest = entry.partition(":")
+    if (
+        not sep
+        or not 1 <= len(transport) <= 32
+        or not transport.isascii()
+        or not all(ch.isalnum() or ch in "+-" for ch in transport)
+        or not rest
+    ):
+        return False
+    for pair in rest.split(","):
+        key, eq, item = pair.partition("=")
+        if (
+            not eq
+            or not key
+            or not item
+            or not key.isascii()
+            or not all(ch.isalnum() or ch in "_-" for ch in key)
+            or "\\" in item
+        ):
+            return False
+        if transport == "unix" and key == "path":
+            if (
+                not item.startswith("/")
+                or not item.isprintable()
+                or "%" in item
+                or ".." in item.split("/")
+            ):
+                return False
+        elif not (item.isascii() and item.isprintable()):
+            return False
+    return True
+
+
+def _sanitize_dbus_session_bus_address(value: str) -> str:
+    """Sanitizes an explicitly configured DBUS_SESSION_BUS_ADDRESS without dropping it.
+
+    Preserves safe `unix:path=...` entries (including valid `;`-separated multi-address lists)
+    and replaces unsupported or malformed explicit addresses (such as `unix:abstract=...`,
+    `tcp:...`, or unsafe paths) with an inert sentinel so the agent never silently falls back
+    to `$XDG_RUNTIME_DIR/bus` as if `DBUS_SESSION_BUS_ADDRESS` had been unset.
+    """
+    if not 1 <= len(value) <= 4096 or "\x00" in value:
+        return _UNSUPPORTED_DBUS_ADDRESS
+    entries = [part.strip() for part in value.split(";")]
+    if not entries or len(entries) > 16 or any(not part for part in entries):
+        return _UNSUPPORTED_DBUS_ADDRESS
+    safe_unix_entries: list[str] = []
+    for entry in entries:
+        if not _is_well_formed_dbus_entry(entry):
+            return _UNSUPPORTED_DBUS_ADDRESS
+        if entry.startswith("unix:"):
+            if _is_safe_dbus_unix_entry(entry):
+                safe_unix_entries.append(entry)
+            elif any(pair.partition("=")[0] == "path" for pair in entry[5:].split(",")):
+                return _UNSUPPORTED_DBUS_ADDRESS
+    if not safe_unix_entries:
+        return _UNSUPPORTED_DBUS_ADDRESS
+    return ";".join(safe_unix_entries)
 
 
 def _sanitize_linux_session_env(environ) -> dict[str, str]:
@@ -161,12 +222,8 @@ def _sanitize_linux_session_env(environ) -> dict[str, str]:
     }:
         result["DESKWEAVE_WAYLAND_BACKEND"] = trimmed
     dbus_addr = environ.get("DBUS_SESSION_BUS_ADDRESS")
-    if (
-        type(dbus_addr) is str
-        and (trimmed := dbus_addr.strip())
-        and _is_safe_dbus_unix_address(trimmed)
-    ):
-        result["DBUS_SESSION_BUS_ADDRESS"] = trimmed
+    if type(dbus_addr) is str and dbus_addr != "":
+        result["DBUS_SESSION_BUS_ADDRESS"] = _sanitize_dbus_session_bus_address(dbus_addr.strip())
     display = environ.get("DISPLAY")
     if type(display) is str and "\x00" not in display and _is_local_x11_display(display):
         result["DISPLAY"] = display.strip()

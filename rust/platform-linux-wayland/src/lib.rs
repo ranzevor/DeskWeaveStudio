@@ -40,6 +40,15 @@ impl WaylandBackendMode {
     }
 }
 
+/// Stable kernel identity for a verified local Unix socket endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SocketEndpointId {
+    pub dev: u64,
+    pub ino: u64,
+    pub ctime: i64,
+    pub ctime_nsec: i64,
+}
+
 /// Read-only facts gathered from Linux login session metadata and real display/portal sockets.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LinuxSessionFacts {
@@ -47,11 +56,15 @@ pub struct LinuxSessionFacts {
     pub xdg_session_type: Option<String>,
     pub wayland_display: Option<String>,
     pub wayland_socket_present: bool,
+    pub wayland_endpoint: Option<SocketEndpointId>,
     pub portal_available: bool,
+    pub portal_endpoint: Option<SocketEndpointId>,
     pub x11_display: Option<String>,
     pub x11_socket_present: bool,
+    pub x11_endpoint: Option<SocketEndpointId>,
     pub wayland_backend_mode: WaylandBackendMode,
     pub compositor_endpoint_present: bool,
+    pub compositor_endpoint: Option<SocketEndpointId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,28 +106,33 @@ pub fn select_linux_session(facts: &LinuxSessionFacts) -> SelectedLinuxBackend {
     let session_type = normalized_type(facts.logind_session_type.as_deref())
         .or_else(|| normalized_type(facts.xdg_session_type.as_deref()));
 
-    let wayland_selected = matches!(session_type, Some("wayland")) || facts.wayland_socket_present;
+    let wayland_active = facts.wayland_socket_present || facts.wayland_endpoint.is_some();
+    let portal_available = facts.portal_available || facts.portal_endpoint.is_some();
+    let compositor_present =
+        facts.compositor_endpoint_present || facts.compositor_endpoint.is_some();
+    let x11_active = facts.x11_socket_present || facts.x11_endpoint.is_some();
+
+    let wayland_selected = matches!(session_type, Some("wayland")) || wayland_active;
     if wayland_selected {
-        let active = facts.wayland_socket_present;
         let use_compositor = match facts.wayland_backend_mode {
             WaylandBackendMode::Compositor => true,
             WaylandBackendMode::Portal => false,
-            WaylandBackendMode::Auto => facts.compositor_endpoint_present,
+            WaylandBackendMode::Auto => compositor_present,
         };
         return if use_compositor {
-            SelectedLinuxBackend::WaylandCompositor { active }
+            SelectedLinuxBackend::WaylandCompositor {
+                active: wayland_active,
+            }
         } else {
             SelectedLinuxBackend::WaylandPortal {
-                active,
-                portal_available: facts.portal_available,
+                active: wayland_active,
+                portal_available,
             }
         };
     }
 
     if matches!(session_type, Some("x11")) {
-        return SelectedLinuxBackend::X11 {
-            active: facts.x11_socket_present,
-        };
+        return SelectedLinuxBackend::X11 { active: x11_active };
     }
 
     SelectedLinuxBackend::Inactive
@@ -148,43 +166,79 @@ pub fn is_safe_relative_wayland_display(display: &str) -> bool {
         && !display.bytes().any(|b| matches!(b, b'/' | b'\\' | 0))
 }
 
-/// Extracts an absolute filesystem Unix socket path from `DBUS_SESSION_BUS_ADDRESS`
-/// (e.g. `unix:path=/run/user/1000/bus,guid=...`). Rejects percent-encoded escapes and non-absolute paths.
-pub fn parse_dbus_unix_socket_path(address: &str) -> Option<&str> {
+/// Extracts all safe absolute filesystem Unix socket paths from `DBUS_SESSION_BUS_ADDRESS`
+/// (e.g. `unix:path=/run/user/1000/bus,guid=...;unix:path=/run/user/1000/bus2`).
+/// Rejects percent-encoded escapes, non-absolute paths, `..` traversal, control characters,
+/// backslashes, and duplicate `path=` keys within a single entry.
+pub fn parse_dbus_unix_socket_paths(address: &str) -> Vec<&str> {
+    let mut paths = Vec::new();
     for entry in address.split(';') {
         let Some(rest) = entry.trim().strip_prefix("unix:") else {
             continue;
         };
+        let mut entry_path: Option<&str> = None;
+        let mut valid_entry = true;
         for pair in rest.split(',') {
-            if let Some(path) = pair.trim().strip_prefix("path=")
-                && path.starts_with('/')
-                && !path.is_empty()
-                && path.len() <= 4096
-                && !path.contains('%')
-                && !path.bytes().any(|b| b == 0)
-            {
-                return Some(path);
+            let trimmed = pair.trim();
+            if let Some(path) = trimmed.strip_prefix("path=") {
+                if entry_path.is_some()
+                    || !path.starts_with('/')
+                    || path.len() > 4096
+                    || path.contains('%')
+                    || path.contains('\\')
+                    || path.split('/').any(|seg| seg == "..")
+                    || path.chars().any(|ch| ch.is_control())
+                {
+                    valid_entry = false;
+                    break;
+                }
+                entry_path = Some(path);
             }
         }
+        if valid_entry && let Some(path) = entry_path {
+            paths.push(path);
+        }
     }
-    None
+    paths
+}
+
+/// Extracts the first safe absolute filesystem Unix socket path from `DBUS_SESSION_BUS_ADDRESS`.
+pub fn parse_dbus_unix_socket_path(address: &str) -> Option<&str> {
+    parse_dbus_unix_socket_paths(address).into_iter().next()
+}
+
+/// Resolves the active D-Bus session bus socket endpoint for Wayland Portal.
+///
+/// Mirrors standard D-Bus client semantics: when `DBUS_SESSION_BUS_ADDRESS` is explicitly set
+/// (any non-empty string, including unsupported addresses or sentinel markers), only safe
+/// `unix:path=...` entries in that explicit address list are probed in order (never silently
+/// falling back to `$XDG_RUNTIME_DIR/bus`); `$XDG_RUNTIME_DIR/bus` is consulted only when
+/// `DBUS_SESSION_BUS_ADDRESS` is unset (`None`).
+pub fn resolve_portal_bus_endpoint<T>(
+    dbus_address: Option<&str>,
+    mut check_explicit_path: impl FnMut(&str) -> Option<T>,
+    check_runtime_bus: impl FnOnce() -> Option<T>,
+) -> Option<T> {
+    match dbus_address {
+        Some(addr) => parse_dbus_unix_socket_paths(addr)
+            .into_iter()
+            .find_map(&mut check_explicit_path),
+        None => check_runtime_bus(),
+    }
 }
 
 /// Resolves whether a D-Bus session bus socket for Wayland Portal is available.
-///
-/// Mirrors standard D-Bus client semantics: when `DBUS_SESSION_BUS_ADDRESS` is explicitly set,
-/// only that address is checked (never silently falling back to `$XDG_RUNTIME_DIR/bus` if the
-/// explicit session bus closes); `$XDG_RUNTIME_DIR/bus` is consulted only when
-/// `DBUS_SESSION_BUS_ADDRESS` is unset.
 pub fn resolve_portal_bus_available(
     dbus_address: Option<&str>,
-    check_explicit_path: impl FnOnce(&str) -> bool,
+    mut check_explicit_path: impl FnMut(&str) -> bool,
     check_runtime_bus: impl FnOnce() -> bool,
 ) -> bool {
-    match dbus_address {
-        Some(addr) => parse_dbus_unix_socket_path(addr).is_some_and(check_explicit_path),
-        None => check_runtime_bus(),
-    }
+    resolve_portal_bus_endpoint(
+        dbus_address,
+        |path| check_explicit_path(path).then_some(()),
+        || check_runtime_bus().then_some(()),
+    )
+    .is_some()
 }
 
 #[cfg(target_os = "linux")]
@@ -211,13 +265,17 @@ fn is_private_owned_dir(path: &std::path::Path, expected_uid: u32) -> bool {
 }
 
 #[cfg(target_os = "linux")]
-fn verify_wayland_socket(display: &str, runtime_dir: Option<&str>, expected_uid: u32) -> bool {
+fn verify_wayland_socket(
+    display: &str,
+    runtime_dir: Option<&str>,
+    expected_uid: u32,
+) -> Option<SocketEndpointId> {
     use std::fs;
     use std::os::unix::fs::{FileTypeExt, MetadataExt};
     use std::path::{Component, Path, PathBuf};
 
     if display.is_empty() || display.bytes().any(|b| b == 0) {
-        return false;
+        return None;
     }
     let path = if Path::new(display).is_absolute() {
         let candidate = PathBuf::from(display);
@@ -225,35 +283,37 @@ fn verify_wayland_socket(display: &str, runtime_dir: Option<&str>, expected_uid:
             .components()
             .any(|c| matches!(c, Component::ParentDir))
         {
-            return false;
+            return None;
         }
-        let Some(parent) = candidate.parent() else {
-            return false;
-        };
+        let parent = candidate.parent()?;
         if !is_private_owned_dir(parent, expected_uid) {
-            return false;
+            return None;
         }
         candidate
     } else {
         if !is_safe_relative_wayland_display(display) {
-            return false;
+            return None;
         }
-        let Some(runtime) = runtime_dir else {
-            return false;
-        };
+        let runtime = runtime_dir?;
         let runtime_path = Path::new(runtime);
         if !is_private_owned_dir(runtime_path, expected_uid) {
-            return false;
+            return None;
         }
         runtime_path.join(display)
     };
     fs::symlink_metadata(path)
-        .map(|meta| {
+        .ok()
+        .filter(|meta| {
             meta.file_type().is_socket()
                 && !meta.file_type().is_symlink()
                 && meta.uid() == expected_uid
         })
-        .unwrap_or(false)
+        .map(|meta| SocketEndpointId {
+            dev: meta.dev(),
+            ino: meta.ino(),
+            ctime: meta.ctime(),
+            ctime_nsec: meta.ctime_nsec(),
+        })
 }
 
 #[cfg(target_os = "linux")]
@@ -297,15 +357,19 @@ pub fn probe_linux_session_facts_with_mode(
     let xdg_session_type = read_env("XDG_SESSION_TYPE").map(|v| v.to_ascii_lowercase());
     let wayland_display = read_env("WAYLAND_DISPLAY");
     let xdg_runtime_dir = read_env("XDG_RUNTIME_DIR");
-    let wayland_socket_present = current_euid.is_some_and(|euid| {
+    let wayland_endpoint = current_euid.and_then(|euid| {
         wayland_display
             .as_deref()
-            .is_some_and(|disp| verify_wayland_socket(disp, xdg_runtime_dir.as_deref(), euid))
+            .and_then(|disp| verify_wayland_socket(disp, xdg_runtime_dir.as_deref(), euid))
     });
 
-    let dbus_address = read_env("DBUS_SESSION_BUS_ADDRESS");
-    let portal_available = current_euid.is_some_and(|euid| {
-        resolve_portal_bus_available(
+    // Preserve any non-empty DBUS_SESSION_BUS_ADDRESS verbatim (including whitespace-only or
+    // sentinel values) so explicit configuration never silently falls back to $XDG_RUNTIME_DIR/bus.
+    let dbus_address = env::var("DBUS_SESSION_BUS_ADDRESS")
+        .ok()
+        .filter(|v| !v.is_empty());
+    let portal_endpoint = current_euid.and_then(|euid| {
+        resolve_portal_bus_endpoint(
             dbus_address.as_deref(),
             |path| verify_wayland_socket(path, None, euid),
             || verify_wayland_socket("bus", xdg_runtime_dir.as_deref(), euid),
@@ -313,16 +377,22 @@ pub fn probe_linux_session_facts_with_mode(
     });
 
     let compositor_socket = read_env("DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET");
-    let compositor_endpoint_present = current_euid.is_some_and(|euid| {
+    let compositor_endpoint = current_euid.and_then(|euid| {
         compositor_socket
             .as_deref()
-            .is_some_and(|sock| verify_wayland_socket(sock, xdg_runtime_dir.as_deref(), euid))
+            .and_then(|sock| verify_wayland_socket(sock, xdg_runtime_dir.as_deref(), euid))
     });
 
     let x11_display = read_env("DISPLAY");
-    let x11_socket_present = x11_display
+    let x11_endpoint = x11_display
         .as_deref()
-        .is_some_and(deskweave_platform_linux_x11::x11_socket_exists);
+        .and_then(deskweave_platform_linux_x11::x11_socket_identity)
+        .map(|id| SocketEndpointId {
+            dev: id.dev,
+            ino: id.ino,
+            ctime: id.ctime,
+            ctime_nsec: id.ctime_nsec,
+        });
 
     let wayland_backend_mode = override_mode.unwrap_or_else(WaylandBackendMode::from_env);
 
@@ -330,12 +400,16 @@ pub fn probe_linux_session_facts_with_mode(
         logind_session_type,
         xdg_session_type,
         wayland_display,
-        wayland_socket_present,
-        portal_available,
+        wayland_socket_present: wayland_endpoint.is_some(),
+        wayland_endpoint,
+        portal_available: portal_endpoint.is_some(),
+        portal_endpoint,
         x11_display,
-        x11_socket_present,
+        x11_socket_present: x11_endpoint.is_some(),
+        x11_endpoint,
         wayland_backend_mode,
-        compositor_endpoint_present,
+        compositor_endpoint_present: compositor_endpoint.is_some(),
+        compositor_endpoint,
     }
 }
 
@@ -423,13 +497,21 @@ pub fn build_compositor_capabilities(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ObservedPortalState {
+    session_active: bool,
+    portal_available: bool,
+    wayland_endpoint: Option<SocketEndpointId>,
+    portal_endpoint: Option<SocketEndpointId>,
+}
+
 struct TrackedPortalState {
-    last_state: Option<(bool, bool)>,
+    last_state: Option<ObservedPortalState>,
     generation: u64,
     invalidated: bool,
 }
 
-type PortalProbeFn = Box<dyn Fn() -> (bool, bool) + Send + Sync>;
+type PortalProbeFn = Box<dyn Fn() -> ObservedPortalState + Send + Sync>;
 
 pub struct LinuxWaylandPortalBackend {
     arch: PlatformArch,
@@ -446,6 +528,36 @@ impl LinuxWaylandPortalBackend {
     pub fn with_probe(
         arch: PlatformArch,
         probe: impl Fn() -> (bool, bool) + Send + Sync + 'static,
+    ) -> Self {
+        Self::from_observed_probe(arch, move || {
+            let (session_active, portal_available) = probe();
+            ObservedPortalState {
+                session_active,
+                portal_available,
+                wayland_endpoint: None,
+                portal_endpoint: None,
+            }
+        })
+    }
+
+    pub fn with_endpoint_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> (Option<SocketEndpointId>, Option<SocketEndpointId>) + Send + Sync + 'static,
+    ) -> Self {
+        Self::from_observed_probe(arch, move || {
+            let (wayland_endpoint, portal_endpoint) = probe();
+            ObservedPortalState {
+                session_active: wayland_endpoint.is_some(),
+                portal_available: portal_endpoint.is_some(),
+                wayland_endpoint,
+                portal_endpoint,
+            }
+        })
+    }
+
+    fn from_observed_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> ObservedPortalState + Send + Sync + 'static,
     ) -> Self {
         Self {
             arch,
@@ -485,7 +597,11 @@ impl LinuxWaylandPortalBackend {
             }
             Some(_) => {}
         }
-        (current.0, current.1, state.generation)
+        (
+            current.session_active,
+            current.portal_available,
+            state.generation,
+        )
     }
 }
 
@@ -557,13 +673,20 @@ impl DesktopSession for LinuxWaylandPortalBackend {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ObservedCompositorState {
+    active: bool,
+    wayland_endpoint: Option<SocketEndpointId>,
+    compositor_endpoint: Option<SocketEndpointId>,
+}
+
 struct TrackedCompositorState {
-    last_active: Option<bool>,
+    last_state: Option<ObservedCompositorState>,
     generation: u64,
     invalidated: bool,
 }
 
-type CompositorProbeFn = Box<dyn Fn() -> bool + Send + Sync>;
+type CompositorProbeFn = Box<dyn Fn() -> ObservedCompositorState + Send + Sync>;
 
 pub struct LinuxWaylandCompositorBackend {
     arch: PlatformArch,
@@ -581,11 +704,36 @@ impl LinuxWaylandCompositorBackend {
         arch: PlatformArch,
         probe: impl Fn() -> bool + Send + Sync + 'static,
     ) -> Self {
+        Self::from_observed_probe(arch, move || ObservedCompositorState {
+            active: probe(),
+            wayland_endpoint: None,
+            compositor_endpoint: None,
+        })
+    }
+
+    pub fn with_endpoint_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> (Option<SocketEndpointId>, Option<SocketEndpointId>) + Send + Sync + 'static,
+    ) -> Self {
+        Self::from_observed_probe(arch, move || {
+            let (wayland_endpoint, compositor_endpoint) = probe();
+            ObservedCompositorState {
+                active: wayland_endpoint.is_some(),
+                wayland_endpoint,
+                compositor_endpoint,
+            }
+        })
+    }
+
+    fn from_observed_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> ObservedCompositorState + Send + Sync + 'static,
+    ) -> Self {
         Self {
             arch,
             probe: Box::new(probe),
             state: Mutex::new(TrackedCompositorState {
-                last_active: None,
+                last_state: None,
                 generation: 1,
                 invalidated: false,
             }),
@@ -606,20 +754,20 @@ impl LinuxWaylandCompositorBackend {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let active = (self.probe)();
-        match state.last_active {
+        let current = (self.probe)();
+        match state.last_state {
             None => {
-                state.last_active = Some(active);
+                state.last_state = Some(current);
                 state.invalidated = false;
             }
-            Some(prev) if prev != active || state.invalidated => {
+            Some(prev) if prev != current || state.invalidated => {
                 state.generation = state.generation.saturating_add(1).min(MAX_SAFE_INT);
-                state.last_active = Some(active);
+                state.last_state = Some(current);
                 state.invalidated = false;
             }
             Some(_) => {}
         }
-        (active, state.generation)
+        (current.active, state.generation)
     }
 }
 
@@ -687,8 +835,52 @@ impl DesktopSession for LinuxWaylandCompositorBackend {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EffectiveLinuxSessionState {
+    selection: SelectedLinuxBackend,
+    wayland_endpoint: Option<SocketEndpointId>,
+    compositor_endpoint: Option<SocketEndpointId>,
+    portal_endpoint: Option<SocketEndpointId>,
+    x11_endpoint: Option<SocketEndpointId>,
+}
+
+impl EffectiveLinuxSessionState {
+    fn from_facts(selection: SelectedLinuxBackend, facts: &LinuxSessionFacts) -> Self {
+        match selection {
+            SelectedLinuxBackend::WaylandCompositor { .. } => Self {
+                selection,
+                wayland_endpoint: facts.wayland_endpoint,
+                compositor_endpoint: facts.compositor_endpoint,
+                portal_endpoint: None,
+                x11_endpoint: None,
+            },
+            SelectedLinuxBackend::WaylandPortal { .. } => Self {
+                selection,
+                wayland_endpoint: facts.wayland_endpoint,
+                compositor_endpoint: None,
+                portal_endpoint: facts.portal_endpoint,
+                x11_endpoint: None,
+            },
+            SelectedLinuxBackend::X11 { .. } => Self {
+                selection,
+                wayland_endpoint: None,
+                compositor_endpoint: None,
+                portal_endpoint: None,
+                x11_endpoint: facts.x11_endpoint,
+            },
+            SelectedLinuxBackend::Inactive => Self {
+                selection,
+                wayland_endpoint: None,
+                compositor_endpoint: None,
+                portal_endpoint: None,
+                x11_endpoint: None,
+            },
+        }
+    }
+}
+
 struct TrackedLinuxSessionState {
-    last_selection: Option<SelectedLinuxBackend>,
+    last_state: Option<EffectiveLinuxSessionState>,
     generation: u64,
     invalidated: bool,
 }
@@ -696,7 +888,8 @@ struct TrackedLinuxSessionState {
 type LinuxFactsProbeFn = Box<dyn Fn() -> LinuxSessionFacts + Send + Sync>;
 
 /// Dynamic Linux `DesktopSession` that re-probes session/socket/portal/compositor facts on every
-/// query and increments capability `generation` whenever backend selection or availability changes.
+/// query and increments capability `generation` whenever backend selection, availability, or any
+/// active socket endpoint identity changes.
 pub struct LinuxDesktopSession {
     arch: PlatformArch,
     probe: LinuxFactsProbeFn,
@@ -719,7 +912,7 @@ impl LinuxDesktopSession {
             arch,
             probe: Box::new(probe),
             state: Mutex::new(TrackedLinuxSessionState {
-                last_selection: None,
+                last_state: None,
                 generation: 1,
                 invalidated: false,
             }),
@@ -742,14 +935,15 @@ impl LinuxDesktopSession {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let facts = (self.probe)();
         let selection = select_linux_session(&facts);
-        match state.last_selection {
+        let observed = EffectiveLinuxSessionState::from_facts(selection, &facts);
+        match state.last_state {
             None => {
-                state.last_selection = Some(selection);
+                state.last_state = Some(observed);
                 state.invalidated = false;
             }
-            Some(prev) if prev != selection || state.invalidated => {
+            Some(prev) if prev != observed || state.invalidated => {
                 state.generation = state.generation.saturating_add(1).min(MAX_SAFE_INT);
-                state.last_selection = Some(selection);
+                state.last_state = Some(observed);
                 state.invalidated = false;
             }
             Some(_) => {}
@@ -1162,11 +1356,26 @@ mod tests {
             Some("/run/user/1000/bus")
         );
         assert_eq!(parse_dbus_unix_socket_path("unix:abstract=/tmp/dbus"), None);
+        assert_eq!(parse_dbus_unix_socket_path("unsupported:"), None);
+        assert_eq!(
+            parse_dbus_unix_socket_path("unix:path=/run/user/1000/a,path=/run/user/1000/b"),
+            None
+        );
+        assert_eq!(
+            parse_dbus_unix_socket_path("unix:path=/run/../tmp/bus"),
+            None
+        );
         assert_eq!(
             parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus%00x"),
             None
         );
         assert_eq!(parse_dbus_unix_socket_path("unix:path=relative/bus"), None);
+        assert_eq!(
+            parse_dbus_unix_socket_paths(
+                "unix:abstract=/tmp/a;unix:path=/run/user/1000/first;unix:path=/run/user/1000/second"
+            ),
+            vec!["/run/user/1000/first", "/run/user/1000/second"]
+        );
 
         assert!(is_safe_relative_wayland_display("wayland-0"));
         assert!(!is_safe_relative_wayland_display(""));
@@ -1186,13 +1395,153 @@ mod tests {
             |p| p == "/run/user/1000/custom-bus",
             || panic!("must not consult runtime bus when explicit D-Bus address is set"),
         ));
-        assert!(!resolve_portal_bus_available(
-            Some("tcp:host=127.0.0.1"),
-            |_| true,
-            || panic!("explicit non-unix D-Bus address must not fall back to runtime bus"),
-        ));
+        assert_eq!(
+            resolve_portal_bus_endpoint(
+                Some("unix:path=/run/user/1000/dead;unix:path=/run/user/1000/live"),
+                |p| (p == "/run/user/1000/live").then_some(SocketEndpointId {
+                    dev: 1,
+                    ino: 42,
+                    ctime: 100,
+                    ctime_nsec: 200,
+                }),
+                || panic!("must not fall back to runtime bus for multi-address D-Bus"),
+            ),
+            Some(SocketEndpointId {
+                dev: 1,
+                ino: 42,
+                ctime: 100,
+                ctime_nsec: 200,
+            })
+        );
+        for unsupported in [
+            "tcp:host=127.0.0.1",
+            "unix:abstract=/tmp/dbus-abs",
+            "unsupported:",
+            "   ",
+        ] {
+            assert!(!resolve_portal_bus_available(
+                Some(unsupported),
+                |_| true,
+                || panic!("explicit unsupported D-Bus address must not fall back to runtime bus"),
+            ));
+        }
         assert!(resolve_portal_bus_available(None, |_| false, || true));
         assert!(!resolve_portal_bus_available(None, |_| true, || false));
+    }
+
+    #[test]
+    fn same_path_endpoint_replacement_bumps_generation_without_intermediate_absence() {
+        use std::sync::{Arc, Mutex};
+
+        let id = |ino: u64| SocketEndpointId {
+            dev: 7,
+            ino,
+            ctime: 1_700_000_000 + ino as i64,
+            ctime_nsec: 50,
+        };
+
+        // 1. LinuxDesktopSession: Portal mode replacing Wayland socket and D-Bus socket in place.
+        let facts = Arc::new(Mutex::new(LinuxSessionFacts {
+            logind_session_type: Some("wayland".to_owned()),
+            wayland_display: Some("wayland-0".to_owned()),
+            wayland_socket_present: true,
+            wayland_endpoint: Some(id(10)),
+            portal_available: true,
+            portal_endpoint: Some(id(20)),
+            wayland_backend_mode: WaylandBackendMode::Portal,
+            ..LinuxSessionFacts::default()
+        }));
+        let reader = Arc::clone(&facts);
+        let session = LinuxDesktopSession::with_probe(PlatformArch::X64, move || {
+            reader.lock().unwrap().clone()
+        });
+
+        let c1 = session.capabilities();
+        assert_eq!(c1.backend, BackendKind::LinuxWaylandPortal);
+        assert_eq!(c1.generation, 1);
+        assert_eq!(
+            c1.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+        assert_eq!(session.capabilities().generation, 1);
+
+        // Replace Wayland socket in place (active stays true, never observed absent) -> gen 2.
+        facts.lock().unwrap().wayland_endpoint = Some(id(11));
+        let c2 = session.capabilities();
+        assert_eq!(c2.backend, BackendKind::LinuxWaylandPortal);
+        assert_eq!(c2.generation, 2);
+        assert_eq!(
+            c2.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+        assert_eq!(session.capabilities().generation, 2);
+
+        // Replace Portal D-Bus socket in place (portal_available stays true) -> gen 3.
+        facts.lock().unwrap().portal_endpoint = Some(id(21));
+        let c3 = session.capabilities();
+        assert_eq!(c3.backend, BackendKind::LinuxWaylandPortal);
+        assert_eq!(c3.generation, 3);
+        assert_eq!(
+            c3.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+
+        // Switch to Auto + Compositor integration socket -> gen 4.
+        {
+            let mut f = facts.lock().unwrap();
+            f.wayland_backend_mode = WaylandBackendMode::Auto;
+            f.compositor_endpoint_present = true;
+            f.compositor_endpoint = Some(id(30));
+        }
+        let c4 = session.capabilities();
+        assert_eq!(c4.backend, BackendKind::LinuxWaylandCompositor);
+        assert_eq!(c4.generation, 4);
+
+        // Replace Compositor integration socket in place (active stays true) -> gen 5.
+        facts.lock().unwrap().compositor_endpoint = Some(id(31));
+        let c5 = session.capabilities();
+        assert_eq!(c5.backend, BackendKind::LinuxWaylandCompositor);
+        assert_eq!(c5.generation, 5);
+        assert_eq!(
+            c5.features.record_all_displays.state,
+            FeatureState::Unimplemented
+        );
+
+        // 2. X11 session replacing X11 socket in place -> bumps generation without absence.
+        let x11_facts = Arc::new(Mutex::new(LinuxSessionFacts {
+            logind_session_type: Some("x11".to_owned()),
+            x11_display: Some(":0".to_owned()),
+            x11_socket_present: true,
+            x11_endpoint: Some(id(40)),
+            ..LinuxSessionFacts::default()
+        }));
+        let x11_reader = Arc::clone(&x11_facts);
+        let x11_session = LinuxDesktopSession::with_probe(PlatformArch::X64, move || {
+            x11_reader.lock().unwrap().clone()
+        });
+        assert_eq!(x11_session.capabilities().generation, 1);
+        x11_facts.lock().unwrap().x11_endpoint = Some(id(41));
+        assert_eq!(x11_session.capabilities().generation, 2);
+
+        // 3. Standalone Portal & Compositor endpoint probes also bump generation on replacement.
+        let portal_eps = Arc::new(Mutex::new((Some(id(50)), Some(id(60)))));
+        let portal_reader = Arc::clone(&portal_eps);
+        let portal = LinuxWaylandPortalBackend::with_endpoint_probe(PlatformArch::X64, move || {
+            *portal_reader.lock().unwrap()
+        });
+        assert_eq!(portal.capabilities().generation, 1);
+        portal_eps.lock().unwrap().1 = Some(id(61));
+        assert_eq!(portal.capabilities().generation, 2);
+
+        let comp_eps = Arc::new(Mutex::new((Some(id(70)), Some(id(80)))));
+        let comp_reader = Arc::clone(&comp_eps);
+        let comp =
+            LinuxWaylandCompositorBackend::with_endpoint_probe(PlatformArch::X64, move || {
+                *comp_reader.lock().unwrap()
+            });
+        assert_eq!(comp.capabilities().generation, 1);
+        comp_eps.lock().unwrap().1 = Some(id(81));
+        assert_eq!(comp.capabilities().generation, 2);
     }
 
     #[test]

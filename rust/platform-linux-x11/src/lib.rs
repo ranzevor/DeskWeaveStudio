@@ -32,27 +32,46 @@ pub fn parse_local_display_number(display: &str) -> Option<u32> {
     num_part.parse::<u32>().ok()
 }
 
-/// Checks whether the local X11 Unix socket `/tmp/.X11-unix/X<n>` exists on Linux.
-pub fn x11_socket_exists(display: &str) -> bool {
+/// Stable kernel identity for a verified local X11 Unix socket endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct X11SocketIdentity {
+    pub dev: u64,
+    pub ino: u64,
+    pub ctime: i64,
+    pub ctime_nsec: i64,
+}
+
+/// Probes the local X11 Unix socket `/tmp/.X11-unix/X<n>` on Linux and returns its stable
+/// filesystem identity when present as a non-symlink Unix socket.
+pub fn x11_socket_identity(display: &str) -> Option<X11SocketIdentity> {
     #[cfg(target_os = "linux")]
     {
         use std::fs;
-        use std::os::unix::fs::FileTypeExt;
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
         use std::path::PathBuf;
 
-        let Some(num) = parse_local_display_number(display) else {
-            return false;
-        };
+        let num = parse_local_display_number(display)?;
         let path = PathBuf::from(format!("/tmp/.X11-unix/X{num}"));
         fs::symlink_metadata(path)
-            .map(|meta| meta.file_type().is_socket())
-            .unwrap_or(false)
+            .ok()
+            .filter(|meta| meta.file_type().is_socket() && !meta.file_type().is_symlink())
+            .map(|meta| X11SocketIdentity {
+                dev: meta.dev(),
+                ino: meta.ino(),
+                ctime: meta.ctime(),
+                ctime_nsec: meta.ctime_nsec(),
+            })
     }
     #[cfg(not(target_os = "linux"))]
     {
         let _ = display;
-        false
+        None
     }
+}
+
+/// Checks whether the local X11 Unix socket `/tmp/.X11-unix/X<n>` exists on Linux.
+pub fn x11_socket_exists(display: &str) -> bool {
+    x11_socket_identity(display).is_some()
 }
 
 pub fn build_capabilities(
@@ -78,13 +97,19 @@ pub fn build_capabilities(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ObservedX11State {
+    active: bool,
+    endpoint: Option<X11SocketIdentity>,
+}
+
 struct TrackedX11State {
-    last_active: Option<bool>,
+    last_state: Option<ObservedX11State>,
     generation: u64,
     invalidated: bool,
 }
 
-type X11ProbeFn = Box<dyn Fn() -> bool + Send + Sync>;
+type X11ProbeFn = Box<dyn Fn() -> ObservedX11State + Send + Sync>;
 
 pub struct LinuxX11Backend {
     arch: PlatformArch,
@@ -102,11 +127,34 @@ impl LinuxX11Backend {
         arch: PlatformArch,
         probe: impl Fn() -> bool + Send + Sync + 'static,
     ) -> Self {
+        Self::from_observed_probe(arch, move || ObservedX11State {
+            active: probe(),
+            endpoint: None,
+        })
+    }
+
+    pub fn with_endpoint_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> Option<X11SocketIdentity> + Send + Sync + 'static,
+    ) -> Self {
+        Self::from_observed_probe(arch, move || {
+            let endpoint = probe();
+            ObservedX11State {
+                active: endpoint.is_some(),
+                endpoint,
+            }
+        })
+    }
+
+    fn from_observed_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> ObservedX11State + Send + Sync + 'static,
+    ) -> Self {
         Self {
             arch,
             probe: Box::new(probe),
             state: Mutex::new(TrackedX11State {
-                last_active: None,
+                last_state: None,
                 generation: 1,
                 invalidated: false,
             }),
@@ -127,20 +175,20 @@ impl LinuxX11Backend {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let active = (self.probe)();
-        match state.last_active {
+        let observed = (self.probe)();
+        match state.last_state {
             None => {
-                state.last_active = Some(active);
+                state.last_state = Some(observed);
                 state.invalidated = false;
             }
-            Some(prev) if prev != active || state.invalidated => {
+            Some(prev) if prev != observed || state.invalidated => {
                 state.generation = state.generation.saturating_add(1).min(MAX_SAFE_INT);
-                state.last_active = Some(active);
+                state.last_state = Some(observed);
                 state.invalidated = false;
             }
             Some(_) => {}
         }
-        (active, state.generation)
+        (observed.active, state.generation)
     }
 }
 
@@ -291,5 +339,39 @@ mod tests {
 
         backend.invalidate();
         assert_eq!(backend.capabilities().generation, 4);
+    }
+
+    #[test]
+    fn x11_backend_bumps_generation_on_same_path_endpoint_replacement() {
+        use std::sync::{Arc, Mutex};
+
+        let endpoint = Arc::new(Mutex::new(Some(X11SocketIdentity {
+            dev: 1,
+            ino: 100,
+            ctime: 1_700_000_000,
+            ctime_nsec: 10,
+        })));
+        let reader = Arc::clone(&endpoint);
+        let backend = LinuxX11Backend::with_endpoint_probe(PlatformArch::X64, move || {
+            *reader.lock().unwrap()
+        });
+
+        assert_eq!(backend.capabilities().generation, 1);
+        assert_eq!(backend.capabilities().generation, 1);
+
+        // Atomic replacement on the same display path without ever observing absence.
+        *endpoint.lock().unwrap() = Some(X11SocketIdentity {
+            dev: 1,
+            ino: 101,
+            ctime: 1_700_000_001,
+            ctime_nsec: 20,
+        });
+        let replaced = backend.capabilities();
+        assert_eq!(replaced.generation, 2);
+        assert_eq!(
+            replaced.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+        assert_eq!(backend.capabilities().generation, 2);
     }
 }
