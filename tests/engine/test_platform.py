@@ -272,13 +272,22 @@ class PlatformContractTests(unittest.TestCase):
         mixed_multi = agent._sanitize_linux_session_env(
             {
                 "DBUS_SESSION_BUS_ADDRESS": (
-                    "unix:abstract=/tmp/dbus-1;unix:path=/run/user/1000/fallback"
+                    "unix:abstract=/tmp/dbus-1;unix:path=/run/user/1000/fallback,foo_bar=1;autolaunch:"
                 )
             }
         )
         self.assertEqual(
             mixed_multi,
-            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/fallback"},
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/fallback,foo_bar=1"},
+        )
+
+        # Single trailing semicolon on a valid address is accepted.
+        trailing_semi = agent._sanitize_linux_session_env(
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus;"}
+        )
+        self.assertEqual(
+            trailing_semi,
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus"},
         )
 
         # Unset or empty DBUS_SESSION_BUS_ADDRESS remains unset (allows $XDG_RUNTIME_DIR/bus).
@@ -312,8 +321,21 @@ class PlatformContractTests(unittest.TestCase):
 
         for explicit_unsupported in (
             "unix:abstract=/tmp/dbus-abc",
+            "autolaunch:",
             "unix:abstract=/tmp/a;tcp:host=127.0.0.1,port=1234",
+            ";",
+            ";unix:path=/run/user/1000/bus",
+            "unix:path=/run/user/1000/bus;;unix:path=/run/user/1000/b",
             "unix:path=/run/user/1000/a,path=/run/user/1000/b",
+            "unix:path=/run/user/1000/bus,abstract=/tmp/foo",
+            "unix:path=/run/user/1000/bus,tmpdir=/tmp",
+            "unix:path=/run/user/1000/bus,dir=/tmp",
+            "unix:path=/run/user/1000/bus,runtime=yes",
+            "unix:path=/run/user/1000/bus,garbage",
+            "unix:path=/run/user/1000/bus,",
+            "unix:path=/run/user/1000/bus\r\n",
+            "unix:path=/run/user/1000/bus\n,guid=123",
+            "unix:path=/run/user/1000/a\n;unix:path=/run/user/1000/b",
             "unix:path=/run/user/1000/\x07bus",
             "unix:path=/run/user/1000/good;unix:path=/run/../evil",
             "   ",
@@ -1166,12 +1188,14 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     if compositor_sock_path.exists():
                         compositor_sock_path.unlink()
 
-                # Case 4: Explicit unsupported / abstract / multi-address D-Bus while
+                # Case 4: Explicit unsupported / abstract / malformed D-Bus while
                 # $XDG_RUNTIME_DIR/bus is alive -> must NEVER fall back to runtime bus.
                 for idx, bad_dbus in enumerate(
                     (
                         "unix:abstract=/tmp/deskweave-nonexistent-bus",
                         "unix:abstract=/tmp/dw-abs;tcp:host=127.0.0.1,port=1234",
+                        f"unix:path={runtime_bus_path},abstract=/tmp/dw-conflict",
+                        f"unix:path={runtime_bus_path}\n",
                     )
                 ):
                     wl_sock_abs = _bind_unix(wayland_path)
@@ -1219,7 +1243,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     multi_env = {
                         **base_env,
                         "DBUS_SESSION_BUS_ADDRESS": (
-                            f"unix:path={missing_bus_path};unix:path={custom_bus_path}"
+                            f"unix:path={missing_bus_path};unix:path={custom_bus_path};autolaunch:;"
                         ),
                     }
                     with _patched_session_env(multi_env):

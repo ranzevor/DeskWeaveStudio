@@ -166,36 +166,92 @@ pub fn is_safe_relative_wayland_display(display: &str) -> bool {
         && !display.bytes().any(|b| matches!(b, b'/' | b'\\' | 0))
 }
 
+fn is_valid_dbus_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+}
+
+fn is_safe_dbus_param_value(item: &str) -> bool {
+    !item.is_empty()
+        && item
+            .bytes()
+            .all(|b| (0x21..=0x7E).contains(&b) && b != b'\\')
+}
+
 /// Extracts all safe absolute filesystem Unix socket paths from `DBUS_SESSION_BUS_ADDRESS`
 /// (e.g. `unix:path=/run/user/1000/bus,guid=...;unix:path=/run/user/1000/bus2`).
-/// Rejects percent-encoded escapes, non-absolute paths, `..` traversal, control characters,
-/// backslashes, and duplicate `path=` keys within a single entry.
+///
+/// Mirrors the Python launcher sanitizer and fails closed (`Vec::new()`) if any entry is malformed,
+/// contains control characters, uses mutually exclusive `unix:` locator keys (`path` combined with
+/// `abstract`/`tmpdir`/`dir`/`runtime`), has duplicate `path=` keys, or contains percent escapes,
+/// backslashes, or `..` traversal. Accepts a single trailing `;` and parameterless non-unix
+/// fallback transports (such as `autolaunch:`).
 pub fn parse_dbus_unix_socket_paths(address: &str) -> Vec<&str> {
+    if address.is_empty() || address.len() > 4096 || address.chars().any(char::is_control) {
+        return Vec::new();
+    }
+    let body = address.strip_suffix(';').unwrap_or(address);
+    if body.is_empty() {
+        return Vec::new();
+    }
     let mut paths = Vec::new();
-    for entry in address.split(';') {
-        let Some(rest) = entry.trim().strip_prefix("unix:") else {
-            continue;
+    let mut entry_count = 0usize;
+    for entry in body.split(';') {
+        entry_count += 1;
+        if entry.is_empty() || entry_count > 16 {
+            return Vec::new();
+        }
+        let Some((transport, rest)) = entry.split_once(':') else {
+            return Vec::new();
         };
+        if transport.is_empty()
+            || transport.len() > 32
+            || !transport
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-'))
+        {
+            return Vec::new();
+        }
+        if rest.is_empty() {
+            if transport == "unix" {
+                return Vec::new();
+            }
+            continue;
+        }
         let mut entry_path: Option<&str> = None;
-        let mut valid_entry = true;
+        let mut seen_other_locator = false;
         for pair in rest.split(',') {
-            let trimmed = pair.trim();
-            if let Some(path) = trimmed.strip_prefix("path=") {
+            let Some((key, item)) = pair.split_once('=') else {
+                return Vec::new();
+            };
+            if !is_valid_dbus_key(key) || item.is_empty() {
+                return Vec::new();
+            }
+            if transport == "unix" && key == "path" {
                 if entry_path.is_some()
-                    || !path.starts_with('/')
-                    || path.len() > 4096
-                    || path.contains('%')
-                    || path.contains('\\')
-                    || path.split('/').any(|seg| seg == "..")
-                    || path.chars().any(|ch| ch.is_control())
+                    || !item.starts_with('/')
+                    || item.contains('%')
+                    || item.contains('\\')
+                    || item.split('/').any(|seg| seg == "..")
                 {
-                    valid_entry = false;
-                    break;
+                    return Vec::new();
                 }
-                entry_path = Some(path);
+                entry_path = Some(item);
+            } else {
+                if !is_safe_dbus_param_value(item) {
+                    return Vec::new();
+                }
+                if transport == "unix" && matches!(key, "abstract" | "tmpdir" | "dir" | "runtime") {
+                    seen_other_locator = true;
+                }
             }
         }
-        if valid_entry && let Some(path) = entry_path {
+        if transport == "unix" && entry_path.is_some() && seen_other_locator {
+            return Vec::new();
+        }
+        if let Some(path) = entry_path {
             paths.push(path);
         }
     }
@@ -216,13 +272,13 @@ pub fn parse_dbus_unix_socket_path(address: &str) -> Option<&str> {
 /// `DBUS_SESSION_BUS_ADDRESS` is unset (`None`).
 pub fn resolve_portal_bus_endpoint<T>(
     dbus_address: Option<&str>,
-    mut check_explicit_path: impl FnMut(&str) -> Option<T>,
+    check_explicit_path: impl FnMut(&str) -> Option<T>,
     check_runtime_bus: impl FnOnce() -> Option<T>,
 ) -> Option<T> {
     match dbus_address {
         Some(addr) => parse_dbus_unix_socket_paths(addr)
             .into_iter()
-            .find_map(&mut check_explicit_path),
+            .find_map(check_explicit_path),
         None => check_runtime_bus(),
     }
 }
@@ -1348,31 +1404,53 @@ mod tests {
             Some("/run/user/1000/bus")
         );
         assert_eq!(
-            parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus,guid=deadbeef"),
+            parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus;"),
+            Some("/run/user/1000/bus")
+        );
+        assert_eq!(
+            parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus;autolaunch:"),
+            Some("/run/user/1000/bus")
+        );
+        assert_eq!(
+            parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus,guid=deadbeef,foo_bar=1"),
             Some("/run/user/1000/bus")
         );
         assert_eq!(
             parse_dbus_unix_socket_path("tcp:host=127.0.0.1;unix:path=/run/user/1000/bus"),
             Some("/run/user/1000/bus")
         );
-        assert_eq!(parse_dbus_unix_socket_path("unix:abstract=/tmp/dbus"), None);
-        assert_eq!(parse_dbus_unix_socket_path("unsupported:"), None);
-        assert_eq!(
-            parse_dbus_unix_socket_path("unix:path=/run/user/1000/a,path=/run/user/1000/b"),
-            None
-        );
-        assert_eq!(
-            parse_dbus_unix_socket_path("unix:path=/run/../tmp/bus"),
-            None
-        );
-        assert_eq!(
-            parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus%00x"),
-            None
-        );
-        assert_eq!(parse_dbus_unix_socket_path("unix:path=relative/bus"), None);
+        for rejected in [
+            "unix:abstract=/tmp/dbus",
+            "autolaunch:",
+            "unsupported:",
+            ";",
+            ";unix:path=/run/user/1000/bus",
+            "unix:path=/run/user/1000/bus;;unix:path=/run/user/1000/b",
+            "unix:path=/run/user/1000/a,path=/run/user/1000/b",
+            "unix:path=/run/user/1000/bus,abstract=/tmp/foo",
+            "unix:path=/run/user/1000/bus,tmpdir=/tmp",
+            "unix:path=/run/user/1000/bus,dir=/tmp",
+            "unix:path=/run/user/1000/bus,runtime=yes",
+            "unix:path=/run/user/1000/bus,garbage",
+            "unix:path=/run/user/1000/bus,",
+            "unix:path=/run/user/1000/bus\r\n",
+            "unix:path=/run/user/1000/bus\n,guid=123",
+            "unix:path=/run/user/1000/a\n;unix:path=/run/user/1000/b",
+            "unix:path=/run/user/1000/bus,guid=\x07",
+            "unix:path=/run/user/1000/good;unix:path=/run/../evil",
+            "unix:path=/run/../tmp/bus",
+            "unix:path=/run/user/1000/bus%00x",
+            "unix:path=relative/bus",
+        ] {
+            assert_eq!(
+                parse_dbus_unix_socket_path(rejected),
+                None,
+                "expected D-Bus address {rejected:?} to be rejected"
+            );
+        }
         assert_eq!(
             parse_dbus_unix_socket_paths(
-                "unix:abstract=/tmp/a;unix:path=/run/user/1000/first;unix:path=/run/user/1000/second"
+                "unix:abstract=/tmp/a;unix:path=/run/user/1000/first;unix:path=/run/user/1000/second;autolaunch:"
             ),
             vec!["/run/user/1000/first", "/run/user/1000/second"]
         );
