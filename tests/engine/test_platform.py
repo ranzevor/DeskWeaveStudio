@@ -281,13 +281,24 @@ class PlatformContractTests(unittest.TestCase):
             {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/fallback,foo_bar=1"},
         )
 
-        # Single trailing semicolon on a valid address is accepted.
+        # Single trailing semicolon and D-Bus optionally-escaped path chars are accepted.
         trailing_semi = agent._sanitize_linux_session_env(
-            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus;"}
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus_0-a.sock;"}
         )
         self.assertEqual(
             trailing_semi,
-            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus"},
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus_0-a.sock"},
+        )
+        percent_in_abstract = agent._sanitize_linux_session_env(
+            {
+                "DBUS_SESSION_BUS_ADDRESS": (
+                    "unix:abstract=/tmp/foo%20bar;unix:path=/run/user/1000/bus*0"
+                )
+            }
+        )
+        self.assertEqual(
+            percent_in_abstract,
+            {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus*0"},
         )
 
         # Unset or empty DBUS_SESSION_BUS_ADDRESS remains unset (allows $XDG_RUNTIME_DIR/bus).
@@ -333,6 +344,15 @@ class PlatformContractTests(unittest.TestCase):
             "unix:path=/run/user/1000/bus,runtime=yes",
             "unix:path=/run/user/1000/bus,garbage",
             "unix:path=/run/user/1000/bus,",
+            "unix:path=/run/user/1000/bus socket",
+            "unix:path=/run/user/1000/bus+1",
+            "unix:path=/run/user/1000/bus@1",
+            "unix:path=/run/user/1000/bus:1",
+            "unix:path=/run/user/1000/会话/bus",
+            "unix:path=/run/user/1000/bus%20socket",
+            "unix:path=/run/user/1000/bus,guid=bad value",
+            "unix:path=/run/user/1000/bus,guid=bad%ZZ",
+            "unix:path=/run/user/1000/bus,guid=bad%00",
             "unix:path=/run/user/1000/bus\r\n",
             "unix:path=/run/user/1000/bus\n,guid=123",
             "unix:path=/run/user/1000/a\n;unix:path=/run/user/1000/b",
@@ -1041,16 +1061,17 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                 )
                 self.assertEqual(proc_handle.desktop_capabilities()["generation"], 2)
 
-                # Simulate compositor crash/restart by removing live Wayland socket.
+                # Simulate compositor crash leaving stale socket node on disk (NO unlink!).
                 wl_sock.close()
-                wayland_path.unlink()
+                self.assertTrue(wayland_path.exists())
                 c2 = proc_handle.desktop_capabilities()
                 self.assertEqual(c2["generation"], 3)
                 self.assertEqual(
                     c2["features"]["record.allDisplays"]["state"], "sessionUnavailable"
                 )
 
-                # Re-bind Wayland socket -> recovers to active compositor and bumps generation.
+                # Unlink stale socket node and re-bind -> recovers and bumps generation.
+                wayland_path.unlink()
                 wl_rebound = _bind_unix(wayland_path)
                 c3 = proc_handle.desktop_capabilities()
                 self.assertEqual(c3["backend"], "linux-wayland-compositor")
@@ -1104,9 +1125,10 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                         p_replaced["features"]["input.keyboard"]["state"], "unimplemented"
                     )
 
-                    # Close ONLY the explicit custom session bus; default runtime bus stays alive.
+                    # Close ONLY the explicit custom session bus listener WITHOUT unlinking the
+                    # socket node; default runtime bus stays alive -> must degrade & bump gen.
                     custom_bus_sock.close()
-                    custom_bus_path.unlink()
+                    self.assertTrue(custom_bus_path.exists())
                     p2 = proc_handle.desktop_capabilities()
                     self.assertEqual(p2["backend"], "linux-wayland-portal")
                     self.assertEqual(p2["generation"], 3)
@@ -1160,16 +1182,18 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                         a_replaced["features"]["record.allDisplays"]["state"], "unimplemented"
                     )
 
-                    # Removing compositor socket falls back to active Portal via runtime bus.
+                    # Closing compositor integration listener WITHOUT unlinking the socket node
+                    # must still detect dead listener and fall back to active Portal.
                     comp_sock.close()
-                    compositor_sock_path.unlink()
+                    self.assertTrue(compositor_sock_path.exists())
                     a2 = proc_handle.desktop_capabilities()
                     self.assertEqual(a2["backend"], "linux-wayland-portal")
                     self.assertEqual(a2["generation"], 3)
                     self.assertEqual(a2["features"]["record.allDisplays"]["state"], "unsupported")
                     self.assertEqual(a2["features"]["input.keyboard"]["state"], "unimplemented")
 
-                    # Re-creating compositor socket switches back to compositor and bumps gen.
+                    # Unlink stale compositor node and re-bind -> switches back & bumps gen.
+                    compositor_sock_path.unlink()
                     comp_sock_rebound = _bind_unix(compositor_sock_path)
                     a3 = proc_handle.desktop_capabilities()
                     self.assertEqual(a3["backend"], "linux-wayland-compositor")
@@ -1195,6 +1219,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                         "unix:abstract=/tmp/deskweave-nonexistent-bus",
                         "unix:abstract=/tmp/dw-abs;tcp:host=127.0.0.1,port=1234",
                         f"unix:path={runtime_bus_path},abstract=/tmp/dw-conflict",
+                        f"unix:path={priv_dir}/bus socket",
                         f"unix:path={runtime_bus_path}\n",
                     )
                 ):
@@ -1266,7 +1291,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
                     self.assertEqual(m2["features"]["input.keyboard"]["state"], "unimplemented")
 
                     multi_bus_sock.close()
-                    custom_bus_path.unlink()
+                    self.assertTrue(custom_bus_path.exists())
                     m3 = proc_handle.desktop_capabilities()
                     self.assertEqual(m3["generation"], 3)
                     self.assertEqual(

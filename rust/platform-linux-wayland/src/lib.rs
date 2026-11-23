@@ -173,11 +173,41 @@ fn is_valid_dbus_key(key: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
 }
 
+fn is_dbus_optionally_escaped_byte(b: u8) -> bool {
+    // D-Bus Server Addresses optionally-escaped byte set `[-0-9A-Za-z_/.\\*]` minus `\` for
+    // path-separator safety; all other bytes (including spaces and non-ASCII) must be %-escaped.
+    b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'/' | b'.' | b'*')
+}
+
+fn is_safe_dbus_unix_path_value(item: &str) -> bool {
+    item.starts_with('/')
+        && !item.split('/').any(|seg| seg == "..")
+        && item.bytes().all(is_dbus_optionally_escaped_byte)
+}
+
 fn is_safe_dbus_param_value(item: &str) -> bool {
-    !item.is_empty()
-        && item
-            .bytes()
-            .all(|b| (0x21..=0x7E).contains(&b) && b != b'\\')
+    let bytes = item.as_bytes();
+    if bytes.is_empty() {
+        return false;
+    }
+    let mut idx = 0;
+    while idx < bytes.len() {
+        let b = bytes[idx];
+        if is_dbus_optionally_escaped_byte(b) {
+            idx += 1;
+            continue;
+        }
+        if b == b'%' && idx + 2 < bytes.len() {
+            let hi = bytes[idx + 1];
+            let lo = bytes[idx + 2];
+            if hi.is_ascii_hexdigit() && lo.is_ascii_hexdigit() && !(hi == b'0' && lo == b'0') {
+                idx += 3;
+                continue;
+            }
+        }
+        return false;
+    }
+    true
 }
 
 /// Extracts all safe absolute filesystem Unix socket paths from `DBUS_SESSION_BUS_ADDRESS`
@@ -185,9 +215,10 @@ fn is_safe_dbus_param_value(item: &str) -> bool {
 ///
 /// Mirrors the Python launcher sanitizer and fails closed (`Vec::new()`) if any entry is malformed,
 /// contains control characters, uses mutually exclusive `unix:` locator keys (`path` combined with
-/// `abstract`/`tmpdir`/`dir`/`runtime`), has duplicate `path=` keys, or contains percent escapes,
-/// backslashes, or `..` traversal. Accepts a single trailing `;` and parameterless non-unix
-/// fallback transports (such as `autolaunch:`).
+/// `abstract`/`tmpdir`/`dir`/`runtime`), has duplicate `path=` keys, or contains bytes outside the
+/// D-Bus optionally-escaped set (`[-0-9A-Za-z_/.*]`), percent escapes in `unix:path=`, backslashes,
+/// or `..` traversal. Accepts a single trailing `;` and parameterless non-unix fallback transports
+/// (such as `autolaunch:`).
 pub fn parse_dbus_unix_socket_paths(address: &str) -> Vec<&str> {
     if address.is_empty() || address.len() > 4096 || address.chars().any(char::is_control) {
         return Vec::new();
@@ -230,12 +261,7 @@ pub fn parse_dbus_unix_socket_paths(address: &str) -> Vec<&str> {
                 return Vec::new();
             }
             if transport == "unix" && key == "path" {
-                if entry_path.is_some()
-                    || !item.starts_with('/')
-                    || item.contains('%')
-                    || item.contains('\\')
-                    || item.split('/').any(|seg| seg == "..")
-                {
+                if entry_path.is_some() || !is_safe_dbus_unix_path_value(item) {
                     return Vec::new();
                 }
                 entry_path = Some(item);
@@ -357,19 +383,32 @@ fn verify_wayland_socket(
         }
         runtime_path.join(display)
     };
-    fs::symlink_metadata(path)
-        .ok()
-        .filter(|meta| {
-            meta.file_type().is_socket()
-                && !meta.file_type().is_symlink()
-                && meta.uid() == expected_uid
-        })
-        .map(|meta| SocketEndpointId {
-            dev: meta.dev(),
-            ino: meta.ino(),
-            ctime: meta.ctime(),
-            ctime_nsec: meta.ctime_nsec(),
-        })
+    let read_identity = || {
+        fs::symlink_metadata(&path)
+            .ok()
+            .filter(|meta| {
+                meta.file_type().is_socket()
+                    && !meta.file_type().is_symlink()
+                    && meta.uid() == expected_uid
+            })
+            .map(|meta| SocketEndpointId {
+                dev: meta.dev(),
+                ino: meta.ino(),
+                ctime: meta.ctime(),
+                ctime_nsec: meta.ctime_nsec(),
+            })
+    };
+    for _ in 0..2 {
+        let before = read_identity()?;
+        if !deskweave_platform_linux_x11::probe_unix_stream_listening(&path) {
+            return None;
+        }
+        let after = read_identity()?;
+        if before == after {
+            return Some(after);
+        }
+    }
+    None
 }
 
 #[cfg(target_os = "linux")]
@@ -1416,6 +1455,20 @@ mod tests {
             Some("/run/user/1000/bus")
         );
         assert_eq!(
+            parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus_0-a.sock"),
+            Some("/run/user/1000/bus_0-a.sock")
+        );
+        assert_eq!(
+            parse_dbus_unix_socket_path("unix:path=/run/user/1000/bus*0"),
+            Some("/run/user/1000/bus*0")
+        );
+        assert_eq!(
+            parse_dbus_unix_socket_path(
+                "unix:abstract=/tmp/foo%20bar;unix:path=/run/user/1000/bus"
+            ),
+            Some("/run/user/1000/bus")
+        );
+        assert_eq!(
             parse_dbus_unix_socket_path("tcp:host=127.0.0.1;unix:path=/run/user/1000/bus"),
             Some("/run/user/1000/bus")
         );
@@ -1433,6 +1486,15 @@ mod tests {
             "unix:path=/run/user/1000/bus,runtime=yes",
             "unix:path=/run/user/1000/bus,garbage",
             "unix:path=/run/user/1000/bus,",
+            "unix:path=/run/user/1000/bus socket",
+            "unix:path=/run/user/1000/bus+1",
+            "unix:path=/run/user/1000/bus@1",
+            "unix:path=/run/user/1000/bus:1",
+            "unix:path=/run/user/1000/会话/bus",
+            "unix:path=/run/user/1000/bus%20socket",
+            "unix:path=/run/user/1000/bus,guid=bad value",
+            "unix:path=/run/user/1000/bus,guid=bad%ZZ",
+            "unix:path=/run/user/1000/bus,guid=bad%00",
             "unix:path=/run/user/1000/bus\r\n",
             "unix:path=/run/user/1000/bus\n,guid=123",
             "unix:path=/run/user/1000/a\n;unix:path=/run/user/1000/b",
@@ -1715,5 +1777,57 @@ mod tests {
             recovered.features.input_keyboard.state,
             FeatureState::SessionUnavailable
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wayland_live_socket_probe_rejects_stale_socket_file_when_listener_closes() {
+        use std::fs;
+        use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+        use std::os::unix::net::UnixListener;
+        use std::path::PathBuf;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        struct TempDirGuard(PathBuf);
+        impl Drop for TempDirGuard {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("dw-wl-live-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
+        let _cleanup = TempDirGuard(dir.clone());
+
+        let euid = fs::metadata("/proc/self").unwrap().uid();
+        let dir_str = dir.to_str().unwrap();
+        let sock_path = dir.join("wayland-0");
+        let listener = UnixListener::bind(&sock_path).unwrap();
+
+        // Repeated probes beyond listen(128) backlog remain live and keep identical identity.
+        let id1 = verify_wayland_socket("wayland-0", Some(dir_str), euid).unwrap();
+        for _ in 0..140 {
+            assert_eq!(
+                verify_wayland_socket("wayland-0", Some(dir_str), euid),
+                Some(id1)
+            );
+        }
+
+        // Closing the listener WITHOUT unlinking leaves a stale socket node on disk; liveness
+        // probe must immediately reject it as None.
+        drop(listener);
+        assert!(sock_path.exists());
+        assert!(
+            fs::symlink_metadata(&sock_path)
+                .unwrap()
+                .file_type()
+                .is_socket()
+        );
+        assert!(verify_wayland_socket("wayland-0", Some(dir_str), euid).is_none());
     }
 }

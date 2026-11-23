@@ -41,32 +41,193 @@ pub struct X11SocketIdentity {
     pub ctime_nsec: i64,
 }
 
-/// Probes the local X11 Unix socket `/tmp/.X11-unix/X<n>` on Linux and returns its stable
-/// filesystem identity when present as a non-symlink Unix socket.
-pub fn x11_socket_identity(display: &str) -> Option<X11SocketIdentity> {
+/// Performs a bounded non-blocking `AF_UNIX` `SOCK_STREAM` liveness check on Linux.
+///
+/// Returns `true` only when a live listening peer exists on `path` (`connect` succeeds immediately,
+/// returns `EAGAIN` due to a full listen backlog on an active `TCP_LISTEN` socket, or finishes
+/// `EINPROGRESS` with `SO_ERROR == 0` within the bounded 50ms timeout). Stale socket files left
+/// behind by crashed/closed servers return `ECONNREFUSED` -> `false`.
+#[cfg(target_os = "linux")]
+pub fn probe_unix_stream_listening(path: &std::path::Path) -> bool {
+    use std::ffi::{c_int, c_short, c_ulong, c_ushort, c_void};
+    use std::io::{Error, ErrorKind};
+    use std::os::unix::ffi::OsStrExt;
+    use std::time::{Duration, Instant};
+
+    const AF_UNIX: c_int = 1;
+    const SOCK_STREAM: c_int = 1;
+    const SOCK_NONBLOCK: c_int = 0o0004000;
+    const SOCK_CLOEXEC: c_int = 0o2000000;
+    const SOL_SOCKET: c_int = 1;
+    const SO_ERROR: c_int = 4;
+    const POLLOUT: c_short = 0x0004;
+    const EINPROGRESS: i32 = 115;
+    const PROBE_TIMEOUT: Duration = Duration::from_millis(50);
+
+    #[repr(C)]
+    struct SockAddrUn {
+        sun_family: c_ushort,
+        sun_path: [u8; 108],
+    }
+
+    #[repr(C)]
+    struct PollFd {
+        fd: c_int,
+        events: c_short,
+        revents: c_short,
+    }
+
+    unsafe extern "C" {
+        fn socket(domain: c_int, ty: c_int, protocol: c_int) -> c_int;
+        fn connect(sockfd: c_int, addr: *const c_void, addrlen: u32) -> c_int;
+        fn poll(fds: *mut PollFd, nfds: c_ulong, timeout: c_int) -> c_int;
+        fn getsockopt(
+            sockfd: c_int,
+            level: c_int,
+            optname: c_int,
+            optval: *mut c_void,
+            optlen: *mut u32,
+        ) -> c_int;
+        fn close(fd: c_int) -> c_int;
+    }
+
+    struct FdGuard(c_int);
+    impl Drop for FdGuard {
+        fn drop(&mut self) {
+            // SAFETY: `self.0` is an owned socket file descriptor returned by `socket()`.
+            unsafe {
+                let _ = close(self.0);
+            }
+        }
+    }
+
+    let bytes = path.as_os_str().as_bytes();
+    if bytes.is_empty() || bytes.len() >= 108 || bytes.contains(&0) {
+        return false;
+    }
+
+    // SAFETY: Creating a non-blocking close-on-exec AF_UNIX stream socket.
+    let fd = unsafe { socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0) };
+    if fd < 0 {
+        return false;
+    }
+    let _guard = FdGuard(fd);
+
+    let mut addr = SockAddrUn {
+        sun_family: AF_UNIX as c_ushort,
+        sun_path: [0u8; 108],
+    };
+    addr.sun_path[..bytes.len()].copy_from_slice(bytes);
+    let addr_len = (std::mem::offset_of!(SockAddrUn, sun_path) + bytes.len() + 1) as u32;
+    let deadline = Instant::now() + PROBE_TIMEOUT;
+
+    loop {
+        // SAFETY: `fd` is a valid socket descriptor and `addr` is valid for `addr_len` bytes.
+        let rc = unsafe { connect(fd, (&raw const addr).cast::<c_void>(), addr_len) };
+        if rc == 0 {
+            return true;
+        }
+        let err = Error::last_os_error();
+        match err.kind() {
+            // On Linux AF_UNIX SOCK_STREAM, non-blocking connect returns EAGAIN only when a live
+            // listening socket exists on that inode and its accept backlog is currently full.
+            ErrorKind::WouldBlock => return true,
+            ErrorKind::Interrupted => {
+                if Instant::now() >= deadline {
+                    return false;
+                }
+                continue;
+            }
+            _ if err.raw_os_error() == Some(EINPROGRESS) => loop {
+                let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+                    return false;
+                };
+                let wait_ms = remaining.as_millis().clamp(1, 50) as c_int;
+                let mut pfd = PollFd {
+                    fd,
+                    events: POLLOUT,
+                    revents: 0,
+                };
+                // SAFETY: `pfd` points to 1 valid `PollFd` entry.
+                let ready = unsafe { poll(&raw mut pfd, 1, wait_ms) };
+                if ready < 0 {
+                    if Error::last_os_error().kind() == ErrorKind::Interrupted {
+                        continue;
+                    }
+                    return false;
+                }
+                if ready == 0 {
+                    return false;
+                }
+                let mut so_error: c_int = 0;
+                let mut opt_len = std::mem::size_of::<c_int>() as u32;
+                // SAFETY: `so_error` and `opt_len` are valid writable pointers.
+                let opt_rc = unsafe {
+                    getsockopt(
+                        fd,
+                        SOL_SOCKET,
+                        SO_ERROR,
+                        (&raw mut so_error).cast::<c_void>(),
+                        &raw mut opt_len,
+                    )
+                };
+                return opt_rc == 0 && so_error == 0;
+            },
+            _ => return false,
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn probe_unix_stream_listening(path: &std::path::Path) -> bool {
+    let _ = path;
+    false
+}
+
+/// Probes a specific local X11 Unix socket path on Linux, verifying it is a non-symlink Unix
+/// socket with an active listening peer and returning its stable filesystem identity.
+pub fn probe_x11_socket_path(path: &std::path::Path) -> Option<X11SocketIdentity> {
     #[cfg(target_os = "linux")]
     {
         use std::fs;
         use std::os::unix::fs::{FileTypeExt, MetadataExt};
-        use std::path::PathBuf;
 
-        let num = parse_local_display_number(display)?;
-        let path = PathBuf::from(format!("/tmp/.X11-unix/X{num}"));
-        fs::symlink_metadata(path)
-            .ok()
-            .filter(|meta| meta.file_type().is_socket() && !meta.file_type().is_symlink())
-            .map(|meta| X11SocketIdentity {
-                dev: meta.dev(),
-                ino: meta.ino(),
-                ctime: meta.ctime(),
-                ctime_nsec: meta.ctime_nsec(),
-            })
+        let read_identity = || {
+            fs::symlink_metadata(path)
+                .ok()
+                .filter(|meta| meta.file_type().is_socket() && !meta.file_type().is_symlink())
+                .map(|meta| X11SocketIdentity {
+                    dev: meta.dev(),
+                    ino: meta.ino(),
+                    ctime: meta.ctime(),
+                    ctime_nsec: meta.ctime_nsec(),
+                })
+        };
+        for _ in 0..2 {
+            let before = read_identity()?;
+            if !probe_unix_stream_listening(path) {
+                return None;
+            }
+            let after = read_identity()?;
+            if before == after {
+                return Some(after);
+            }
+        }
+        None
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = display;
+        let _ = path;
         None
     }
+}
+
+/// Probes the local X11 Unix socket `/tmp/.X11-unix/X<n>` on Linux and returns its stable
+/// filesystem identity when present as a non-symlink Unix socket with an active listener.
+pub fn x11_socket_identity(display: &str) -> Option<X11SocketIdentity> {
+    let num = parse_local_display_number(display)?;
+    let path = std::path::PathBuf::from(format!("/tmp/.X11-unix/X{num}"));
+    probe_x11_socket_path(&path)
 }
 
 /// Checks whether the local X11 Unix socket `/tmp/.X11-unix/X<n>` exists on Linux.
@@ -373,5 +534,84 @@ mod tests {
             FeatureState::Unimplemented
         );
         assert_eq!(backend.capabilities().generation, 2);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn x11_live_socket_probe_detects_closed_listener_with_retained_file_and_replacement() {
+        use std::fs;
+        use std::os::unix::fs::{FileTypeExt, symlink};
+        use std::os::unix::net::UnixListener;
+        use std::path::PathBuf;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        struct TempDirGuard(PathBuf);
+        impl Drop for TempDirGuard {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("dw-x11-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let _cleanup = TempDirGuard(dir.clone());
+
+        let sock_path = dir.join("X99");
+        let staged_path = dir.join("X99.new");
+        let link_path = dir.join("X99.link");
+
+        let listener1 = UnixListener::bind(&sock_path).unwrap();
+        symlink(&sock_path, &link_path).unwrap();
+        // Symlinks to live sockets must still be rejected.
+        assert!(probe_x11_socket_path(&link_path).is_none());
+
+        let probe_path = sock_path.clone();
+        let backend = LinuxX11Backend::with_endpoint_probe(PlatformArch::X64, move || {
+            probe_x11_socket_path(&probe_path)
+        });
+
+        // Probe repeatedly beyond UnixListener's default listen(128) backlog without calling
+        // accept() to verify non-blocking EAGAIN handling never deadlocks or drops liveness.
+        for _ in 0..140 {
+            let caps = backend.capabilities();
+            assert_eq!(caps.generation, 1);
+            assert_eq!(
+                caps.features.input_keyboard.state,
+                FeatureState::Unimplemented
+            );
+        }
+
+        // Atomic same-path replacement bumps generation without intermediate absence.
+        let listener2 = UnixListener::bind(&staged_path).unwrap();
+        fs::rename(&staged_path, &sock_path).unwrap();
+        drop(listener1);
+        let replaced = backend.capabilities();
+        assert_eq!(replaced.generation, 2);
+        assert_eq!(
+            replaced.features.input_keyboard.state,
+            FeatureState::Unimplemented
+        );
+
+        // Close listener WITHOUT unlinking the socket file node -> must detect dead listener,
+        // degrade capabilities to SessionUnavailable, and bump generation to 3.
+        drop(listener2);
+        assert!(sock_path.exists());
+        assert!(
+            fs::symlink_metadata(&sock_path)
+                .unwrap()
+                .file_type()
+                .is_socket()
+        );
+        let stale = backend.capabilities();
+        assert_eq!(stale.generation, 3);
+        assert_eq!(
+            stale.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+        assert_eq!(backend.topology().unwrap_err().code, "SESSION_UNAVAILABLE");
     }
 }

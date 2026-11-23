@@ -85,20 +85,45 @@ def _is_safe_socket_spec(value: str) -> bool:
 
 _UNSUPPORTED_DBUS_ADDRESS = "unsupported:"
 _UNIX_EXCLUSIVE_LOCATOR_KEYS = frozenset({"abstract", "tmpdir", "dir", "runtime"})
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
 
 
 def _is_valid_dbus_key(key: str) -> bool:
     return bool(key) and key.isascii() and all(ch.isalnum() or ch in "_-" for ch in key)
 
 
-def _is_safe_dbus_param_value(item: str) -> bool:
+def _is_dbus_optionally_escaped_char(ch: str) -> bool:
+    # D-Bus Server Addresses optionally-escaped byte set `[-0-9A-Za-z_/.\\*]` minus `\` for
+    # path-separator safety; all other bytes (including space and non-ASCII) must be %-escaped.
+    return ch.isascii() and (ch.isalnum() or ch in "-_/.*")
+
+
+def _is_safe_dbus_unix_path_value(item: str) -> bool:
     return (
         bool(item)
-        and item.isascii()
-        and item.isprintable()
-        and "\\" not in item
-        and not any(ch.isspace() for ch in item)
+        and item.startswith("/")
+        and ".." not in item.split("/")
+        and all(_is_dbus_optionally_escaped_char(ch) for ch in item)
     )
+
+
+def _is_safe_dbus_param_value(item: str) -> bool:
+    if not item:
+        return False
+    idx = 0
+    length = len(item)
+    while idx < length:
+        ch = item[idx]
+        if _is_dbus_optionally_escaped_char(ch):
+            idx += 1
+            continue
+        if ch == "%" and idx + 2 < length:
+            hi, lo = item[idx + 1], item[idx + 2]
+            if hi in _HEX_DIGITS and lo in _HEX_DIGITS and not (hi == "0" and lo == "0"):
+                idx += 3
+                continue
+        return False
+    return True
 
 
 def _parse_dbus_entry(entry: str) -> tuple[bool, bool]:
@@ -106,7 +131,8 @@ def _parse_dbus_entry(entry: str) -> tuple[bool, bool]:
 
     Returns `(well_formed, is_safe_unix_path_entry)`. Rejects mutually exclusive `unix:` locator
     keys (`path` combined with `abstract`/`tmpdir`/`dir`/`runtime`), duplicate `path=` keys,
-    path traversal, percent escapes, backslashes, and malformed key/value pairs.
+    unescaped bytes outside the D-Bus optionally-escaped set (such as spaces), path traversal,
+    percent escapes in `unix:path=`, backslashes, and malformed key/value pairs.
     """
     transport, sep, rest = entry.partition(":")
     if (
@@ -128,14 +154,7 @@ def _parse_dbus_entry(entry: str) -> tuple[bool, bool]:
         if not eq or not _is_valid_dbus_key(key) or not item:
             return False, False
         if transport == "unix" and key == "path":
-            if (
-                seen_path
-                or not item.startswith("/")
-                or not item.isprintable()
-                or "\\" in item
-                or "%" in item
-                or ".." in item.split("/")
-            ):
+            if seen_path or not _is_safe_dbus_unix_path_value(item):
                 return False, False
             seen_path = True
         else:
