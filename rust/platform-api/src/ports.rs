@@ -45,6 +45,9 @@ pub trait TargetBinding: Send + Sync {
     fn bind_selection(&self, selection_grant: &str) -> Result<TargetDescriptor, PlatformError>;
     fn verify_target(&self, token: &TargetToken) -> Result<TargetStatus, PlatformError>;
     fn focus_target(&self, token: &TargetToken) -> Result<(), PlatformError>;
+    fn target_version(&self, _token: &TargetToken) -> Result<Option<String>, PlatformError> {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,6 +107,28 @@ pub trait InputRecorder: Send + Sync {
 pub enum HeldInput {
     Key { key: String },
     Button { button: PointerButton },
+}
+
+impl HeldInput {
+    pub fn sort_key(&self) -> (&'static str, &str) {
+        match self {
+            Self::Button { button } => ("button", button.as_str()),
+            Self::Key { key } => ("key", key.as_str()),
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), PlatformError> {
+        match self {
+            Self::Button { .. } => Ok(()),
+            Self::Key { key } => {
+                let chars = key.chars().count();
+                if !(1..=32).contains(&chars) || key.bytes().any(|b| b == 0) {
+                    return Err(PlatformError::invalid_argument("按键名称长度应为 1～32。"));
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

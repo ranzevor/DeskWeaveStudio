@@ -272,6 +272,18 @@ pub enum PointerButton {
     X2,
 }
 
+impl PointerButton {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Middle => "middle",
+            Self::X1 => "x1",
+            Self::X2 => "x2",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ButtonState {

@@ -1,6 +1,8 @@
 pub mod capabilities;
+pub mod control;
 pub mod error;
 pub mod fake;
+pub mod jcs;
 pub mod ports;
 pub mod topology;
 pub mod trajectory;
@@ -9,8 +11,18 @@ pub use capabilities::{
     BackendKind, CapabilitySnapshot, FeatureReason, FeatureSet, FeatureState, FeatureStatus,
     MAX_SAFE_INT, NextAction, PlatformArch, PlatformOs, TopologyCoverage, TrajectoryVersion,
 };
+pub use control::{
+    AtomicInputEvent, DEFAULT_PRESS_DURATION_MS, InterruptPolicy, LeaseAcquireResult,
+    LeaseReleaseReason, LeaseReleaseResult, LeaseSnapshot, LeaseState, MAX_PRESS_DURATION_MS,
+    MAX_SEGMENT_EVENTS, PausePoint, PauseSnapshot, ResolvedPosition, ResumeContext, ResumePlan,
+    SegmentCursor, SegmentResult, SegmentState, TargetBindResult, TargetState, TrajectoryRef,
+    compute_segment_payload_hash, expand_input_operation, format_utc_timestamp,
+    parse_utc_timestamp, quintic_progress, reject_unresolved_expressions, sort_held_inputs,
+    sort_target_states,
+};
 pub use error::PlatformError;
 pub use fake::{FakeClock, FakeDesktopSession};
+pub use jcs::{canonical_json_bytes, format_jcs_f64, jcs_sha256_hex, sha256_bytes, sha256_hex};
 pub use ports::{
     CaptureRoi, CaptureSource, CapturedFrame, CleanupOutcome, CredentialErrorKind, CredentialStore,
     DesktopSession, EmergencyControl, EmergencyHotkey, EmergencyState, HeldInput, InputClock,
@@ -20,8 +32,9 @@ pub use ports::{
 };
 pub use topology::{
     AffineTransform2D, DisplayLocalTopology, DisplayPoint, DisplayTopology, InputProfile,
-    LayoutRect, LocalDisplay, LocalTopologyCoverage, NativeSpace, PhysicalDisplay, PhysicalPoint,
-    PhysicalRect, PhysicalTopology, PixelSize, RelativeUnit, Rotation,
+    LayoutRect, LocalDisplay, LocalTopologyCoverage, MAX_COORD_F64, MAX_COORD_I64, MIN_COORD_I64,
+    NativeSpace, PhysicalDisplay, PhysicalPoint, PhysicalRect, PhysicalTopology, PixelSize,
+    RelativeUnit, Rotation,
 };
 pub use trajectory::{
     ButtonState, CoordinateMode, DisplayLocalTopologyWrapper, DisplayMapping, DisplayPair,
@@ -499,5 +512,339 @@ mod tests {
         single_display.scope = RecordingScope::Display;
         single_display.display_ids = vec!["main".to_owned()];
         single_display.validate().unwrap();
+    }
+
+    fn repo_example_path(rel: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples")
+            .join(rel)
+    }
+
+    fn load_repo_json<T: serde::de::DeserializeOwned>(rel: &str) -> Result<T, serde_json::Error> {
+        let bytes = fs::read(repo_example_path(rel)).expect("repo example file must exist");
+        serde_json::from_slice(&bytes)
+    }
+
+    #[test]
+    fn jcs_encoding_and_segment_payload_hash_match_rfc8785_and_golden_examples() {
+        assert_eq!(
+            jcs_sha256_hex(&Vec::<HeldInput>::new()).unwrap(),
+            "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        );
+        assert_eq!(format_jcs_f64(-0.0).unwrap(), "0");
+        assert_eq!(format_jcs_f64(1e-6).unwrap(), "0.000001");
+        assert_eq!(format_jcs_f64(1e-7).unwrap(), "1e-7");
+        assert_eq!(format_jcs_f64(1e20).unwrap(), "100000000000000000000");
+        assert_eq!(format_jcs_f64(1e21).unwrap(), "1e+21");
+
+        // UTF-16 key sorting: U+E000 (BMP, UTF-16 0xE000) must sort AFTER U+10000 (surrogate 0xD800 0xDC00).
+        let obj = serde_json::json!({
+            "\u{E000}": 1,
+            "\u{10000}": 2,
+            "a": 3
+        });
+        let encoded = String::from_utf8(canonical_json_bytes(&obj).unwrap()).unwrap();
+        assert_eq!(encoded, "{\"a\":3,\"\u{10000}\":2,\"\u{E000}\":1}");
+
+        let seg_req: serde_json::Value = load_repo_json("messages/agent-segment.json").unwrap();
+        let params = &seg_req["params"];
+        let expected_hash = params["payloadHash"].as_str().unwrap();
+        let computed = compute_segment_payload_hash(
+            params["targetToken"].as_str().unwrap(),
+            &params["operation"],
+            None,
+        )
+        .unwrap();
+        assert_eq!(computed, expected_hash);
+
+        let bad_expr: serde_json::Value = load_repo_json("invalid/agent-expression.json").unwrap();
+        assert!(
+            expand_input_operation(
+                &bad_expr["params"]["operation"],
+                None,
+                &PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }),
+            )
+            .is_err()
+        );
+
+        assert_eq!(
+            parse_utc_timestamp("+999-+1-+1T+0:+0:+0Z")
+                .unwrap_err()
+                .code,
+            "INVALID_ARGUMENT"
+        );
+        assert!(parse_utc_timestamp("2026-10-29T10:15:00Z").is_ok());
+    }
+
+    #[test]
+    fn golden_execution_control_examples_match_expected_outcomes() {
+        for valid_pause in [
+            "control/pause-held.json",
+            "control/pause-idle.json",
+            "control/pause-between-held-multitarget.json",
+        ] {
+            let snap: PauseSnapshot = load_repo_json(valid_pause).unwrap();
+            snap.validate()
+                .unwrap_or_else(|err| panic!("expected {valid_pause} valid, got {err}"));
+        }
+
+        for invalid_pause in [
+            "control/invalid-cursor-overflow.json",
+            "control/invalid-held-digest.json",
+            "control/invalid-pause-target-outside.json",
+            "control/invalid-pause-target-null.json",
+        ] {
+            let outcome = load_repo_json::<PauseSnapshot>(invalid_pause).and_then(|snap| {
+                snap.validate()
+                    .map_err(|err| serde::de::Error::custom(err.to_string()))
+            });
+            assert!(
+                outcome.is_err(),
+                "expected {invalid_pause} to fail validation"
+            );
+        }
+
+        for valid_lease in [
+            "control/lease-paused.json",
+            "control/lease-uncertain.json",
+            "control/lease-resumed.json",
+        ] {
+            let snap: LeaseSnapshot = load_repo_json(valid_lease).unwrap();
+            snap.validate()
+                .unwrap_or_else(|err| panic!("expected {valid_lease} valid, got {err}"));
+        }
+
+        for invalid_lease in [
+            "control/invalid-paused-cleanup.json",
+            "control/invalid-lease-generation.json",
+        ] {
+            let outcome = load_repo_json::<LeaseSnapshot>(invalid_lease).and_then(|snap| {
+                snap.validate()
+                    .map_err(|err| serde::de::Error::custom(err.to_string()))
+            });
+            assert!(
+                outcome.is_err(),
+                "expected {invalid_lease} to fail validation"
+            );
+        }
+
+        for (plan_file, ctx_file, expect_ok) in [
+            (
+                "control/resume-plan-held.json",
+                "control/context-held.json",
+                true,
+            ),
+            (
+                "control/resume-plan-idle.json",
+                "control/context-idle.json",
+                true,
+            ),
+            (
+                "control/resume-between-held-multitarget.json",
+                "control/context-between.json",
+                true,
+            ),
+            (
+                "control/invalid-plan-hash.json",
+                "control/context-held.json",
+                false,
+            ),
+            (
+                "control/invalid-plan-expired.json",
+                "control/context-expired.json",
+                false,
+            ),
+            (
+                "control/invalid-plan-epoch.json",
+                "control/context-epoch.json",
+                false,
+            ),
+            (
+                "control/invalid-plan-generation.json",
+                "control/context-generation.json",
+                false,
+            ),
+            (
+                "control/invalid-plan-consumed.json",
+                "control/context-consumed.json",
+                false,
+            ),
+            (
+                "control/invalid-resume-target-substituted.json",
+                "control/context-between.json",
+                false,
+            ),
+            (
+                "control/invalid-resume-target-outside.json",
+                "control/context-between.json",
+                false,
+            ),
+        ] {
+            let plan: ResumePlan = load_repo_json(plan_file).unwrap();
+            let ctx: ResumeContext = load_repo_json(ctx_file).unwrap();
+            assert_eq!(
+                plan.validate(&ctx).is_ok(),
+                expect_ok,
+                "unexpected validation outcome for {plan_file}"
+            );
+        }
+    }
+
+    #[test]
+    fn input_operation_expansion_preserves_smooth_motion_deltas_and_chord_lifecycles() {
+        // Positive-duration small & negative relative delta conservation (Q53).
+        let delta_op = serde_json::json!({
+            "id": "relMove",
+            "title": "小负相对增量运动",
+            "action": "pointer.delta",
+            "params": {
+                "target": "main",
+                "dx": -3,
+                "dy": 5,
+                "durationMs": 40
+            },
+            "on": {}
+        });
+        let delta_events = expand_input_operation(
+            &delta_op,
+            None,
+            &PausePoint::Physical(PhysicalPoint { x: 100, y: 100 }),
+        )
+        .unwrap();
+        assert!(delta_events.len() >= 5);
+        let mut sum_dx = 0_i64;
+        let mut sum_dy = 0_i64;
+        let mut sum_delay = 0_u64;
+        for ev in &delta_events {
+            sum_delay += ev.delay_before_us;
+            let NativeInputAction::PointerDelta { dx, dy } = ev.action else {
+                panic!("expected PointerDelta");
+            };
+            sum_dx += dx.round() as i64;
+            sum_dy += dy.round() as i64;
+        }
+        assert_eq!(sum_dx, -3);
+        assert_eq!(sum_dy, 5);
+        assert_eq!(sum_delay, 40_000);
+
+        // Positive-duration drag lifecycle: move(from) -> button_down -> smooth moves -> button_up(to).
+        let drag_op = serde_json::json!({
+            "id": "dragLine",
+            "title": "平滑拖拽",
+            "action": "pointer.drag",
+            "params": {
+                "target": "main",
+                "from": {"kind": "point", "space": "desktopPhysical", "x": 10, "y": 20},
+                "to": {"kind": "point", "space": "desktopPhysical", "x": 110, "y": 220},
+                "button": "left",
+                "durationMs": 64
+            },
+            "on": {}
+        });
+        let drag_events = expand_input_operation(
+            &drag_op,
+            None,
+            &PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }),
+        )
+        .unwrap();
+        assert!(drag_events.len() >= 10);
+        assert_eq!(
+            drag_events[0].action,
+            NativeInputAction::PointerMovePhysical(PhysicalPoint { x: 10, y: 20 })
+        );
+        assert_eq!(
+            drag_events[1].action,
+            NativeInputAction::PointerButtonDown(PointerButton::Left)
+        );
+        assert_eq!(
+            drag_events[drag_events.len() - 2].action,
+            NativeInputAction::PointerMovePhysical(PhysicalPoint { x: 110, y: 220 })
+        );
+        assert_eq!(
+            drag_events[drag_events.len() - 1].action,
+            NativeInputAction::PointerButtonUp(PointerButton::Left)
+        );
+
+        // Positive-duration displayPixels move interpolates smoothly from PausePoint::Display.
+        let disp_move_op = serde_json::json!({
+            "id": "dispMove",
+            "title": "屏内平滑移动",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "displayPixels", "displayId": "main", "x": 110.0, "y": 220.0},
+                "durationMs": 40
+            },
+            "on": {}
+        });
+        let disp_events = expand_input_operation(
+            &disp_move_op,
+            None,
+            &PausePoint::Display(DisplayPoint {
+                display_id: "main".to_owned(),
+                x: 10.0,
+                y: 20.0,
+            }),
+        )
+        .unwrap();
+        assert!(disp_events.len() >= 5);
+        let disp_delay: u64 = disp_events.iter().map(|e| e.delay_before_us).sum();
+        assert_eq!(disp_delay, 40_000);
+        assert_eq!(
+            disp_events.last().unwrap().action,
+            NativeInputAction::PointerMoveDisplay(DisplayPoint {
+                display_id: "main".to_owned(),
+                x: 110.0,
+                y: 220.0,
+            })
+        );
+
+        // Keyboard chord forward press, hold pressDurationMs, reverse release (Q29).
+        let chord_op = serde_json::json!({
+            "id": "copyChord",
+            "title": "组合键复制",
+            "action": "keyboard.chord",
+            "params": {
+                "target": "main",
+                "keys": ["Control", "Shift", "C"],
+                "pressDurationMs": 80
+            },
+            "on": {}
+        });
+        let chord_events = expand_input_operation(
+            &chord_op,
+            None,
+            &PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }),
+        )
+        .unwrap();
+        assert_eq!(
+            chord_events,
+            vec![
+                AtomicInputEvent {
+                    delay_before_us: 0,
+                    action: NativeInputAction::KeyDown("Control".to_owned()),
+                },
+                AtomicInputEvent {
+                    delay_before_us: 0,
+                    action: NativeInputAction::KeyDown("Shift".to_owned()),
+                },
+                AtomicInputEvent {
+                    delay_before_us: 0,
+                    action: NativeInputAction::KeyDown("C".to_owned()),
+                },
+                AtomicInputEvent {
+                    delay_before_us: 80_000,
+                    action: NativeInputAction::KeyUp("C".to_owned()),
+                },
+                AtomicInputEvent {
+                    delay_before_us: 0,
+                    action: NativeInputAction::KeyUp("Shift".to_owned()),
+                },
+                AtomicInputEvent {
+                    delay_before_us: 0,
+                    action: NativeInputAction::KeyUp("Control".to_owned()),
+                },
+            ]
+        );
     }
 }

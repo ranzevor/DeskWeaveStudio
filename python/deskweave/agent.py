@@ -15,6 +15,14 @@ from pathlib import Path
 
 from deskweave.coordination.directory import Directory, StartupLock, backend, runtime_directory
 from deskweave.coordination.startup import InvalidDiscovery, check_idle
+from deskweave.domain.execution_control import (
+    compute_segment_payload_hash,
+    validate_lease_acquire_result,
+    validate_lease_release_result,
+    validate_lease_snapshot,
+    validate_segment_result,
+    validate_target_bind_result,
+)
 from deskweave.domain.platform import validate_desktop_capabilities, validate_desktop_topology
 from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME as _MAX_CONTROL_FRAME
@@ -170,11 +178,13 @@ def _parse_dbus_entry(entry: str) -> tuple[bool, bool]:
 def _sanitize_dbus_session_bus_address(value: str) -> str:
     """Sanitizes an explicitly configured DBUS_SESSION_BUS_ADDRESS without dropping it.
 
-    Preserves safe `unix:path=...` entries (including valid `;`-separated multi-address lists,
-    optional single trailing `;`, and parameterless fallback transports like `autolaunch:`) and
-    replaces unsupported or malformed explicit addresses (such as `unix:abstract=...`, `tcp:...`,
-    control characters, mutually exclusive `unix:` keys, or unsafe paths) with an inert sentinel
-    so the agent never silently falls back to `$XDG_RUNTIME_DIR/bus`.
+    Extracts and emits safe `unix:path=...` entries (allowing valid `;`-separated multi-address
+    lists, optional single trailing `;`, and well-formed fallback transports like `autolaunch:`
+    alongside at least one `unix:path=...` entry, which are stripped from the emitted value) and
+    replaces unsupported, non-unix-only, or malformed explicit addresses (such as `autolaunch:`
+    alone, `unix:abstract=...`, `tcp:...`, control characters, mutually exclusive `unix:` keys,
+    or unsafe paths) with an inert sentinel so the agent never silently falls back to
+    `$XDG_RUNTIME_DIR/bus`.
     """
     if not 1 <= len(value) <= 4096 or any(not ch.isprintable() for ch in value):
         return _UNSUPPORTED_DBUS_ADDRESS
@@ -1136,6 +1146,165 @@ class AgentProcess(Resource):
             timeout=timeout,
             cancel=cancel,
             validator=validate_desktop_topology,
+        )
+
+    def target_bind(self, selection_grant: str, *, timeout=10, cancel=None) -> dict:
+        return self.call(
+            "target.bind",
+            {"selectionGrant": selection_grant},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_target_bind_result,
+        )
+
+    def lease_acquire(
+        self,
+        run_id: str,
+        targets: list[str],
+        *,
+        wait_ms: int = 0,
+        interrupt_policy: str | None = None,
+        timeout=10,
+        cancel=None,
+    ) -> dict:
+        params: dict[str, object] = {
+            "runId": run_id,
+            "targets": list(targets) if isinstance(targets, (list, tuple)) else targets,
+            "waitMs": wait_ms,
+        }
+        if interrupt_policy is not None:
+            params["interruptPolicy"] = interrupt_policy
+        return self.call(
+            "lease.acquire",
+            params,
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_lease_acquire_result,
+        )
+
+    def lease_renew(self, lease_id: str, generation: int, *, timeout=10, cancel=None) -> dict:
+        return self.call(
+            "lease.renew",
+            {"leaseId": lease_id, "generation": generation},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_lease_acquire_result,
+        )
+
+    def lease_release(
+        self,
+        lease_id: str,
+        generation: int,
+        reason: str = "finished",
+        *,
+        timeout=10,
+        cancel=None,
+    ) -> dict:
+        return self.call(
+            "lease.release",
+            {"leaseId": lease_id, "generation": generation, "reason": reason},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_lease_release_result,
+        )
+
+    def lease_pause(self, lease_id: str, generation: int, *, timeout=10, cancel=None) -> dict:
+        return self.call(
+            "lease.pause",
+            {"leaseId": lease_id, "generation": generation},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_lease_snapshot,
+        )
+
+    def lease_status(self, lease_id: str, *, timeout=10, cancel=None) -> dict:
+        return self.call(
+            "lease.status",
+            {"leaseId": lease_id},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_lease_snapshot,
+        )
+
+    def lease_resume(
+        self,
+        lease_id: str,
+        generation: int,
+        pause_id: str,
+        resume_attempt_id: str,
+        resume_plan_hash: str,
+        *,
+        confirmation_grant: str | None = None,
+        timeout=10,
+        cancel=None,
+    ) -> dict:
+        params: dict[str, object] = {
+            "leaseId": lease_id,
+            "generation": generation,
+            "pauseId": pause_id,
+            "resumeAttemptId": resume_attempt_id,
+            "resumePlanHash": resume_plan_hash,
+        }
+        if confirmation_grant is not None:
+            params["confirmationGrant"] = confirmation_grant
+        return self.call(
+            "lease.resume",
+            params,
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_lease_snapshot,
+        )
+
+    def segment_submit(
+        self,
+        lease_id: str,
+        generation: int,
+        segment_id: str,
+        target_token: str,
+        operation: dict,
+        *,
+        payload_hash: str | None = None,
+        trajectory_ref: dict | None = None,
+        timeout=10,
+        cancel=None,
+    ) -> dict:
+        computed_hash = (
+            payload_hash
+            if payload_hash is not None
+            else compute_segment_payload_hash(target_token, operation, trajectory_ref)
+        )
+        params: dict[str, object] = {
+            "leaseId": lease_id,
+            "generation": generation,
+            "segmentId": segment_id,
+            "payloadHash": computed_hash,
+            "targetToken": target_token,
+            "operation": operation,
+        }
+        if trajectory_ref is not None:
+            params["trajectoryRef"] = trajectory_ref
+        return self.call(
+            "segment.submit",
+            params,
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_segment_result,
+        )
+
+    def segment_status(
+        self,
+        segment_id: str,
+        payload_hash: str,
+        *,
+        timeout=10,
+        cancel=None,
+    ) -> dict:
+        return self.call(
+            "segment.status",
+            {"segmentId": segment_id, "payloadHash": payload_hash},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_segment_result,
         )
 
     def _close_resource(self, name):

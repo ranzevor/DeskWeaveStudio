@@ -42,6 +42,10 @@ struct FakeState {
     emergency_generation: u64,
     hotkey_ready: bool,
     submission_outcome: SubmissionOutcome,
+    cleanup_outcome: CleanupOutcome,
+    pointer: PhysicalPoint,
+    targets: HashMap<String, (TargetDescriptor, TargetStatus)>,
+    grants: HashMap<String, TargetDescriptor>,
     submitted: Vec<(TargetToken, NativeInputAction)>,
     released: Vec<Vec<HeldInput>>,
     secrets: HashMap<(String, String), Vec<u8>>,
@@ -70,6 +74,10 @@ impl FakeDesktopSession {
                 emergency_generation: 0,
                 hotkey_ready: true,
                 submission_outcome: SubmissionOutcome::Submitted,
+                cleanup_outcome: CleanupOutcome::Succeeded,
+                pointer: PhysicalPoint { x: 0, y: 0 },
+                targets: HashMap::new(),
+                grants: HashMap::new(),
                 submitted: Vec::new(),
                 released: Vec::new(),
                 secrets: HashMap::new(),
@@ -91,6 +99,53 @@ impl FakeDesktopSession {
 
     pub fn set_submission_outcome(&self, outcome: SubmissionOutcome) {
         self.state.lock().unwrap().submission_outcome = outcome;
+    }
+
+    pub fn set_cleanup_outcome(&self, outcome: CleanupOutcome) {
+        self.state.lock().unwrap().cleanup_outcome = outcome;
+    }
+
+    pub fn set_hotkey_ready(&self, ready: bool) {
+        self.state.lock().unwrap().hotkey_ready = ready;
+    }
+
+    pub fn set_pointer(&self, point: PhysicalPoint) {
+        self.state.lock().unwrap().pointer = point;
+    }
+
+    pub fn pointer(&self) -> PhysicalPoint {
+        self.state.lock().unwrap().pointer
+    }
+
+    pub fn register_grant(&self, selection_grant: impl Into<String>, descriptor: TargetDescriptor) {
+        let mut state = self.state.lock().unwrap();
+        state.targets.insert(
+            descriptor.token.0.clone(),
+            (descriptor.clone(), TargetStatus::Active),
+        );
+        state.grants.insert(selection_grant.into(), descriptor);
+    }
+
+    pub fn register_target(&self, descriptor: TargetDescriptor, status: TargetStatus) {
+        self.state
+            .lock()
+            .unwrap()
+            .targets
+            .insert(descriptor.token.0.clone(), (descriptor, status));
+    }
+
+    pub fn set_target_status(&self, token: &str, status: TargetStatus) {
+        let mut state = self.state.lock().unwrap();
+        if let Some(entry) = state.targets.get_mut(token) {
+            entry.1 = status;
+        }
+    }
+
+    pub fn set_target_version(&self, token: &str, version: impl Into<String>) {
+        let mut state = self.state.lock().unwrap();
+        if let Some(entry) = state.targets.get_mut(token) {
+            entry.0.target_version = version.into();
+        }
     }
 
     pub fn submitted_actions(&self) -> Vec<(TargetToken, NativeInputAction)> {
@@ -161,16 +216,33 @@ impl TargetBinding for FakeDesktopSession {
         if selection_grant.is_empty() {
             return Err(PlatformError::invalid_argument("选择授权无效。"));
         }
-        Ok(TargetDescriptor {
+        let mut state = self.state.lock().unwrap();
+        if let Some(desc) = state.grants.remove(selection_grant) {
+            state
+                .targets
+                .entry(desc.token.0.clone())
+                .or_insert_with(|| (desc.clone(), TargetStatus::Active));
+            return Ok(desc);
+        }
+        let desc = TargetDescriptor {
             token: TargetToken(format!("fake-target-{selection_grant}")),
             display_name: "Fake Target".to_owned(),
             kind: TargetKind::Desktop,
             target_version: "1".to_owned(),
             expires_at: "2099-01-01T00:00:00Z".to_owned(),
-        })
+        };
+        state
+            .targets
+            .entry(desc.token.0.clone())
+            .or_insert_with(|| (desc.clone(), TargetStatus::Active));
+        Ok(desc)
     }
 
     fn verify_target(&self, token: &TargetToken) -> Result<TargetStatus, PlatformError> {
+        let state = self.state.lock().unwrap();
+        if let Some((_, status)) = state.targets.get(&token.0) {
+            return Ok(*status);
+        }
         if token.0.starts_with("fake-target-") {
             Ok(TargetStatus::Active)
         } else {
@@ -179,11 +251,31 @@ impl TargetBinding for FakeDesktopSession {
     }
 
     fn focus_target(&self, token: &TargetToken) -> Result<(), PlatformError> {
+        let mut state = self.state.lock().unwrap();
+        if let Some((_, status)) = state.targets.get_mut(&token.0) {
+            return match *status {
+                TargetStatus::Active | TargetStatus::Unfocused => {
+                    *status = TargetStatus::Active;
+                    Ok(())
+                }
+                TargetStatus::Lost | TargetStatus::Expired => {
+                    Err(PlatformError::target_lost("目标已失效或不存在。"))
+                }
+            };
+        }
         if token.0.starts_with("fake-target-") {
             Ok(())
         } else {
             Err(PlatformError::target_lost("目标不存在。"))
         }
+    }
+
+    fn target_version(&self, token: &TargetToken) -> Result<Option<String>, PlatformError> {
+        let state = self.state.lock().unwrap();
+        Ok(state
+            .targets
+            .get(&token.0)
+            .map(|(desc, _)| desc.target_version.clone()))
     }
 }
 
@@ -245,6 +337,18 @@ impl InputEmitter for FakeDesktopSession {
         if state.emergency_state == EmergencyState::Locked {
             return Ok(SubmissionOutcome::Rejected);
         }
+        if state.submission_outcome == SubmissionOutcome::Submitted {
+            match action {
+                NativeInputAction::PointerMovePhysical(pt) => {
+                    state.pointer = *pt;
+                }
+                NativeInputAction::PointerDelta { dx, dy } => {
+                    state.pointer.x = state.pointer.x.saturating_add(dx.round() as i64);
+                    state.pointer.y = state.pointer.y.saturating_add(dy.round() as i64);
+                }
+                _ => {}
+            }
+        }
         state.submitted.push((token.clone(), action.clone()));
         Ok(state.submission_outcome)
     }
@@ -253,8 +357,10 @@ impl InputEmitter for FakeDesktopSession {
         if held.is_empty() {
             return Ok(CleanupOutcome::NotRequired);
         }
-        self.state.lock().unwrap().released.push(held.to_vec());
-        Ok(CleanupOutcome::Succeeded)
+        let mut state = self.state.lock().unwrap();
+        let outcome = state.cleanup_outcome;
+        state.released.push(held.to_vec());
+        Ok(outcome)
     }
 }
 
