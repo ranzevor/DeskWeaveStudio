@@ -23,6 +23,7 @@ class PendingRun:
 class RunManager:
     def __init__(self, workspace, *, clock, threaded=True, ports=LOGIC_PORTS):
         self.workspace, self.clock, self.threaded = workspace, clock, threaded
+        self.ports = ports
         self.lifecycle = RunLifecycleStore(workspace)
         self.planner = RunService(workspace, ports=ports, max_unfinished=17)
         self._guard = threading.RLock()

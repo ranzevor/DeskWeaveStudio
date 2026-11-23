@@ -10,7 +10,7 @@ from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME, dumps, loads
 
 REFERENCE = "urn:deskweave:connection:1#/$defs/"
-CAPABILITIES = frozenset({"contentRefsV1"})
+CAPABILITIES = frozenset({"contentRefsV1", "platform-capabilities-v1", "display-coordinates-v1"})
 
 
 def packet(value: object, kind: str) -> dict:

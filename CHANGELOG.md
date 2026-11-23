@@ -4,6 +4,7 @@
 
 ### 新增
 
+- 建立 Rust 平台端口与四类桌面后端边界（`rust/platform-api`、`platform-windows`、`platform-macos`、`platform-linux-x11`、`platform-linux-wayland`）：提供 10 类端口抽象、12 项平台能力语义校验、2D 可逆仿射变换、Trajectory 1.0/1.1 与跨屏回放兼容校验、只读会话探测与可控内存替身；Rust Agent 接入服务端 `session` 绑定、1MiB 严格 JSON 控制信封路由及 `desktop.capabilities` / `desktop.topology`；Engine 扩展 `platform-capabilities-v1` / `display-coordinates-v1` 协商并注册公开方法 `system.capabilities`。
 - 完善 Rust Desktop Agent 跨 Engine 共享接入：原生多客户端监听（Windows 登录 SID DACL 命名管道与 Linux/macOS 私有 Unix socket）、`agent.json` 原子发现发布、连接优先并发首启、Ed25519 + HMAC 双向接入认证与 `idle_grace` 原子排空退出。
 - 增加 Rust Desktop Agent 连接基础：受控启动、原生对端核验、登录会话独占、存活探测和实例更换。
 - 接入公共运行服务与生命周期管理：新增 `run.prepare`、`run.start`、`run.pause`、`run.resume`、`run.stop`、`run.snapshot`、`debug.variables.read`、`event.subscribe`、`event.read`、`event.unsubscribe`、`workspace.catalog(kind="run")` 与 `query.read` 运行集合，支持原生异步事件帧推送、客户端与宿主退出生命周期协调及数据库格式 6 启动恢复。

@@ -183,6 +183,7 @@ class DesktopAgentTests(unittest.TestCase):
             process = instance._process
             self.assertTrue(instance.created)
             self.assertEqual(instance.workspace_id, engine.workspace.id)
+            self.assertTrue(agent._is_session_id(instance.session))
             self.assertNotEqual(instance.pid, os.getpid())
             self.assertEqual(instance.probe(), instance.epoch)
             self.assertIs(instance, self._start_with_engine(engine))
@@ -249,6 +250,7 @@ class DesktopAgentTests(unittest.TestCase):
             self.assertFalse(second.created)
             self.assertEqual(second.pid, first.pid)
             self.assertEqual(second.epoch, first.epoch)
+            self.assertNotEqual(second.session, first.session)
             self.assertEqual(second.workspace_id, engine_b.workspace.id)
             engine_a.close()
             threading.Event().wait(0.35)

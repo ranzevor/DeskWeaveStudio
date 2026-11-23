@@ -1,4 +1,7 @@
+use deskweave_platform_api::DesktopSession;
 use ed25519_dalek::{Signature, VerifyingKey};
+use serde::Serialize;
+use serde_json::{Map, Value};
 use std::io;
 use std::process;
 use std::sync::{Arc, Condvar, Mutex};
@@ -7,14 +10,18 @@ use std::time::{Duration, Instant};
 
 use crate::native::{DeadlineIo, SessionListener, SessionStream, StopSignal};
 use crate::protocol::{
-    AttachChallenge, AttachHello, AttachReady, AttachRegistration, Pong, Probe, VERSION,
-    attach_ready_proof, constant_time_eq, is_hex, parse_object, read_frame, sha256_hex,
-    valid_workspace_id, write_frame,
+    AttachChallenge, AttachHello, AttachReady, AttachRegistration, ErrorBody, ErrorResponse,
+    MAX_CONTROL_FRAME, Pong, SuccessResponse, VERSION, attach_ready_proof, constant_time_eq,
+    generate_session_id, is_hex, looks_like_protocol_version, parse_object, parse_strict_object,
+    read_frame, sha256_hex, valid_envelope_id, valid_method_name, valid_workspace_id, write_frame,
+    write_frame_bounded,
 };
 
 pub(crate) const MAX_CLIENTS: usize = 32;
 pub(crate) const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const FRAME_READ_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_DEADLINE_MS: u64 = 86_400_000;
 
 pub(crate) struct ServerConfig {
     pub(crate) agent_epoch: String,
@@ -23,7 +30,16 @@ pub(crate) struct ServerConfig {
     pub(crate) verification_key: VerifyingKey,
     pub(crate) idle_grace: Duration,
     pub(crate) handshake_timeout: Duration,
+    pub(crate) frame_read_timeout: Duration,
     pub(crate) max_clients: usize,
+    pub(crate) desktop: Arc<dyn DesktopSession>,
+}
+
+#[derive(Clone)]
+pub(crate) struct SessionContext {
+    pub(crate) agent_epoch: String,
+    pub(crate) session_id: String,
+    pub(crate) workspace_id: String,
 }
 
 struct ServerState {
@@ -73,31 +89,303 @@ impl Drop for ConnectionSlot {
     }
 }
 
+fn serialize_error(reply_to: &str, code: &str, message: &str, retry: &str) -> io::Result<Vec<u8>> {
+    let response = ErrorResponse {
+        protocol_version: "1.0",
+        kind: "response",
+        reply_to,
+        ok: false,
+        error: ErrorBody {
+            code,
+            message,
+            retry,
+        },
+    };
+    serde_json::to_vec(&response).map_err(io::Error::other)
+}
+
+fn serialize_success<T: Serialize>(reply_to: &str, result: T) -> io::Result<Vec<u8>> {
+    let response = SuccessResponse {
+        protocol_version: "1.0",
+        kind: "response",
+        reply_to,
+        ok: true,
+        result,
+    };
+    let payload = serde_json::to_vec(&response).map_err(io::Error::other)?;
+    if payload.len() > MAX_CONTROL_FRAME {
+        return serialize_error(
+            reply_to,
+            "LIMIT_EXCEEDED",
+            "Agent 响应超出控制帧预算。",
+            "never",
+        );
+    }
+    Ok(payload)
+}
+
+fn dispatch_request(
+    map: &Map<String, Value>,
+    ctx: &SessionContext,
+    desktop: &dyn DesktopSession,
+) -> io::Result<(Vec<u8>, Duration)> {
+    let reply_to = map
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|value| valid_envelope_id(value))
+        .unwrap_or("invalid");
+
+    if map.len() != 8
+        || !map.contains_key("protocolVersion")
+        || !map.contains_key("kind")
+        || !map.contains_key("id")
+        || !map.contains_key("session")
+        || !map.contains_key("workspace")
+        || !map.contains_key("method")
+        || !map.contains_key("deadlineMs")
+        || !map.contains_key("params")
+    {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "请求信封字段无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    }
+
+    let Some(version) = map.get("protocolVersion").and_then(Value::as_str) else {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "协议版本类型无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    };
+    if version != "1.0" {
+        let code = if looks_like_protocol_version(version) {
+            "PROTOCOL_UNSUPPORTED"
+        } else {
+            "INVALID_ARGUMENT"
+        };
+        return Ok((
+            serialize_error(reply_to, code, "Agent 控制协议版本不受支持。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    }
+
+    let Some(id) = map.get("id").and_then(Value::as_str) else {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "请求标识无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    };
+    let Some(session) = map.get("session").and_then(Value::as_str) else {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "会话标识无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    };
+    let Some(workspace) = map.get("workspace").and_then(Value::as_str) else {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "工作空间标识无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    };
+    let Some(method) = map.get("method").and_then(Value::as_str) else {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "方法名称无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    };
+    let Some(deadline_ms) = map
+        .get("deadlineMs")
+        .and_then(Value::as_u64)
+        .filter(|ms| (1..=MAX_DEADLINE_MS).contains(ms))
+    else {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "请求时限无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    };
+    let Some(params) = map.get("params").and_then(Value::as_object) else {
+        return Ok((
+            serialize_error(
+                reply_to,
+                "INVALID_ARGUMENT",
+                "请求参数必须为对象。",
+                "never",
+            )?,
+            WRITE_TIMEOUT,
+        ));
+    };
+
+    if !valid_envelope_id(id)
+        || !valid_envelope_id(session)
+        || !valid_workspace_id(workspace)
+        || !valid_method_name(method)
+    {
+        return Ok((
+            serialize_error(reply_to, "INVALID_ARGUMENT", "请求信封格式无效。", "never")?,
+            WRITE_TIMEOUT,
+        ));
+    }
+
+    let write_budget = Duration::from_millis(deadline_ms).min(WRITE_TIMEOUT);
+
+    if !constant_time_eq(session.as_bytes(), ctx.session_id.as_bytes())
+        || workspace != ctx.workspace_id
+    {
+        return Ok((
+            serialize_error(
+                id,
+                "ACCESS_DENIED",
+                "请求会话或工作空间与已认证连接不匹配。",
+                "never",
+            )?,
+            write_budget,
+        ));
+    }
+
+    match method {
+        "desktop.capabilities" => {
+            if !params.is_empty() {
+                return Ok((
+                    serialize_error(
+                        id,
+                        "INVALID_ARGUMENT",
+                        "desktop.capabilities 不接受额外参数。",
+                        "never",
+                    )?,
+                    write_budget,
+                ));
+            }
+            let snapshot = desktop.capabilities();
+            if snapshot.validate().is_err() {
+                return Ok((
+                    serialize_error(
+                        id,
+                        "INTERNAL_ERROR",
+                        "Desktop Agent 生成的平台能力摘要不符合契约。",
+                        "never",
+                    )?,
+                    write_budget,
+                ));
+            }
+            Ok((serialize_success(id, snapshot)?, write_budget))
+        }
+        "desktop.topology" => {
+            if !params.is_empty() {
+                return Ok((
+                    serialize_error(
+                        id,
+                        "INVALID_ARGUMENT",
+                        "desktop.topology 不接受额外参数。",
+                        "never",
+                    )?,
+                    write_budget,
+                ));
+            }
+            match desktop.topology() {
+                Ok(topology) => {
+                    if topology.validate().is_err() {
+                        return Ok((
+                            serialize_error(
+                                id,
+                                "INTERNAL_ERROR",
+                                "Desktop Agent 生成的显示拓扑不符合契约。",
+                                "never",
+                            )?,
+                            write_budget,
+                        ));
+                    }
+                    Ok((serialize_success(id, topology)?, write_budget))
+                }
+                Err(error) => Ok((
+                    serialize_error(id, error.code, &error.message, error.retry)?,
+                    write_budget,
+                )),
+            }
+        }
+        _ => Ok((
+            serialize_error(id, "METHOD_UNAVAILABLE", "此 Agent 方法尚未实现。", "never")?,
+            write_budget,
+        )),
+    }
+}
+
+fn read_session_frame_bytes<S: SessionStream>(
+    stream: &mut S,
+    max_bytes: usize,
+    assembly_timeout: Duration,
+    stop: &StopSignal,
+) -> io::Result<Option<Vec<u8>>> {
+    use std::io::Read as _;
+
+    let mut prefix = [0_u8; 4];
+    {
+        let mut idle_io = DeadlineIo::new(stream, None, stop);
+        loop {
+            match idle_io.read(&mut prefix[..1]) {
+                Ok(0) => return Ok(None),
+                Ok(_) => break,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    let deadline = Some(Instant::now() + assembly_timeout);
+    let mut framed_io = DeadlineIo::new(stream, deadline, stop);
+    framed_io.read_exact(&mut prefix[1..])?;
+    let size = u32::from_le_bytes(prefix) as usize;
+    if !(1..=max_bytes).contains(&size) {
+        return Err(io::ErrorKind::InvalidData.into());
+    }
+    let mut payload = vec![0_u8; size];
+    framed_io.read_exact(&mut payload)?;
+    Ok(Some(payload))
+}
+
 pub(crate) fn serve_session<S: SessionStream>(
     stream: &mut S,
-    agent_epoch: &str,
+    ctx: &SessionContext,
+    desktop: &dyn DesktopSession,
+    frame_read_timeout: Duration,
     stop: &StopSignal,
 ) -> io::Result<()> {
+    use std::io::Write as _;
+
     loop {
-        let request = {
-            let mut io = DeadlineIo::new(stream, None, stop);
-            read_frame::<Probe>(&mut io)?
-        };
-        let Some(request) = request else {
+        let Some(raw) =
+            read_session_frame_bytes(stream, MAX_CONTROL_FRAME, frame_read_timeout, stop)?
+        else {
             return Ok(());
         };
-        if request.kind != "agent.ping" || request.agent_epoch != agent_epoch {
-            return Err(io::ErrorKind::PermissionDenied.into());
+        let request_started = Instant::now();
+        let map = parse_strict_object(&raw)?;
+        match map.get("kind").and_then(Value::as_str) {
+            Some("agent.ping") => {
+                if map.len() != 2
+                    || map.get("agentEpoch").and_then(Value::as_str)
+                        != Some(ctx.agent_epoch.as_str())
+                {
+                    return Err(io::ErrorKind::PermissionDenied.into());
+                }
+                let deadline = Some(Instant::now() + WRITE_TIMEOUT);
+                let mut io = DeadlineIo::new(stream, deadline, stop);
+                write_frame_bounded(
+                    &mut io,
+                    &Pong {
+                        kind: "agent.pong",
+                        agent_epoch: &ctx.agent_epoch,
+                    },
+                    MAX_CONTROL_FRAME,
+                )?;
+            }
+            Some("request") => {
+                let (payload, budget) = dispatch_request(&map, ctx, desktop)?;
+                let deadline = Some((request_started + budget).min(Instant::now() + WRITE_TIMEOUT));
+                let mut io = DeadlineIo::new(stream, deadline, stop);
+                io.write_all(&(payload.len() as u32).to_le_bytes())?;
+                io.write_all(&payload)?;
+            }
+            _ => return Err(io::ErrorKind::InvalidData.into()),
         }
-        let deadline = Some(Instant::now() + WRITE_TIMEOUT);
-        let mut io = DeadlineIo::new(stream, deadline, stop);
-        write_frame(
-            &mut io,
-            &Pong {
-                kind: "agent.pong",
-                agent_epoch,
-            },
-        )?;
     }
 }
 
@@ -173,6 +461,9 @@ fn handle_attached<S: SessionStream>(
     let Ok(registration) = verify_attach(&hello, peer_pid, &nonce, &shared.config) else {
         return;
     };
+    let Ok(session_id) = generate_session_id() else {
+        return;
+    };
     if !slot.promote() {
         return;
     }
@@ -183,6 +474,7 @@ fn handle_attached<S: SessionStream>(
         &registration.workspace_id,
         &shared.config.agent_epoch,
         &nonce,
+        &session_id,
     );
     {
         let mut io = DeadlineIo::new(&mut stream, deadline, &shared.stop);
@@ -190,17 +482,30 @@ fn handle_attached<S: SessionStream>(
             kind: "agent.attach.ready",
             agent_epoch: &shared.config.agent_epoch,
             workspace_id: &registration.workspace_id,
+            session: &session_id,
             proof,
         };
         if write_frame(&mut io, &ready).is_err() {
             return;
         }
     }
-    let _ = serve_session(&mut stream, &shared.config.agent_epoch, &shared.stop);
+    let ctx = SessionContext {
+        agent_epoch: shared.config.agent_epoch.clone(),
+        session_id,
+        workspace_id: registration.workspace_id,
+    };
+    let _ = serve_session(
+        &mut stream,
+        &ctx,
+        shared.config.desktop.as_ref(),
+        shared.config.frame_read_timeout,
+        &shared.stop,
+    );
 }
 
 pub(crate) fn run<S: SessionStream + 'static, L: SessionListener + 'static>(
     mut initial: S,
+    initial_session: SessionContext,
     mut listener: L,
     config: ServerConfig,
     stop: StopSignal,
@@ -226,7 +531,9 @@ pub(crate) fn run<S: SessionStream + 'static, L: SessionListener + 'static>(
         let _slot = initial_slot;
         let _ = serve_session(
             &mut initial,
-            &initial_shared.config.agent_epoch,
+            &initial_session,
+            initial_shared.config.desktop.as_ref(),
+            initial_shared.config.frame_read_timeout,
             &initial_shared.stop,
         );
     })?;
@@ -288,9 +595,17 @@ pub(crate) fn run<S: SessionStream + 'static, L: SessionListener + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::read_frame_bytes;
+    use deskweave_platform_api::{
+        BackendKind, CapabilitySnapshot, DisplayTopology, FakeDesktopSession, FeatureSet,
+        FeatureState, FeatureStatus, PlatformArch, PlatformError, PlatformOs, TopologyCoverage,
+        TrajectoryVersion,
+    };
     use ed25519_dalek::{Signer, SigningKey};
-    use serde_json::{Value, json};
+    use serde_json::json;
     use std::collections::VecDeque;
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::mpsc;
 
     struct PipeHalf {
@@ -356,7 +671,6 @@ mod tests {
     impl Drop for MemStream {
         fn drop(&mut self) {
             self.writer.close();
-            self.reader.close();
         }
     }
 
@@ -374,8 +688,8 @@ mod tests {
                 }
                 if !state.buf.is_empty() {
                     let count = buf.len().min(state.buf.len());
-                    for byte in buf.iter_mut().take(count) {
-                        *byte = state.buf.pop_front().unwrap();
+                    for slot in buf.iter_mut().take(count) {
+                        *slot = state.buf.pop_front().unwrap();
                     }
                     return Ok(count);
                 }
@@ -388,7 +702,7 @@ mod tests {
                         if now >= limit {
                             return Err(io::ErrorKind::TimedOut.into());
                         }
-                        (limit - now).min(Duration::from_millis(10))
+                        limit.duration_since(now).min(Duration::from_millis(10))
                     }
                     None => Duration::from_millis(10),
                 };
@@ -433,10 +747,30 @@ mod tests {
         }
     }
 
+    fn fake_desktop(topology: Result<DisplayTopology, PlatformError>) -> Arc<dyn DesktopSession> {
+        let caps = CapabilitySnapshot {
+            os: PlatformOs::Macos,
+            arch: PlatformArch::Arm64,
+            backend: BackendKind::MacosQuartz,
+            backend_version: "0.1.0".to_owned(),
+            generation: 1,
+            topology_version: topology.as_ref().ok().map(DisplayTopology::version),
+            topology_coverage: if topology.is_ok() {
+                TopologyCoverage::All
+            } else {
+                TopologyCoverage::Unknown
+            },
+            trajectory_versions: vec![TrajectoryVersion::V1_0, TrajectoryVersion::V1_1],
+            features: FeatureSet::all(FeatureStatus::unimplemented()),
+        };
+        Arc::new(FakeDesktopSession::new(caps, topology))
+    }
+
     fn test_config(
         signing_key: &SigningKey,
         idle_grace: Duration,
         max_clients: usize,
+        desktop: Arc<dyn DesktopSession>,
     ) -> ServerConfig {
         ServerConfig {
             agent_epoch: "a".repeat(64),
@@ -445,7 +779,17 @@ mod tests {
             verification_key: signing_key.verifying_key(),
             idle_grace,
             handshake_timeout: Duration::from_millis(200),
+            frame_read_timeout: Duration::from_millis(200),
             max_clients,
+            desktop,
+        }
+    }
+
+    fn initial_ctx() -> SessionContext {
+        SessionContext {
+            agent_epoch: "a".repeat(64),
+            session_id: "1".repeat(32),
+            workspace_id: "ws-1".to_owned(),
         }
     }
 
@@ -491,6 +835,7 @@ mod tests {
         write_frame(&mut DeadlineIo::new(client, deadline, stop), &hello)?;
         let ready: Value = read_frame(&mut DeadlineIo::new(client, deadline, stop))?
             .ok_or(io::ErrorKind::UnexpectedEof)?;
+        let session = ready["session"].as_str().unwrap();
         let expected_proof = attach_ready_proof(
             &proof_key,
             engine_pid,
@@ -498,6 +843,7 @@ mod tests {
             workspace_id,
             &"a".repeat(64),
             &nonce,
+            session,
         );
         let actual_proof: Vec<u8> = ready["proof"]
             .as_array()
@@ -519,6 +865,21 @@ mod tests {
             .ok_or_else(|| io::Error::from(io::ErrorKind::UnexpectedEof))
     }
 
+    fn client_rpc(client: &mut MemStream, request: &Value, stop: &StopSignal) -> io::Result<Value> {
+        let deadline = Some(Instant::now() + Duration::from_secs(2));
+        write_frame_bounded(
+            &mut DeadlineIo::new(client, deadline, stop),
+            request,
+            MAX_CONTROL_FRAME,
+        )?;
+        let raw = read_frame_bytes(
+            &mut DeadlineIo::new(client, deadline, stop),
+            MAX_CONTROL_FRAME,
+        )?
+        .ok_or_else(|| io::Error::from(io::ErrorKind::UnexpectedEof))?;
+        serde_json::from_slice(&raw).map_err(|_| io::ErrorKind::InvalidData.into())
+    }
+
     #[test]
     fn shared_server_serves_multiple_engines_and_exits_after_idle_grace() {
         let key = SigningKey::from_bytes(&[0x5a; 32]);
@@ -526,9 +887,11 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let stop = StopSignal::new().unwrap();
         let client_stop = StopSignal::new().unwrap();
-        let config = test_config(&key, Duration::from_millis(300), 4);
-        let server_thread =
-            thread::spawn(move || run(server_init, MemListener { rx }, config, stop));
+        let desktop = fake_desktop(Err(PlatformError::capability_not_implemented("none")));
+        let config = test_config(&key, Duration::from_millis(300), 4, desktop);
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
 
         assert_eq!(
             client_ping(&mut client_a, &client_stop).unwrap()["kind"],
@@ -576,11 +939,12 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let stop = StopSignal::new().unwrap();
         let client_stop = StopSignal::new().unwrap();
-        let config = test_config(&key, Duration::from_millis(80), 2);
-        let server_thread =
-            thread::spawn(move || run(server_init, MemListener { rx }, config, stop));
+        let desktop = fake_desktop(Err(PlatformError::session_unavailable("inactive")));
+        let config = test_config(&key, Duration::from_millis(80), 2, desktop);
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
 
-        // Mismatched owner identity must be rejected.
         let (server_bad, mut client_bad) = MemStream::pair();
         tx.send((server_bad, 4004)).unwrap();
         assert!(
@@ -595,13 +959,10 @@ mod tests {
             .is_err()
         );
 
-        // Stalled unauthenticated connection fills the 2nd slot (max_clients=2) and never replies,
-        // yet closing authenticated client A must still allow idle exit without waiting forever.
         let (server_stalled, _client_stalled) = MemStream::pair();
         tx.send((server_stalled, 5005)).unwrap();
         thread::sleep(Duration::from_millis(20));
 
-        // 3rd connection exceeds max_clients=2 and is immediately closed.
         let (server_over, mut client_over) = MemStream::pair();
         tx.send((server_over, 6006)).unwrap();
         let over_deadline = Some(Instant::now() + Duration::from_secs(1));
@@ -613,6 +974,387 @@ mod tests {
             ))
             .unwrap()
             .is_none()
+        );
+
+        drop(client_a);
+        server_thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn shared_server_routes_capabilities_topology_and_enforces_envelope_boundaries() {
+        let topo_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/platform/macos-topology.json");
+        let topology: DisplayTopology =
+            serde_json::from_slice(&fs::read(topo_path).unwrap()).unwrap();
+        let key = SigningKey::from_bytes(&[0x5a; 32]);
+        let (server_init, mut client_a) = MemStream::pair();
+        let (tx, rx) = mpsc::channel();
+        let stop = StopSignal::new().unwrap();
+        let client_stop = StopSignal::new().unwrap();
+        let config = test_config(
+            &key,
+            Duration::from_millis(80),
+            4,
+            fake_desktop(Ok(topology.clone())),
+        );
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
+
+        // 1. Valid desktop.capabilities
+        let caps_resp = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-caps",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(caps_resp["ok"], true);
+        assert_eq!(caps_resp["replyTo"], "req-caps");
+        assert_eq!(caps_resp["result"]["backend"], "macos-quartz");
+
+        // 2. Valid desktop.topology
+        let topo_resp = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-topo",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.topology",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(topo_resp["ok"], true);
+        assert_eq!(topo_resp["result"]["version"], topology.version());
+
+        // 3. Cross-workspace spoofing -> ACCESS_DENIED
+        let spoof_resp = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-spoof",
+                "session": "1".repeat(32),
+                "workspace": "ws-other",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(spoof_resp["ok"], false);
+        assert_eq!(spoof_resp["error"]["code"], "ACCESS_DENIED");
+
+        // 4. Unsupported protocolVersion -> PROTOCOL_UNSUPPORTED
+        let proto_resp = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "2.0",
+                "kind": "request",
+                "id": "req-proto",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(proto_resp["ok"], false);
+        assert_eq!(proto_resp["error"]["code"], "PROTOCOL_UNSUPPORTED");
+
+        // 5. Extra params -> INVALID_ARGUMENT
+        let param_resp = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-params",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {"extra": true}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(param_resp["ok"], false);
+        assert_eq!(param_resp["error"]["code"], "INVALID_ARGUMENT");
+
+        // 6. Unimplemented method -> METHOD_UNAVAILABLE
+        let missing_resp = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-unimpl",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "lease.acquire",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(missing_resp["ok"], false);
+        assert_eq!(missing_resp["error"]["code"], "METHOD_UNAVAILABLE");
+
+        // 7. Attached second Engine uses its own session/workspace independently
+        let (server_b, mut client_b) = MemStream::pair();
+        tx.send((server_b, 2002)).unwrap();
+        let ready_b =
+            client_attach(&mut client_b, &key, 2002, "ws-2", ["1", "2"], &client_stop).unwrap();
+        let sess_b = ready_b["session"].as_str().unwrap();
+        let b_resp = client_rpc(
+            &mut client_b,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-b",
+                "session": sess_b,
+                "workspace": "ws-2",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(b_resp["ok"], true);
+
+        drop(client_b);
+        drop(client_a);
+        server_thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn serialize_success_falls_back_to_limit_exceeded_when_over_budget() {
+        let oversized = "x".repeat(MAX_CONTROL_FRAME + 32);
+        let bytes = serialize_success("req-big", json!({"blob": oversized})).unwrap();
+        assert!(bytes.len() <= MAX_CONTROL_FRAME);
+        let parsed: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(parsed["ok"], false);
+        assert_eq!(parsed["replyTo"], "req-big");
+        assert_eq!(parsed["error"]["code"], "LIMIT_EXCEEDED");
+    }
+
+    #[test]
+    fn stalled_partial_header_and_partial_payload_time_out_and_release_slot() {
+        let key = SigningKey::from_bytes(&[0x5a; 32]);
+        let (server_init, mut client_idle) = MemStream::pair();
+        let (tx, rx) = mpsc::channel();
+        let stop = StopSignal::new().unwrap();
+        let client_stop = StopSignal::new().unwrap();
+        let desktop = fake_desktop(Err(PlatformError::capability_not_implemented("none")));
+        let mut config = test_config(&key, Duration::from_millis(250), 2, desktop);
+        config.frame_read_timeout = Duration::from_millis(120);
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
+
+        // 1. Partial 1-byte frame header stalls -> server times out frame assembly and releases slot.
+        let (server_hdr, mut client_hdr) = MemStream::pair();
+        tx.send((server_hdr, 3001)).unwrap();
+        let _ = client_attach(
+            &mut client_hdr,
+            &key,
+            3001,
+            "ws-hdr",
+            ["1", "2"],
+            &client_stop,
+        )
+        .unwrap();
+        client_hdr.write_chunk(&[0x20], None, &client_stop).unwrap();
+        // Wait for the server side to close the stalled connection and free the 2nd slot.
+        let mut probe = [0_u8; 1];
+        let closed_hdr = client_hdr
+            .read_chunk(
+                &mut probe,
+                Some(Instant::now() + Duration::from_secs(2)),
+                &client_stop,
+            )
+            .unwrap();
+        assert_eq!(closed_hdr, 0);
+
+        // 2. Partial payload after full 4-byte length prefix stalls -> server times out and releases slot.
+        let (server_body, mut client_body) = MemStream::pair();
+        tx.send((server_body, 3002)).unwrap();
+        let _ = client_attach(
+            &mut client_body,
+            &key,
+            3002,
+            "ws-body",
+            ["1", "2"],
+            &client_stop,
+        )
+        .unwrap();
+        let mut partial = 128_u32.to_le_bytes().to_vec();
+        partial.extend_from_slice(br#"{"protocolVersion":"1.0""#);
+        client_body
+            .write_chunk(&partial, None, &client_stop)
+            .unwrap();
+        let closed_body = client_body
+            .read_chunk(
+                &mut probe,
+                Some(Instant::now() + Duration::from_secs(2)),
+                &client_stop,
+            )
+            .unwrap();
+        assert_eq!(closed_body, 0);
+
+        // 3. Slot is free again AND the idle healthy connection stayed alive beyond frame_read_timeout!
+        thread::sleep(Duration::from_millis(180));
+        let (server_ok, mut client_ok) = MemStream::pair();
+        tx.send((server_ok, 3003)).unwrap();
+        let ready_ok = client_attach(
+            &mut client_ok,
+            &key,
+            3003,
+            "ws-ok",
+            ["1", "2"],
+            &client_stop,
+        )
+        .unwrap();
+        let sess_ok = ready_ok["session"].as_str().unwrap();
+        let resp_ok = client_rpc(
+            &mut client_ok,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-ok",
+                "session": sess_ok,
+                "workspace": "ws-ok",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(resp_ok["ok"], true);
+
+        let idle_resp = client_rpc(
+            &mut client_idle,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-idle",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(idle_resp["ok"], true);
+
+        drop(client_hdr);
+        drop(client_body);
+        drop(client_ok);
+        drop(client_idle);
+        server_thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn desktop_capabilities_serves_live_refreshed_snapshot_and_generation() {
+        let key = SigningKey::from_bytes(&[0x5a; 32]);
+        let (server_init, mut client_a) = MemStream::pair();
+        let (_tx, rx) = mpsc::channel();
+        let stop = StopSignal::new().unwrap();
+        let client_stop = StopSignal::new().unwrap();
+
+        let initial_caps = CapabilitySnapshot {
+            os: PlatformOs::Macos,
+            arch: PlatformArch::Arm64,
+            backend: BackendKind::MacosQuartz,
+            backend_version: "0.1.0".to_owned(),
+            generation: 1,
+            topology_version: None,
+            topology_coverage: TopologyCoverage::Unknown,
+            trajectory_versions: vec![TrajectoryVersion::V1_0, TrajectoryVersion::V1_1],
+            features: FeatureSet::all(FeatureStatus::unimplemented()),
+        };
+        let fake = Arc::new(FakeDesktopSession::new(
+            initial_caps.clone(),
+            Err(PlatformError::capability_not_implemented("none")),
+        ));
+        let desktop: Arc<dyn DesktopSession> = fake.clone();
+        let config = test_config(&key, Duration::from_millis(200), 2, desktop);
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
+
+        let r1 = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-gen-1",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(r1["ok"], true);
+        assert_eq!(r1["result"]["generation"], 1);
+        assert_eq!(
+            r1["result"]["features"]["input.keyboard"]["state"],
+            "unimplemented"
+        );
+
+        // Simulate runtime permission revocation / session change on the shared DesktopSession.
+        let mut updated = initial_caps;
+        updated.generation = 2;
+        updated.features = FeatureSet::all(FeatureStatus::session_unavailable());
+        assert_eq!(
+            updated.features.input_keyboard.state,
+            FeatureState::SessionUnavailable
+        );
+        fake.set_capabilities(updated);
+
+        let r2 = client_rpc(
+            &mut client_a,
+            &json!({
+                "protocolVersion": "1.0",
+                "kind": "request",
+                "id": "req-gen-2",
+                "session": "1".repeat(32),
+                "workspace": "ws-1",
+                "method": "desktop.capabilities",
+                "deadlineMs": 5000,
+                "params": {}
+            }),
+            &client_stop,
+        )
+        .unwrap();
+        assert_eq!(r2["ok"], true);
+        assert_eq!(r2["result"]["generation"], 2);
+        assert_eq!(
+            r2["result"]["features"]["input.keyboard"]["state"],
+            "sessionUnavailable"
         );
 
         drop(client_a);

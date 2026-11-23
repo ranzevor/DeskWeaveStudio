@@ -89,6 +89,11 @@ dependencies = [
 name = "deskweave-agent"
 version = "0.1.0"
 dependencies = [
+ "deskweave-platform-api",
+ "deskweave-platform-linux-wayland",
+ "deskweave-platform-linux-x11",
+ "deskweave-platform-macos",
+ "deskweave-platform-windows",
  "ed25519-dalek",
  "getrandom 0.3.4",
  "hmac",
@@ -96,6 +101,43 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "deskweave-platform-api"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "deskweave-platform-linux-wayland"
+version = "0.1.0"
+dependencies = [
+ "deskweave-platform-api",
+ "deskweave-platform-linux-x11",
+]
+
+[[package]]
+name = "deskweave-platform-linux-x11"
+version = "0.1.0"
+dependencies = [
+ "deskweave-platform-api",
+]
+
+[[package]]
+name = "deskweave-platform-macos"
+version = "0.1.0"
+dependencies = [
+ "deskweave-platform-api",
+]
+
+[[package]]
+name = "deskweave-platform-windows"
+version = "0.1.0"
+dependencies = [
+ "deskweave-platform-api",
 ]
 
 [[package]]

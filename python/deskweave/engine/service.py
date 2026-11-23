@@ -11,6 +11,8 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 
 import rfc8785
 
@@ -22,6 +24,7 @@ from deskweave.adapters.receipts import find_receipt
 from deskweave.adapters.run_commands import RunCommand
 from deskweave.adapters.workspace import Workspace, utc_time
 from deskweave.contracts import method_schema, schema_contents, validate
+from deskweave.domain.platform import current_platform_tag
 from deskweave.domain.values import evaluate
 from deskweave.domain.workflow import validate_workflow
 from deskweave.engine.inspection import Inspection
@@ -29,10 +32,22 @@ from deskweave.engine.pagination import Pages
 from deskweave.engine.run_api import RunAPI
 from deskweave.engine.run_events import RunEvents
 from deskweave.engine.run_manager import RunManager
-from deskweave.engine.run_planning import RunAccess
+from deskweave.engine.run_planning import DEFAULT_LIMITS, RunAccess
 from deskweave.engine.run_queries import RunQueries
 from deskweave.errors import DeskWeaveError
 from deskweave.json import MAX_FRAME, digest, dumps, loads
+
+
+def _engine_version() -> str:
+    try:
+        return package_version("deskweave")
+    except PackageNotFoundError:
+        return "0.1.0"
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingCapabilities:
+    base: dict
 
 
 @dataclass(frozen=True)
@@ -72,6 +87,8 @@ class Engine:
         self._desktop_lock = threading.Lock()
         self._desktop_stopping = threading.Event()
         self._desktop_agent = None
+        self._desktop_caps_future: Future | None = None
+        self._desktop_caps_agent = None
         self._revocations = {}
         self._draining = False
         self._frame_limit = MAX_FRAME
@@ -146,6 +163,7 @@ class Engine:
         self.register("event.subscribe", self.events.subscribe, {"run.read"})
         self.register("event.read", self.events.read, {"run.read"})
         self.register("event.unsubscribe", self.events.unsubscribe, set())
+        self.register("system.capabilities", self._system_capabilities, set())
 
     @property
     def methods(self) -> tuple[str, ...]:
@@ -249,7 +267,15 @@ class Engine:
             return True
 
     def start_desktop_agent(
-        self, local, installation, authority, *, timeout=10, cancel=None, idle_grace=2.0
+        self,
+        local,
+        installation,
+        authority,
+        *,
+        timeout=10,
+        cancel=None,
+        idle_grace=2.0,
+        wayland_backend=None,
     ):
         from deskweave.agent import start_agent
 
@@ -261,6 +287,7 @@ class Engine:
             timeout=timeout,
             cancel=cancel,
             idle_grace=idle_grace,
+            wayland_backend=wayland_backend,
         )
 
     def close(self) -> None:
@@ -269,6 +296,8 @@ class Engine:
             self._desktop_stopping.set()
         failures = []
         with self._desktop_lock:
+            self._desktop_caps_future = None
+            self._desktop_caps_agent = None
             if self._desktop_agent is not None:
                 try:
                     self._desktop_agent.close()
@@ -450,9 +479,26 @@ class Engine:
                         )
                     else:
                         result = method.handler(session, params, request["id"])
-                    if not isinstance(result, Future):
+                    if not isinstance(result, (Future, _PendingCapabilities)):
                         response = self._response(header, name, method, result, max_frame_bytes)
-            if isinstance(result, Future):
+            if isinstance(result, _PendingCapabilities):
+                payload = result.base
+                desktop = self._query_desktop_capabilities(deadline, current)
+                if desktop is not None:
+                    versions = dict(payload["componentVersions"])
+                    if 1 <= len(desktop["backendVersion"]) <= 64:
+                        versions["agent"] = desktop["backendVersion"]
+                    payload = {
+                        **payload,
+                        "componentVersions": versions,
+                        "desktop": desktop,
+                    }
+                with (
+                    self._mutex,
+                    self.workspace.budget(deadline, self.monotonic, authorize=current),
+                ):
+                    response = self._response(header, name, method, payload, max_frame_bytes)
+            elif isinstance(result, Future):
                 try:
                     result = result.result(timeout=max(0, deadline - self.monotonic()))
                 except FutureTimeout:
@@ -879,6 +925,97 @@ class Engine:
         if collection is not None and collection["owner"] == session.id:
             del self._collections[identity]
         return {"closed": True}
+
+    def _run_desktop_capabilities(self, desktop_agent, future: Future) -> None:
+        result = None
+        error = None
+        try:
+            result = desktop_agent.desktop_capabilities(timeout=5, cancel=self._desktop_stopping)
+        except BaseException as exc:
+            error = exc
+        finally:
+            with self._desktop_lock:
+                if self._desktop_caps_future is future:
+                    self._desktop_caps_future = None
+                    self._desktop_caps_agent = None
+            if error is not None:
+                future.set_exception(error)
+            else:
+                future.set_result(result)
+
+    def _query_desktop_capabilities(
+        self, deadline: float, authorize: Callable[[], None]
+    ) -> dict | None:
+        acquired = False
+        while not acquired:
+            authorize()
+            if self._desktop_stopping.is_set():
+                raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
+            left = deadline - self.monotonic()
+            if left <= 0:
+                raise DeskWeaveError("DEADLINE_EXCEEDED", "请求已超过截止时间。")
+            acquired = self._desktop_lock.acquire(timeout=min(left, 0.05))
+        try:
+            authorize()
+            if self._desktop_stopping.is_set():
+                raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
+            if deadline - self.monotonic() <= 0:
+                raise DeskWeaveError("DEADLINE_EXCEEDED", "请求已超过截止时间。")
+            desktop_agent = (
+                self._desktop_agent
+                if self._desktop_agent is not None and self._desktop_agent.running
+                else None
+            )
+            if desktop_agent is None:
+                return None
+            future = self._desktop_caps_future
+            if future is None or self._desktop_caps_agent is not desktop_agent:
+                future = Future()
+                self._desktop_caps_future = future
+                self._desktop_caps_agent = desktop_agent
+                try:
+                    threading.Thread(
+                        target=self._run_desktop_capabilities,
+                        args=(desktop_agent, future),
+                        name="deskweave-agent-capabilities",
+                        daemon=True,
+                    ).start()
+                except BaseException:
+                    self._desktop_caps_future = None
+                    self._desktop_caps_agent = None
+                    raise
+        finally:
+            self._desktop_lock.release()
+        while True:
+            authorize()
+            if self._desktop_stopping.is_set():
+                raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。")
+            left = deadline - self.monotonic()
+            if left <= 0:
+                raise DeskWeaveError("DEADLINE_EXCEEDED", "请求已超过截止时间。")
+            try:
+                return copy.deepcopy(future.result(timeout=min(left, 0.05)))
+            except FutureTimeout:
+                continue
+            except DeskWeaveError:
+                if self._desktop_stopping.is_set():
+                    raise DeskWeaveError("WORKSPACE_CLOSED", "执行服务正在关闭。") from None
+                raise
+
+    def _system_capabilities(self, session, _params, _request_id):
+        base = {
+            "platform": current_platform_tag(),
+            "componentVersions": {"engine": _engine_version()},
+            "actions": sorted(self.runs.ports.actions),
+            "limits": {
+                **DEFAULT_LIMITS,
+                "maxFrameBytes": self._frame_limit,
+                "maxContentBytes": MAX_CONTENT,
+            },
+        }
+        if "platform-capabilities-v1" in session.capabilities:
+            return _PendingCapabilities(base)
+        return base
 
     def _request_status(self, session, params, _request_id):
         with self.workspace.transaction() as connection:

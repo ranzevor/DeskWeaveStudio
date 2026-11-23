@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
 import secrets
 import struct
@@ -14,7 +15,9 @@ from pathlib import Path
 
 from deskweave.coordination.directory import Directory, StartupLock, backend, runtime_directory
 from deskweave.coordination.startup import InvalidDiscovery, check_idle
+from deskweave.domain.platform import validate_desktop_capabilities, validate_desktop_topology
 from deskweave.errors import DeskWeaveError
+from deskweave.json import MAX_FRAME as _MAX_CONTROL_FRAME
 from deskweave.json import dumps, loads
 from deskweave.process import _wire as wire
 from deskweave.process._wire import write_frame
@@ -37,6 +40,216 @@ _STARTUP = ".agent-start.lock"
 _DISCOVERY = "agent.json"
 _MAX_FRAME = 4096
 _DISCOVERY_LIMIT = 16384
+
+
+def _is_local_x11_display(value: str) -> bool:
+    trimmed = value.strip()
+    if not 1 <= len(trimmed) <= 64:
+        return False
+    for prefix in ("unix/:", "unix:", ":"):
+        if trimmed.startswith(prefix):
+            rest = trimmed[len(prefix) :]
+            break
+    else:
+        return False
+    num, sep, screen = rest.partition(".")
+    if not num or not num.isascii() or not num.isdigit():
+        return False
+    if sep and (not screen or not screen.isascii() or not screen.isdigit()):
+        return False
+    return int(num) <= 0xFFFFFFFF
+
+
+def _check_wayland_backend(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise ValueError("Wayland 后端选择无效。")
+    normalized = value.strip().lower()
+    if normalized not in {"auto", "portal", "compositor"}:
+        raise ValueError("Wayland 后端选择必须为 auto、portal 或 compositor。")
+    return normalized
+
+
+def _is_safe_socket_spec(value: str) -> bool:
+    return (
+        1 <= len(value) <= 255
+        and "\x00" not in value
+        and value not in {".", ".."}
+        and (
+            (value.startswith("/") and ".." not in value.split("/") and "\\" not in value)
+            or ("/" not in value and "\\" not in value)
+        )
+    )
+
+
+_UNSUPPORTED_DBUS_ADDRESS = "unsupported:"
+_UNIX_EXCLUSIVE_LOCATOR_KEYS = frozenset({"abstract", "tmpdir", "dir", "runtime"})
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
+
+
+def _is_valid_dbus_key(key: str) -> bool:
+    return bool(key) and key.isascii() and all(ch.isalnum() or ch in "_-" for ch in key)
+
+
+def _is_dbus_optionally_escaped_char(ch: str) -> bool:
+    # D-Bus Server Addresses optionally-escaped byte set `[-0-9A-Za-z_/.\\*]` minus `\` for
+    # path-separator safety; all other bytes (including space and non-ASCII) must be %-escaped.
+    return ch.isascii() and (ch.isalnum() or ch in "-_/.*")
+
+
+def _is_safe_dbus_unix_path_value(item: str) -> bool:
+    return (
+        bool(item)
+        and item.startswith("/")
+        and ".." not in item.split("/")
+        and all(_is_dbus_optionally_escaped_char(ch) for ch in item)
+    )
+
+
+def _is_safe_dbus_param_value(item: str) -> bool:
+    if not item:
+        return False
+    idx = 0
+    length = len(item)
+    while idx < length:
+        ch = item[idx]
+        if _is_dbus_optionally_escaped_char(ch):
+            idx += 1
+            continue
+        if ch == "%" and idx + 2 < length:
+            hi, lo = item[idx + 1], item[idx + 2]
+            if hi in _HEX_DIGITS and lo in _HEX_DIGITS and not (hi == "0" and lo == "0"):
+                idx += 3
+                continue
+        return False
+    return True
+
+
+def _parse_dbus_entry(entry: str) -> tuple[bool, bool]:
+    """Validates a single D-Bus address entry.
+
+    Returns `(well_formed, is_safe_unix_path_entry)`. Rejects mutually exclusive `unix:` locator
+    keys (`path` combined with `abstract`/`tmpdir`/`dir`/`runtime`), duplicate `path=` keys,
+    unescaped bytes outside the D-Bus optionally-escaped set (such as spaces), path traversal,
+    percent escapes in `unix:path=`, backslashes, and malformed key/value pairs.
+    """
+    transport, sep, rest = entry.partition(":")
+    if (
+        not sep
+        or not 1 <= len(transport) <= 32
+        or not transport.isascii()
+        or not all(ch.isalnum() or ch in "+-" for ch in transport)
+    ):
+        return False, False
+    if not rest:
+        # Standard D-Bus allows parameterless non-unix transports (e.g. `autolaunch:`, `systemd:`);
+        # `unix:` always requires an explicit locator parameter.
+        return transport != "unix", False
+
+    seen_path = False
+    seen_other_locator = False
+    for pair in rest.split(","):
+        key, eq, item = pair.partition("=")
+        if not eq or not _is_valid_dbus_key(key) or not item:
+            return False, False
+        if transport == "unix" and key == "path":
+            if seen_path or not _is_safe_dbus_unix_path_value(item):
+                return False, False
+            seen_path = True
+        else:
+            if not _is_safe_dbus_param_value(item):
+                return False, False
+            if transport == "unix" and key in _UNIX_EXCLUSIVE_LOCATOR_KEYS:
+                seen_other_locator = True
+    if transport == "unix" and seen_path and seen_other_locator:
+        return False, False
+    return True, transport == "unix" and seen_path
+
+
+def _sanitize_dbus_session_bus_address(value: str) -> str:
+    """Sanitizes an explicitly configured DBUS_SESSION_BUS_ADDRESS without dropping it.
+
+    Preserves safe `unix:path=...` entries (including valid `;`-separated multi-address lists,
+    optional single trailing `;`, and parameterless fallback transports like `autolaunch:`) and
+    replaces unsupported or malformed explicit addresses (such as `unix:abstract=...`, `tcp:...`,
+    control characters, mutually exclusive `unix:` keys, or unsafe paths) with an inert sentinel
+    so the agent never silently falls back to `$XDG_RUNTIME_DIR/bus`.
+    """
+    if not 1 <= len(value) <= 4096 or any(not ch.isprintable() for ch in value):
+        return _UNSUPPORTED_DBUS_ADDRESS
+    body = value[:-1] if value.endswith(";") else value
+    if not body:
+        return _UNSUPPORTED_DBUS_ADDRESS
+    entries = body.split(";")
+    if len(entries) > 16 or any(not entry for entry in entries):
+        return _UNSUPPORTED_DBUS_ADDRESS
+    safe_unix_entries: list[str] = []
+    for entry in entries:
+        well_formed, is_safe_unix = _parse_dbus_entry(entry)
+        if not well_formed:
+            return _UNSUPPORTED_DBUS_ADDRESS
+        if is_safe_unix:
+            safe_unix_entries.append(entry)
+    if not safe_unix_entries:
+        return _UNSUPPORTED_DBUS_ADDRESS
+    return ";".join(safe_unix_entries)
+
+
+def _sanitize_linux_session_env(environ) -> dict[str, str]:
+    result: dict[str, str] = {}
+    session_type = environ.get("XDG_SESSION_TYPE")
+    if (
+        type(session_type) is str
+        and (trimmed := session_type.strip())
+        and len(trimmed) <= 32
+        and trimmed.isascii()
+        and trimmed.isalnum()
+    ):
+        result["XDG_SESSION_TYPE"] = trimmed
+    session_id = environ.get("XDG_SESSION_ID")
+    if (
+        type(session_id) is str
+        and (trimmed := session_id.strip())
+        and len(trimmed) <= 64
+        and trimmed.isascii()
+        and all(ch.isalnum() or ch in "-_" for ch in trimmed)
+    ):
+        result["XDG_SESSION_ID"] = trimmed
+    runtime_dir = environ.get("XDG_RUNTIME_DIR")
+    if (
+        type(runtime_dir) is str
+        and (trimmed := runtime_dir.strip())
+        and 1 <= len(trimmed) <= 4096
+        and "\x00" not in trimmed
+        and trimmed.startswith("/")
+        and ".." not in trimmed.split("/")
+    ):
+        result["XDG_RUNTIME_DIR"] = trimmed
+    wayland = environ.get("WAYLAND_DISPLAY")
+    if type(wayland) is str and (trimmed := wayland.strip()) and _is_safe_socket_spec(trimmed):
+        result["WAYLAND_DISPLAY"] = trimmed
+    compositor_socket = environ.get("DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET")
+    if (
+        type(compositor_socket) is str
+        and (trimmed := compositor_socket.strip())
+        and _is_safe_socket_spec(trimmed)
+    ):
+        result["DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET"] = trimmed
+    wayland_backend = environ.get("DESKWEAVE_WAYLAND_BACKEND")
+    if type(wayland_backend) is str and (trimmed := wayland_backend.strip().lower()) in {
+        "auto",
+        "portal",
+        "compositor",
+    }:
+        result["DESKWEAVE_WAYLAND_BACKEND"] = trimmed
+    dbus_addr = environ.get("DBUS_SESSION_BUS_ADDRESS")
+    if type(dbus_addr) is str and dbus_addr != "":
+        result["DBUS_SESSION_BUS_ADDRESS"] = _sanitize_dbus_session_bus_address(dbus_addr)
+    display = environ.get("DISPLAY")
+    if type(display) is str and "\x00" not in display and _is_local_x11_display(display):
+        result["DISPLAY"] = display.strip()
+    return result
 
 
 def _scope(local):
@@ -79,6 +292,14 @@ def _is_hex(value):
     )
 
 
+def _is_session_id(value):
+    return (
+        type(value) is str
+        and len(value) == 32
+        and all(letter in "0123456789abcdef" for letter in value)
+    )
+
+
 def _check_owner(runtime, expected):
     runtime.check()
     with runtime.open(_OWNER) as current:
@@ -86,14 +307,16 @@ def _check_owner(runtime, expected):
             raise DeskWeaveError("RESOURCE_DENIED", "桌面 Agent 所有权对象已改变。")
 
 
-def _proof(secret, role, engine_pid, agent_pid, epoch, *, address=None):
+def _proof(secret, role, engine_pid, agent_pid, epoch, *, address=None, session=None):
     identity = struct.pack("<II", engine_pid, agent_pid) + epoch.encode("ascii")
     if address is not None:
         identity += b"\0" + address.encode("utf-8")
+    if session is not None:
+        identity += b"\0" + session.encode("ascii")
     return hmac.digest(secret, b"deskweave/desktop-agent/v1\0" + role + b"\0" + identity, "sha256")
 
 
-def _attach_ready_proof(proof_key, engine_pid, agent_pid, workspace_id, epoch, nonce):
+def _attach_ready_proof(proof_key, engine_pid, agent_pid, workspace_id, epoch, nonce, session):
     payload = (
         b"deskweave/desktop-agent/attach-ready/v1\0"
         + struct.pack("<II", engine_pid, agent_pid)
@@ -102,6 +325,8 @@ def _attach_ready_proof(proof_key, engine_pid, agent_pid, workspace_id, epoch, n
         + epoch.encode("ascii")
         + b"\0"
         + nonce
+        + b"\0"
+        + session.encode("ascii")
     )
     return hmac.digest(proof_key, payload, "sha256")
 
@@ -376,17 +601,20 @@ class AgentProcess(Resource):
         timeout=10,
         cancel=None,
         idle_grace=2.0,
+        wayland_backend: str | None = None,
     ):
         if type(installation) is not Installation or type(authority) is not AgentAuthority:
             raise TypeError("启动 Desktop Agent 需要受信安装清单和启动授权方。")
         _check_workspace_id(workspace_id)
         check_idle(idle_grace)
+        self.wayland_backend = _check_wayland_backend(wayland_backend)
         self.local = local
         self.installation = installation
         self.authority = authority
         self.workspace_id = workspace_id
         self.idle_grace = idle_grace
         self.epoch = None
+        self.session = None
         self.created = False
         self._published = False
         self._process = self._peer = self._listener = self._channel = None
@@ -584,10 +812,11 @@ class AgentProcess(Resource):
         )
         ready = self._channel.receive(budget=budget)
         if (
-            ready.keys() != {"kind", "agentEpoch", "workspaceId", "proof"}
+            ready.keys() != {"kind", "agentEpoch", "workspaceId", "session", "proof"}
             or ready["kind"] != "agent.attach.ready"
             or ready["agentEpoch"] != record["agentEpoch"]
             or ready["workspaceId"] != self.workspace_id
+            or not _is_session_id(ready["session"])
         ):
             raise rejected()
         expected = _attach_ready_proof(
@@ -597,13 +826,16 @@ class AgentProcess(Resource):
             self.workspace_id,
             record["agentEpoch"],
             nonce,
+            ready["session"],
         )
         if not hmac.compare_digest(_bytes(ready["proof"], 32), expected):
             raise rejected()
         _check_owner(self._runtime_dir, owner_identity)
         self._close_resource("_owner")
         self._owner_identity = owner_identity
+        self._channel.max_frame_bytes = _MAX_CONTROL_FRAME
         self.epoch = record["agentEpoch"]
+        self.session = ready["session"]
         self.created = False
         return True
 
@@ -639,17 +871,17 @@ class AgentProcess(Resource):
             ):
                 raise rejected()
             self.local.check(budget.check_time)
-            write_frame(
-                process.stdin,
-                {
-                    "version": 1,
-                    "enginePid": engine.process_id,
-                    "agentEpoch": self.epoch,
-                    "address": self._listener.address,
-                    "secret": list(secret),
-                    "idleGraceMs": round(self.idle_grace * 1000),
-                },
-            )
+            bootstrap = {
+                "version": 1,
+                "enginePid": engine.process_id,
+                "agentEpoch": self.epoch,
+                "address": self._listener.address,
+                "secret": list(secret),
+                "idleGraceMs": round(self.idle_grace * 1000),
+            }
+            if self.wayland_backend is not None:
+                bootstrap["waylandBackend"] = self.wayland_backend
+            write_frame(process.stdin, bootstrap)
         self._initialize_resource(
             "_channel",
             self._listener.accept,
@@ -703,9 +935,10 @@ class AgentProcess(Resource):
                 raise rejected()
             raise DeskWeaveError("DESKTOP_BUSY", "当前登录会话已有 Desktop Agent。")
         if (
-            ready.keys() != {"kind", "agentEpoch", "address", "proof"}
+            ready.keys() != {"kind", "agentEpoch", "address", "session", "proof"}
             or kind != "agent.ready"
             or ready["agentEpoch"] != self.epoch
+            or not _is_session_id(ready["session"])
         ):
             raise rejected()
         address = ready["address"]
@@ -713,17 +946,29 @@ class AgentProcess(Resource):
             raise rejected()
         if not hmac.compare_digest(
             _bytes(ready["proof"], 32),
-            _proof(secret, b"agent", engine.process_id, process.pid, self.epoch, address=address),
+            _proof(
+                secret,
+                b"agent",
+                engine.process_id,
+                process.pid,
+                self.epoch,
+                address=address,
+                session=ready["session"],
+            ),
         ):
             raise rejected()
+        self.session = ready["session"]
+        self._channel.max_frame_bytes = _MAX_CONTROL_FRAME
         return address
 
     def _spawn(self, path, image):
-        environment = {
-            name: os.environ[name]
-            for name in ("SystemRoot", "WINDIR")
-            if sys.platform == "win32" and name in os.environ
-        }
+        environment = {}
+        if sys.platform == "win32":
+            for name in ("SystemRoot", "WINDIR"):
+                if name in os.environ:
+                    environment[name] = os.environ[name]
+        elif sys.platform == "linux":
+            environment.update(_sanitize_linux_session_env(os.environ))
         launch = {}
         if sys.platform == "linux":
             descriptor = image.fileno()
@@ -777,6 +1022,122 @@ class AgentProcess(Resource):
         finally:
             self._io.release()
 
+    def call(
+        self,
+        method: str,
+        params: dict | None = None,
+        *,
+        timeout=10,
+        cancel=None,
+        validator=None,
+    ):
+        if type(method) is not str or not 1 <= len(method) <= 128 or "\x00" in method:
+            raise ValueError("Agent 方法名无效。")
+        payload = {} if params is None else params
+        if type(payload) is not dict:
+            raise TypeError("Agent 请求参数必须为对象。")
+        if self._stopping.is_set() or self.session is None:
+            raise closed()
+        budget = Budget(timeout, Cancellation(cancel, self._stopping))
+        request_id = secrets.token_hex(16)
+        deadline_seconds = min(remaining(budget), 86_400)
+        deadline_ms = max(1, min(86_400_000, math.ceil(deadline_seconds * 1000)))
+        request = {
+            "protocolVersion": "1.0",
+            "kind": "request",
+            "id": request_id,
+            "session": self.session,
+            "workspace": self.workspace_id,
+            "method": method,
+            "deadlineMs": deadline_ms,
+            "params": payload,
+        }
+        try:
+            dumps(request, max_bytes=_MAX_CONTROL_FRAME, checkpoint=budget.check_time)
+        except (TypeError, ValueError) as error:
+            raise DeskWeaveError("INVALID_ARGUMENT", "Agent 请求参数无法编码。") from error
+        budget.acquire(self._io)
+        agent_error = None
+        try:
+            if self._stopping.is_set() or self._channel is None or self.session is None:
+                raise closed()
+            _check_owner(self._runtime_dir, self._owner_identity)
+            deadline_seconds = min(remaining(budget), 86_400)
+            request["deadlineMs"] = max(1, min(86_400_000, math.ceil(deadline_seconds * 1000)))
+            self._channel.send(request, budget=budget)
+            response = self._channel.receive(budget=budget)
+            _check_owner(self._runtime_dir, self._owner_identity)
+            if (
+                type(response) is not dict
+                or response.get("protocolVersion") != "1.0"
+                or response.get("kind") != "response"
+                or response.get("replyTo") != request_id
+                or type(response.get("ok")) is not bool
+            ):
+                raise rejected()
+            if response["ok"]:
+                if response.keys() != {"protocolVersion", "kind", "replyTo", "ok", "result"}:
+                    raise rejected()
+                result = response["result"]
+                if validator is not None:
+                    try:
+                        return validator(result, checkpoint=budget.check_time)
+                    except DeskWeaveError as error:
+                        if error.code != "INVALID_ARGUMENT":
+                            raise
+                        raise DeskWeaveError(
+                            "INTERNAL_ERROR", "Desktop Agent 返回的平台数据不符合契约。"
+                        ) from error
+                return result
+            if response.keys() != {"protocolVersion", "kind", "replyTo", "ok", "error"}:
+                raise rejected()
+            body = response["error"]
+            if (
+                type(body) is not dict
+                or not {"code", "message", "retry"}
+                <= body.keys()
+                <= {"code", "message", "retry", "details"}
+                or type(body["code"]) is not str
+                or not 1 <= len(body["code"]) <= 80
+                or type(body["message"]) is not str
+                or not 1 <= len(body["message"]) <= 1000
+                or body["retry"] not in {"never", "sameRequest", "afterQuery"}
+            ):
+                raise rejected()
+            if "details" in body:
+                if type(body["details"]) is not dict:
+                    raise rejected()
+                details = body["details"]
+            else:
+                details = None
+            agent_error = DeskWeaveError(
+                body["code"], body["message"], retry=body["retry"], details=details
+            )
+        except BaseException as error:
+            self._abort(error)
+            raise
+        finally:
+            self._io.release()
+        raise agent_error
+
+    def desktop_capabilities(self, *, timeout=10, cancel=None) -> dict:
+        return self.call(
+            "desktop.capabilities",
+            {},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_desktop_capabilities,
+        )
+
+    def desktop_topology(self, *, timeout=10, cancel=None) -> dict:
+        return self.call(
+            "desktop.topology",
+            {},
+            timeout=timeout,
+            cancel=cancel,
+            validator=validate_desktop_topology,
+        )
+
     def _close_resource(self, name):
         resource = getattr(self, name)
         if resource is not None:
@@ -823,8 +1184,10 @@ def start_agent(
     timeout=10,
     cancel=None,
     idle_grace=2.0,
+    wayland_backend=None,
 ):
     check_idle(idle_grace)
+    checked_wayland = _check_wayland_backend(wayland_backend)
     budget = Budget(timeout, Cancellation(cancel, engine._desktop_stopping))
     budget.acquire(engine._desktop_lock)
     try:
@@ -835,6 +1198,7 @@ def start_agent(
                     current.local is not local
                     or current.installation != installation
                     or current.authority is not authority
+                    or current.wayland_backend != checked_wayland
                 ):
                     raise rejected()
                 current.probe(timeout=remaining(budget), cancel=budget.cancel)
@@ -850,6 +1214,7 @@ def start_agent(
                 timeout=remaining(budget),
                 cancel=budget.cancel,
                 idle_grace=idle_grace,
+                wayland_backend=checked_wayland,
             )
         except InitializationError as error:
             if type(error.resource) is AgentProcess:

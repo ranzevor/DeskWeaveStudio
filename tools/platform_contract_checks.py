@@ -36,6 +36,8 @@ def local_source_errors(value):
             errors.append("全部显示屏录制需要完整桌面覆盖")
         if any(d["layoutBounds"] is None or d["pixelToNative"] is None for d in topology["displays"]):
             errors.append("全部显示屏录制缺少完整位置映射")
+    if value["scope"] == "window" and selected != all_ids:
+        errors.append("窗口录制来源未覆盖当时可用显示集合")
     if value["scope"] == "display" and len(selected) != 1:
         errors.append("单屏录制只能选择一个显示区域")
     point = value["initialPointer"]
