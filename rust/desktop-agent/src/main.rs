@@ -217,23 +217,65 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::native::SessionStream;
+    use crate::native::{SessionRead, SessionStream, SessionWrite};
     use crate::protocol::{DEFAULT_IDLE_GRACE_MS, MAX_FRAME, Probe, VERSION};
     use serde_json::json;
     use std::io::Cursor;
+    use std::sync::{Arc, Mutex};
 
-    struct CursorStream {
-        cursor: Cursor<Vec<u8>>,
+    struct CursorReader {
+        cursor: Arc<Mutex<Cursor<Vec<u8>>>>,
     }
 
-    impl SessionStream for CursorStream {
+    impl SessionRead for CursorReader {
         fn read_chunk(
             &mut self,
             buf: &mut [u8],
             _deadline: Option<Instant>,
             _stop: &StopSignal,
         ) -> io::Result<usize> {
-            self.cursor.read(buf)
+            self.cursor.lock().unwrap().read(buf)
+        }
+    }
+
+    struct CursorWriter {
+        cursor: Arc<Mutex<Cursor<Vec<u8>>>>,
+    }
+
+    impl SessionWrite for CursorWriter {
+        fn write_chunk(
+            &mut self,
+            buf: &[u8],
+            _deadline: Option<Instant>,
+            _stop: &StopSignal,
+        ) -> io::Result<usize> {
+            self.cursor.lock().unwrap().write(buf)
+        }
+    }
+
+    struct CursorStream {
+        cursor: Arc<Mutex<Cursor<Vec<u8>>>>,
+    }
+
+    impl CursorStream {
+        fn new(bytes: Vec<u8>) -> Self {
+            Self {
+                cursor: Arc::new(Mutex::new(Cursor::new(bytes))),
+            }
+        }
+    }
+
+    impl SessionStream for CursorStream {
+        type Reader = CursorReader;
+        type Writer = CursorWriter;
+
+        fn read_chunk(
+            &mut self,
+            buf: &mut [u8],
+            _deadline: Option<Instant>,
+            _stop: &StopSignal,
+        ) -> io::Result<usize> {
+            self.cursor.lock().unwrap().read(buf)
         }
 
         fn write_chunk(
@@ -242,7 +284,18 @@ mod tests {
             _deadline: Option<Instant>,
             _stop: &StopSignal,
         ) -> io::Result<usize> {
-            self.cursor.write(buf)
+            self.cursor.lock().unwrap().write(buf)
+        }
+
+        fn split(self) -> io::Result<(Self::Reader, Self::Writer)> {
+            Ok((
+                CursorReader {
+                    cursor: Arc::clone(&self.cursor),
+                },
+                CursorWriter {
+                    cursor: self.cursor,
+                },
+            ))
         }
     }
 
@@ -277,9 +330,7 @@ mod tests {
         let duplicate = frame(br#"{"kind":"agent.ping","kind":"agent.ping","agentEpoch":"old"}"#);
         assert!(read_frame::<Probe>(&mut duplicate.as_slice()).is_err());
         let stale = frame(br#"{"kind":"agent.ping","agentEpoch":"old"}"#);
-        let mut channel = CursorStream {
-            cursor: Cursor::new(stale),
-        };
+        let channel = CursorStream::new(stale);
         let stop = StopSignal::new().unwrap();
         let desktop = platform::current_session(None);
         let ctx = SessionContext {
@@ -288,15 +339,9 @@ mod tests {
             workspace_id: "ws-1".to_owned(),
         };
         assert_eq!(
-            server::serve_session(
-                &mut channel,
-                &ctx,
-                desktop.as_ref(),
-                FRAME_READ_TIMEOUT,
-                &stop
-            )
-            .unwrap_err()
-            .kind(),
+            server::serve_session(channel, &ctx, desktop, FRAME_READ_TIMEOUT, &stop)
+                .unwrap_err()
+                .kind(),
             io::ErrorKind::PermissionDenied
         );
     }

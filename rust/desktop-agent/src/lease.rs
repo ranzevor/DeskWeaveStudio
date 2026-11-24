@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -13,6 +14,8 @@ use deskweave_platform_api::{
 };
 use serde_json::{Map, Value};
 
+use crate::native::StopSignal;
+use crate::protocol::{ConfirmationClaim, is_hex};
 use crate::server::SessionContext;
 
 pub(crate) const LEASE_TTL_US: u64 = 2_000_000;
@@ -26,12 +29,13 @@ const MAX_HISTORICAL_LEASES: usize = 512;
 const MAX_RESUME_RECEIPTS: usize = 1024;
 const MAX_SEGMENT_RECEIPTS: usize = 4096;
 const MAX_CONSUMED_TOKENS: usize = 4096;
-#[cfg(test)]
 const MAX_REGISTERED_CONFIRMATIONS: usize = 256;
+const MAX_SINGLE_LATENESS_US: u64 = 20_000;
+const MIN_CUMULATIVE_SHIFT_US: u64 = 50_000;
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone)]
 pub(crate) struct RegisteredConfirmation {
+    pub(crate) owner_workspace: String,
     pub(crate) lease_id: String,
     pub(crate) pause_id: String,
     pub(crate) agent_epoch: String,
@@ -39,6 +43,8 @@ pub(crate) struct RegisteredConfirmation {
     pub(crate) checkpoint_hash: String,
     pub(crate) resume_plan_hash: String,
     pub(crate) restore_target_token: Option<String>,
+    pub(crate) pointer_to_restore: Option<PausePoint>,
+    pub(crate) expires_at_us: u64,
 }
 
 #[derive(Clone)]
@@ -68,6 +74,8 @@ struct SuspendedSegment {
     next_event_index: usize,
     remaining_delay_us: u64,
     active_elapsed_us: u64,
+    original_duration_us: u64,
+    cumulative_shift_us: u64,
     dispatched_count: usize,
     pause_cleanup: CleanupOutcome,
 }
@@ -90,8 +98,8 @@ struct ActiveLease {
     state: LeaseState,
     cleanup: CleanupOutcome,
     held_inputs: Vec<HeldInput>,
-    pointer: PausePoint,
-    physical_pointer: PhysicalPoint,
+    pointer: Option<PausePoint>,
+    physical_pointer: Option<PhysicalPoint>,
     input_target_token: Option<String>,
     in_flight: Option<InFlightSegment>,
     release_waiters: usize,
@@ -360,6 +368,40 @@ impl LeaseCoordinator {
         }
     }
 
+    pub(crate) fn notify_all(&self) {
+        self.wait_cv.notify_all();
+    }
+
+    pub(crate) fn drive_expiry_loop(&self, desktop: &dyn DesktopSession, stop: &StopSignal) {
+        let mut state = self.state.lock().unwrap();
+        while !stop.is_triggered() {
+            self.refresh_lease_expiry_locked(&mut state, desktop);
+            let now_us = desktop.clock().now_us();
+            let sleep_us = if let Some(lease) = state.current_lease.as_ref() {
+                let mut deadline_us = lease.expires_at_us;
+                if lease.state == LeaseState::Paused
+                    && let Some(pause_limit) = lease.pause_expires_at_us
+                {
+                    deadline_us = deadline_us.min(pause_limit);
+                }
+                let rem_us = deadline_us.saturating_sub(now_us);
+                if rem_us == 0 && lease.in_flight.is_some() {
+                    self.wait_cv.notify_all();
+                    5_000
+                } else {
+                    rem_us.clamp(5_000, 50_000)
+                }
+            } else {
+                50_000
+            };
+            let (guard, _) = self
+                .wait_cv
+                .wait_timeout(state, Duration::from_micros(sleep_us))
+                .unwrap();
+            state = guard;
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn register_confirmation(
         &self,
@@ -381,6 +423,166 @@ impl LeaseCoordinator {
         }
         state.registered_confirmations.insert(grant.into(), record);
         Ok(())
+    }
+
+    pub(crate) fn register_host_confirmation(
+        &self,
+        ctx: &SessionContext,
+        desktop: &dyn DesktopSession,
+        claim: &ConfirmationClaim,
+    ) -> Result<(String, u64), PlatformError> {
+        if claim.purpose != "lease.resume" {
+            return Err(PlatformError::invalid_argument(
+                "确认声明 purpose 必须为 lease.resume。",
+            ));
+        }
+        if !(1..=60_000).contains(&claim.ttl_ms) {
+            return Err(PlatformError::invalid_argument(
+                "确认声明 ttlMs 必须在 1..=60000 之间。",
+            ));
+        }
+        if claim.workspace_id != ctx.workspace_id || claim.agent_epoch != ctx.agent_epoch {
+            return Err(PlatformError::new(
+                "ACCESS_DENIED",
+                "确认声明会话工作空间或代次不匹配。",
+            ));
+        }
+        validate_identifier(&claim.lease_id, "leaseId")?;
+        validate_identifier(&claim.pause_id, "pauseId")?;
+        if !is_hex(&claim.checkpoint_hash) || !is_hex(&claim.resume_plan_hash) {
+            return Err(PlatformError::invalid_argument(
+                "确认声明摘要字段必须为 64 位小写十六进制字符串。",
+            ));
+        }
+        if let Some(ref token) = claim.restore_target_token {
+            validate_identifier(token, "restoreTargetToken")?;
+        }
+        if let Some(ref ptr) = claim.pointer_to_restore {
+            ptr.validate()?;
+        }
+
+        let mut state = self.state.lock().unwrap();
+        self.refresh_lease_expiry_locked(&mut state, desktop);
+
+        let now_us = desktop.clock().now_us();
+        let (pause_expires_at_us, snap) = {
+            let lease =
+                require_active_owner_lease_mut(&mut state, &claim.lease_id, claim.generation, ctx)?;
+            if lease.state != LeaseState::Paused {
+                return Err(PlatformError::new(
+                    "RESOURCE_DENIED",
+                    "仅处于 paused 状态的租约允许登记本地确认授权。",
+                ));
+            }
+            let Some(snap) = lease.pause_snapshot.clone() else {
+                return Err(PlatformError::new(
+                    "INTERNAL_ERROR",
+                    "暂停租约缺少实时检查点。",
+                ));
+            };
+            if snap.pause_id != claim.pause_id
+                || snap.checkpoint_hash != claim.checkpoint_hash
+                || snap.agent_epoch != claim.agent_epoch
+            {
+                return Err(PlatformError::new(
+                    "RESOURCE_DENIED",
+                    "确认声明与当前暂停检查点不匹配。",
+                ));
+            }
+            (lease.pause_expires_at_us, snap)
+        };
+
+        let requires_restore_target = !snap.held_inputs.is_empty()
+            || snap.cursor.is_some()
+            || claim.pointer_to_restore.is_some();
+        if requires_restore_target && claim.restore_target_token.is_none() {
+            return Err(PlatformError::invalid_argument(
+                "包含指针或持有输入恢复的确认声明必须绑定 restoreTargetToken。",
+            ));
+        }
+        if let Some(ref token) = claim.restore_target_token
+            && (snap.input_target_token.as_deref() != Some(token.as_str())
+                || !snap.targets.iter().any(|t| t.target_token == *token))
+        {
+            return Err(PlatformError::new(
+                "RESOURCE_DENIED",
+                "确认声明的 restoreTargetToken 与暂停检查点输入目标不匹配。",
+            ));
+        }
+        if let Some(ref ptr) = claim.pointer_to_restore
+            && *ptr != snap.pointer
+        {
+            return Err(PlatformError::new(
+                "RESOURCE_DENIED",
+                "确认声明的 pointerToRestore 与暂停检查点指针位置不匹配。",
+            ));
+        }
+        if claim.restore_target_token.is_none()
+            && claim.pointer_to_restore.is_none()
+            && snap.held_inputs.is_empty()
+            && snap.cursor.is_none()
+        {
+            return Err(PlatformError::invalid_argument(
+                "该暂停检查点与继续计划无需本地确认授权。",
+            ));
+        }
+
+        let requested_exp = now_us.saturating_add(claim.ttl_ms.saturating_mul(1_000));
+        let expires_at_us = match pause_expires_at_us {
+            Some(limit) => {
+                if now_us >= limit {
+                    return Err(PlatformError::new(
+                        "LEASE_EXPIRED",
+                        "暂停租约保留期限已到期。",
+                    ));
+                }
+                requested_exp.min(limit)
+            }
+            None => requested_exp,
+        };
+        let expires_in_ms = expires_at_us
+            .saturating_sub(now_us)
+            .div_ceil(1_000)
+            .clamp(1, 60_000);
+
+        let mut grant_bytes = [0_u8; 32];
+        getrandom::fill(&mut grant_bytes)
+            .map_err(|_| PlatformError::new("INTERNAL_ERROR", "无法生成随机本地确认授权令牌。"))?;
+        let mut grant = String::with_capacity(64);
+        for byte in grant_bytes {
+            use std::fmt::Write as _;
+            let _ = write!(&mut grant, "{byte:02x}");
+        }
+
+        let active_lease_id = state.current_lease.as_ref().map(|l| l.lease_id.clone());
+        if state.registered_confirmations.len() >= MAX_REGISTERED_CONFIRMATIONS {
+            state.registered_confirmations.retain(|_, v| {
+                now_us < v.expires_at_us && active_lease_id.as_deref() == Some(v.lease_id.as_str())
+            });
+            if state.registered_confirmations.len() >= MAX_REGISTERED_CONFIRMATIONS {
+                return Err(PlatformError::new(
+                    "LIMIT_EXCEEDED",
+                    "恢复确认授权表已达上限。",
+                ));
+            }
+        }
+
+        state.registered_confirmations.insert(
+            grant.clone(),
+            RegisteredConfirmation {
+                owner_workspace: ctx.workspace_id.clone(),
+                lease_id: claim.lease_id.clone(),
+                pause_id: claim.pause_id.clone(),
+                agent_epoch: claim.agent_epoch.clone(),
+                generation: claim.generation,
+                checkpoint_hash: claim.checkpoint_hash.clone(),
+                resume_plan_hash: claim.resume_plan_hash.clone(),
+                restore_target_token: claim.restore_target_token.clone(),
+                pointer_to_restore: claim.pointer_to_restore.clone(),
+                expires_at_us,
+            },
+        );
+        Ok((grant, expires_in_ms))
     }
 
     #[cfg(test)]
@@ -566,12 +768,33 @@ impl LeaseCoordinator {
         Ok(result)
     }
 
+    #[cfg(test)]
     pub(crate) fn handle_lease_acquire(
         &self,
         params: &Map<String, Value>,
         ctx: &SessionContext,
         desktop: &dyn DesktopSession,
         is_draining: impl Fn() -> bool,
+        deadline_ms: u64,
+    ) -> Result<LeaseAcquireResult, PlatformError> {
+        let closing = AtomicBool::new(false);
+        self.handle_lease_acquire_with_close(
+            params,
+            ctx,
+            desktop,
+            is_draining,
+            &closing,
+            deadline_ms,
+        )
+    }
+
+    pub(crate) fn handle_lease_acquire_with_close(
+        &self,
+        params: &Map<String, Value>,
+        ctx: &SessionContext,
+        desktop: &dyn DesktopSession,
+        is_draining: impl Fn() -> bool,
+        session_closing: &AtomicBool,
         deadline_ms: u64,
     ) -> Result<LeaseAcquireResult, PlatformError> {
         for key in params.keys() {
@@ -701,6 +924,14 @@ impl LeaseCoordinator {
                     )
                     .with_retry("afterQuery"));
                 }
+                let still_queued = state.wait_queue.iter().any(|w| w.waiter_id == waiter_id);
+                if session_closing.load(Ordering::Acquire) || !still_queued {
+                    state.wait_queue.retain(|w| w.waiter_id != waiter_id);
+                    self.wait_cv.notify_all();
+                    return Err(PlatformError::session_unavailable(
+                        "会话已关闭，取消租约等待。",
+                    ));
+                }
                 if is_draining() {
                     state.wait_queue.retain(|w| w.waiter_id != waiter_id);
                     self.wait_cv.notify_all();
@@ -759,12 +990,23 @@ impl LeaseCoordinator {
             }
         }
 
+        if session_closing.load(Ordering::Acquire) {
+            self.wait_cv.notify_all();
+            return Err(PlatformError::session_unavailable(
+                "会话已关闭，无法授予桌面租约。",
+            ));
+        }
+
         let now_us = desktop.clock().now_us();
         state.generation += 1;
         state.next_lease_seq += 1;
         let generation = state.generation;
         let lease_id = format!("lease-{}", state.next_lease_seq);
-        let initial_pt = PhysicalPoint { x: 0, y: 0 };
+        let initial_pointer = query_pointer_position(desktop).ok();
+        let initial_physical = match initial_pointer {
+            Some(PausePoint::Physical(pt)) => Some(pt),
+            _ => None,
+        };
 
         let lease = ActiveLease {
             lease_id: lease_id.clone(),
@@ -778,8 +1020,8 @@ impl LeaseCoordinator {
             state: LeaseState::Active,
             cleanup: CleanupOutcome::NotRequired,
             held_inputs: Vec::new(),
-            pointer: PausePoint::Physical(initial_pt),
-            physical_pointer: initial_pt,
+            pointer: initial_pointer,
+            physical_pointer: initial_physical,
             input_target_token: None,
             in_flight: None,
             release_waiters: 0,
@@ -793,6 +1035,7 @@ impl LeaseCoordinator {
             pause_expires_at_us: None,
         };
         state.current_lease = Some(lease);
+        self.wait_cv.notify_all();
 
         let result = LeaseAcquireResult {
             lease_id,
@@ -839,6 +1082,13 @@ impl LeaseCoordinator {
         }
 
         let now_us = desktop.clock().now_us();
+        if now_us >= lease.expires_at_us {
+            self.wait_cv.notify_all();
+            return Err(PlatformError::new(
+                "LEASE_EXPIRED",
+                "桌面租约已过期，拒绝续期。",
+            ));
+        }
         let candidate_exp = now_us.saturating_add(LEASE_TTL_US);
         let (new_exp, expires_in_ms) = match (lease.state, lease.pause_expires_at_us) {
             (LeaseState::Paused, Some(pause_limit)) => {
@@ -858,7 +1108,6 @@ impl LeaseCoordinator {
             _ => (candidate_exp, LEASE_EXPIRES_IN_MS),
         };
         lease.expires_at_us = new_exp;
-
         let result = LeaseAcquireResult {
             lease_id: lease.lease_id.clone(),
             run_id: lease.run_id.clone(),
@@ -866,6 +1115,7 @@ impl LeaseCoordinator {
             agent_epoch: lease.agent_epoch.clone(),
             expires_in_ms,
         };
+        self.wait_cv.notify_all();
         result.validate()?;
         Ok(result)
     }
@@ -998,14 +1248,37 @@ impl LeaseCoordinator {
         let generation = require_u64_in_range(params, "generation", 0, MAX_SAFE_INT)?;
 
         let mut state = self.state.lock().unwrap();
+        if desktop.emergency().state() == EmergencyState::Locked {
+            self.wait_cv.notify_all();
+            return Err(PlatformError::new(
+                "RESOURCE_DENIED",
+                "桌面处于急停锁定状态，无法暂停。",
+            ));
+        }
         self.refresh_lease_expiry_locked(&mut state, desktop);
 
         let wait_start = Instant::now();
         let deadline_budget = Duration::from_millis(deadline_ms);
 
         loop {
+            if desktop.emergency().state() == EmergencyState::Locked {
+                self.wait_cv.notify_all();
+                return Err(PlatformError::new(
+                    "RESOURCE_DENIED",
+                    "桌面处于急停锁定状态，无法暂停。",
+                ));
+            }
+            self.refresh_lease_expiry_locked(&mut state, desktop);
+            let now_us = desktop.clock().now_us();
             let need_wait = {
                 let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
+                if now_us >= lease.expires_at_us {
+                    self.wait_cv.notify_all();
+                    return Err(PlatformError::new(
+                        "LEASE_EXPIRED",
+                        "桌面租约已过期，无法暂停。",
+                    ));
+                }
                 if lease.release_pending || lease.release_waiters > 0 {
                     self.wait_cv.notify_all();
                     true
@@ -1053,8 +1326,10 @@ impl LeaseCoordinator {
             return Ok(snap);
         }
 
-        finalize_pause_locked(&mut state, &lease_id, generation, ctx, desktop, None, None)
-            .map(|(snap, _)| snap)
+        finalize_pause_locked(
+            &mut state, &lease_id, generation, ctx, desktop, None, None, None, true,
+        )
+        .map(|(snap, _)| snap)
     }
 
     pub(crate) fn handle_lease_status(
@@ -1206,33 +1481,46 @@ impl LeaseCoordinator {
             ));
         }
 
-        let requires_confirmation =
+        let must_restore_held_or_cursor =
             !pause_snapshot.held_inputs.is_empty() || pause_snapshot.cursor.is_some();
-        if requires_confirmation && confirmation_grant.is_none() {
+        if must_restore_held_or_cursor && confirmation_grant.is_none() {
             return Err(PlatformError::new(
                 "LOCAL_CONFIRMATION_REQUIRED",
                 "恢复持有输入或段内游标需要提供可信本地 confirmationGrant。",
             ));
         }
 
-        if let Some(grant) = &confirmation_grant {
-            verify_confirmation_grant(
+        let reg = match &confirmation_grant {
+            Some(grant) => Some(verify_confirmation_grant(
                 &state,
+                &ctx.workspace_id,
+                desktop.clock().now_us(),
                 grant,
                 &lease_id,
                 generation,
                 &pause_snapshot,
                 &resume_plan_hash,
-            )?;
-        }
+            )?),
+            None => None,
+        };
 
         state.ensure_resume_receipt_capacity(&receipt_lookup_key)?;
 
+        let should_focus_target = must_restore_held_or_cursor
+            || reg.as_ref().is_some_and(|r| {
+                r.restore_target_token.is_some() || r.pointer_to_restore.is_some()
+            });
+        let should_restore_pointer = reg.as_ref().is_some_and(|r| r.pointer_to_restore.is_some());
+
         let mut restored_held = Vec::new();
-        if requires_confirmation {
-            let restore_target = pause_snapshot.input_target_token.as_ref().ok_or_else(|| {
-                PlatformError::invalid_argument("恢复持有输入时检查点必须包含 inputTargetToken。")
-            })?;
+        if should_focus_target {
+            let restore_target = reg
+                .as_ref()
+                .and_then(|r| r.restore_target_token.as_ref())
+                .or(pause_snapshot.input_target_token.as_ref())
+                .ok_or_else(|| {
+                    PlatformError::invalid_argument("恢复指针或持有输入时必须包含目标令牌。")
+                })?;
             focus_target_checked(desktop, restore_target)?;
             let status = verify_target_checked(desktop, restore_target)?;
             if status != TargetStatus::Active {
@@ -1241,25 +1529,42 @@ impl LeaseCoordinator {
                 ));
             }
 
-            let move_action = match &pause_snapshot.pointer {
-                PausePoint::Physical(pt) => NativeInputAction::PointerMovePhysical(*pt),
-                PausePoint::Display(pt) => NativeInputAction::PointerMoveDisplay(pt.clone()),
-            };
-            let move_outcome = submit_native_action(desktop, restore_target, &move_action);
-            if !matches!(move_outcome, Ok(SubmissionOutcome::Submitted)) {
-                return fail_resume_uncertain_locked(
-                    &mut state,
-                    ctx,
-                    confirmation_grant,
-                    receipt_lookup_key,
-                    lease_id,
-                    request_key,
-                    (
-                        CleanupOutcome::NotRequired,
-                        restored_held,
-                        resume_attempt_id,
-                    ),
-                );
+            if should_restore_pointer {
+                let target_pointer = reg
+                    .as_ref()
+                    .and_then(|r| r.pointer_to_restore.as_ref())
+                    .expect("pointer_to_restore checked by should_restore_pointer");
+                let move_action = match target_pointer {
+                    PausePoint::Physical(pt) => NativeInputAction::PointerMovePhysical(*pt),
+                    PausePoint::Display(pt) => NativeInputAction::PointerMoveDisplay(pt.clone()),
+                };
+                match submit_native_action(desktop, restore_target, &move_action) {
+                    Ok(SubmissionOutcome::Submitted) => {}
+                    Ok(SubmissionOutcome::Rejected) => {
+                        return Err(PlatformError::new(
+                            "RESOURCE_DENIED",
+                            "恢复指针位置被原生端明确拒绝，保持 paused 状态。",
+                        ));
+                    }
+                    Err(err) if is_pre_dispatch_error(&err) => {
+                        return Err(err);
+                    }
+                    Ok(SubmissionOutcome::Uncertain) | Err(_) => {
+                        return fail_resume_uncertain_locked(
+                            &mut state,
+                            ctx,
+                            confirmation_grant,
+                            receipt_lookup_key,
+                            lease_id,
+                            request_key,
+                            (
+                                CleanupOutcome::NotRequired,
+                                restored_held,
+                                resume_attempt_id,
+                            ),
+                        );
+                    }
+                }
             }
 
             for held in &pause_snapshot.held_inputs {
@@ -1271,7 +1576,47 @@ impl LeaseCoordinator {
                     Ok(SubmissionOutcome::Submitted) => {
                         restored_held.push(held.clone());
                     }
-                    Ok(SubmissionOutcome::Rejected | SubmissionOutcome::Uncertain) | Err(_) => {
+                    Ok(SubmissionOutcome::Rejected) => {
+                        let cleanup = release_held_inputs(desktop, &mut restored_held);
+                        if matches!(
+                            cleanup,
+                            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+                        ) {
+                            return Err(PlatformError::new(
+                                "RESOURCE_DENIED",
+                                "恢复持有输入被原生端明确拒绝，保持 paused 状态。",
+                            ));
+                        }
+                        return fail_resume_uncertain_locked(
+                            &mut state,
+                            ctx,
+                            confirmation_grant,
+                            receipt_lookup_key,
+                            lease_id,
+                            request_key,
+                            (cleanup, restored_held, resume_attempt_id),
+                        );
+                    }
+                    Err(err) if is_pre_dispatch_error(&err) => {
+                        let cleanup = release_held_inputs(desktop, &mut restored_held);
+                        if matches!(
+                            cleanup,
+                            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+                        ) {
+                            return Err(err);
+                        }
+                        return fail_resume_uncertain_locked(
+                            &mut state,
+                            ctx,
+                            confirmation_grant,
+                            receipt_lookup_key,
+                            lease_id,
+                            request_key,
+                            (cleanup, restored_held, resume_attempt_id),
+                        );
+                    }
+                    Ok(SubmissionOutcome::Uncertain) | Err(_) => {
+                        record_potentially_held_press(&mut restored_held, &action);
                         let cleanup = release_held_inputs(desktop, &mut restored_held);
                         return fail_resume_uncertain_locked(
                             &mut state,
@@ -1286,14 +1631,17 @@ impl LeaseCoordinator {
                 }
             }
         } else if let Some(restore_target) = &pause_snapshot.input_target_token {
-            if confirmation_grant.is_some() {
-                focus_target_checked(desktop, restore_target)?;
-            }
             let status = verify_target_checked(desktop, restore_target)?;
             if status != TargetStatus::Active {
                 return Err(PlatformError::target_lost("输入目标当前不在前台。"));
             }
         }
+
+        let resumed_pointer = if should_restore_pointer {
+            reg.as_ref().and_then(|r| r.pointer_to_restore.clone())
+        } else {
+            query_pointer_position(desktop).ok()
+        };
 
         if let Some(grant) = confirmation_grant {
             state.record_consumed_confirmation(grant);
@@ -1305,10 +1653,11 @@ impl LeaseCoordinator {
             lease.state = LeaseState::Active;
             lease.cleanup = CleanupOutcome::NotRequired;
             lease.held_inputs = restored_held;
-            if let PausePoint::Physical(pt) = pause_snapshot.pointer {
-                lease.physical_pointer = pt;
-            }
-            lease.pointer = pause_snapshot.pointer;
+            lease.physical_pointer = match &resumed_pointer {
+                Some(PausePoint::Physical(pt)) => Some(*pt),
+                _ => None,
+            };
+            lease.pointer = resumed_pointer;
             lease.pause_snapshot = None;
             lease.pending_pause = None;
             lease.pause_expires_at_us = None;
@@ -1324,6 +1673,7 @@ impl LeaseCoordinator {
             let snapshot = lease.to_snapshot();
             (suspended, snapshot)
         };
+        self.wait_cv.notify_all();
 
         snapshot.validate()?;
         state.record_resume_receipt(
@@ -1338,6 +1688,13 @@ impl LeaseCoordinator {
         let Some(seg) = suspended else {
             return Ok(snapshot);
         };
+
+        let seg_target_state = current_targets
+            .iter()
+            .find(|ts| ts.target_token == seg.target_token)
+            .ok_or_else(|| PlatformError::target_lost("恢复段引用的目标不在实时检查点中。"))?;
+        let expected_target_version = seg_target_state.target_version.clone();
+        let expected_topology_version = seg_target_state.topology_version.clone();
 
         let running_result = SegmentResult {
             segment_id: seg.segment_id.clone(),
@@ -1368,10 +1725,14 @@ impl LeaseCoordinator {
                 segment_id: seg.segment_id,
                 payload_hash: seg.payload_hash,
                 target_token: seg.target_token,
+                expected_target_version,
+                expected_topology_version,
                 events: seg.events,
                 start_index: seg.next_event_index,
                 first_delay_override: Some(seg.remaining_delay_us),
                 prior_active_elapsed_us: seg.active_elapsed_us,
+                original_duration_us: seg.original_duration_us,
+                prior_cumulative_shift_us: seg.cumulative_shift_us,
                 dispatched_count: seg.dispatched_count,
                 fresh_submit: false,
             },
@@ -1471,7 +1832,7 @@ impl LeaseCoordinator {
             ));
         }
 
-        {
+        let is_busy = {
             let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
             if lease.state != LeaseState::Active {
                 return Err(PlatformError::new(
@@ -1479,9 +1840,19 @@ impl LeaseCoordinator {
                     "当前租约非活动状态，拒绝派发输入段。",
                 ));
             }
-        }
+            lease.in_flight.is_some() || lease.release_pending || lease.release_waiters > 0
+        };
 
         if desktop.emergency().state() == EmergencyState::Locked {
+            if !is_busy
+                && state
+                    .current_lease
+                    .as_ref()
+                    .is_some_and(|l| !l.held_inputs.is_empty())
+            {
+                revoke_current_lease_locked(&mut state, desktop, "EMERGENCY_LOCKED");
+            }
+            self.wait_cv.notify_all();
             return Err(PlatformError::new(
                 "RESOURCE_DENIED",
                 "桌面处于急停锁定状态，拒绝派发输入段。",
@@ -1489,38 +1860,114 @@ impl LeaseCoordinator {
         }
 
         let current_pointer = {
-            let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
-            if lease.in_flight.is_some() || lease.release_pending || lease.release_waiters > 0 {
-                return Err(PlatformError::new(
-                    "DESKTOP_BUSY",
-                    "当前租约已有输入段正在执行或释放。",
-                )
-                .with_retry("afterQuery"));
+            let needs_start_pointer = operation.get("action").and_then(Value::as_str)
+                == Some("pointer.move")
+                && operation
+                    .get("params")
+                    .and_then(|p| p.get("durationMs"))
+                    .and_then(Value::as_u64)
+                    .is_some_and(|d| d > 0);
+
+            {
+                let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
+                if lease.in_flight.is_some() || lease.release_pending || lease.release_waiters > 0 {
+                    return Err(PlatformError::new(
+                        "DESKTOP_BUSY",
+                        "当前租约已有输入段正在执行或释放。",
+                    )
+                    .with_retry("afterQuery"));
+                }
+                if !lease.targets.contains(&target_token) {
+                    return Err(PlatformError::new(
+                        "RESOURCE_DENIED",
+                        "输入段 targetToken 不在该租约已授权的目标集合内。",
+                    ));
+                }
             }
-            if !lease.targets.contains(&target_token) {
-                return Err(PlatformError::new(
-                    "RESOURCE_DENIED",
-                    "输入段 targetToken 不在该租约已授权的目标集合内。",
-                ));
+
+            let target_check = verify_target_expiry_locked(&state, &target_token).and_then(|()| {
+                match verify_target_checked(desktop, &target_token)? {
+                    TargetStatus::Active => Ok(()),
+                    _ => Err(PlatformError::target_lost("输入目标已失焦、失效或丢失。")),
+                }
+            });
+            if let Err(err) = target_check {
+                let has_held = state
+                    .current_lease
+                    .as_ref()
+                    .is_some_and(|l| !l.held_inputs.is_empty());
+                if has_held
+                    && matches!(
+                        err.code,
+                        "TARGET_LOST" | "RESOURCE_DENIED" | "SESSION_UNAVAILABLE"
+                    )
+                {
+                    self.handle_admission_target_loss_locked(
+                        &mut state,
+                        &lease_id,
+                        generation,
+                        ctx,
+                        desktop,
+                        "TARGET_LOST",
+                    );
+                }
+                return Err(err);
             }
-            let pointer = lease.pointer.clone();
-            verify_target_expiry_locked(&state, &target_token)?;
-            pointer
+
+            let live_pointer = query_pointer_position(desktop);
+            let lease = state.current_lease.as_mut().unwrap();
+            if let Ok(pt) = live_pointer {
+                if lease.pointer.is_none() || lease.input_target_token.is_none() {
+                    if let PausePoint::Physical(phys) = pt {
+                        lease.physical_pointer = Some(phys);
+                    }
+                    lease.pointer = Some(pt);
+                }
+            } else if needs_start_pointer && lease.pointer.is_none() {
+                return Err(live_pointer.unwrap_err());
+            }
+            lease.pointer.clone()
         };
 
-        let target_status = verify_target_checked(desktop, &target_token)?;
-        if target_status != TargetStatus::Active {
-            return Err(PlatformError::target_lost("输入目标已失焦、失效或丢失。"));
-        }
+        let version_pair = read_live_target_version(&state, &target_token, desktop)
+            .and_then(|tv| Ok((tv, current_topology_version(desktop)?)));
+        let (expected_target_version, expected_topology_version) = match version_pair {
+            Ok(pair) => pair,
+            Err(err) => {
+                if state
+                    .current_lease
+                    .as_ref()
+                    .is_some_and(|l| !l.held_inputs.is_empty())
+                {
+                    self.handle_admission_target_loss_locked(
+                        &mut state,
+                        &lease_id,
+                        generation,
+                        ctx,
+                        desktop,
+                        "TARGET_LOST",
+                    );
+                }
+                return Err(err);
+            }
+        };
 
-        let atomic_events =
-            expand_input_operation(operation, trajectory_ref.as_ref(), &current_pointer)?;
+        let current_topology = desktop.topology().ok();
+        let atomic_events = expand_input_operation(
+            operation,
+            trajectory_ref.as_ref(),
+            current_pointer.as_ref(),
+            current_topology.as_ref(),
+        )?;
         if atomic_events.len() as u64 > MAX_SEGMENT_EVENTS {
             return Err(PlatformError::new(
                 "LIMIT_EXCEEDED",
                 "输入段展开事件数量超过上限。",
             ));
         }
+        let original_duration_us = atomic_events
+            .iter()
+            .fold(0_u64, |acc, ev| acc.saturating_add(ev.delay_before_us));
 
         state.ensure_segment_receipt_capacity(&receipt_key)?;
 
@@ -1548,6 +1995,7 @@ impl LeaseCoordinator {
                 pause_requested: false,
             });
         }
+        self.wait_cv.notify_all();
 
         let (_state, result) = self.drive_segment_events(
             state,
@@ -1560,16 +2008,51 @@ impl LeaseCoordinator {
                 segment_id,
                 payload_hash,
                 target_token,
+                expected_target_version,
+                expected_topology_version,
                 events: atomic_events,
                 start_index: 0,
                 first_delay_override: None,
                 prior_active_elapsed_us: 0,
+                original_duration_us,
+                prior_cumulative_shift_us: 0,
                 dispatched_count: 0,
                 fresh_submit: true,
             },
             deadline_ms,
         );
         result
+    }
+
+    fn handle_admission_target_loss_locked(
+        &self,
+        state: &mut CoordinatorState,
+        lease_id: &str,
+        generation: u64,
+        ctx: &SessionContext,
+        desktop: &dyn DesktopSession,
+        reason: &str,
+    ) {
+        if finalize_pause_locked(
+            state,
+            lease_id,
+            generation,
+            ctx,
+            desktop,
+            None,
+            None,
+            Some(reason),
+            false,
+        )
+        .is_err()
+            && state
+                .current_lease
+                .as_ref()
+                .is_some_and(|l| l.lease_id == lease_id && l.generation == generation)
+        {
+            revoke_current_lease_locked(state, desktop, reason);
+        }
+        self.wait_cv.notify_all();
     }
 
     fn drive_segment_events<'a>(
@@ -1583,10 +2066,20 @@ impl LeaseCoordinator {
         MutexGuard<'a, CoordinatorState>,
         Result<SegmentResult, PlatformError>,
     ) {
+        let _timer_guard = if run.original_duration_us > 0 {
+            HighResTimerGuard::new()
+        } else {
+            HighResTimerGuard::disabled()
+        };
         let rpc_wall_start = Instant::now();
         let rpc_deadline_budget = Duration::from_millis(deadline_ms);
         let seg_clock_start_us = desktop.clock().now_us();
+        let slice_wall_start = Instant::now();
+        let slice_clock_start_us = desktop.clock().now_us();
         let mut dispatched_count = run.dispatched_count;
+        let mut next_deadline_us: u64 = 0;
+        let mut cumulative_shift_us = run.prior_cumulative_shift_us;
+        let max_cumulative_shift_us = MIN_CUMULATIVE_SHIFT_US.max(run.original_duration_us / 50);
 
         let active_elapsed_now = |wall_start: &Instant, clock_start_us: u64| {
             let cur = desktop
@@ -1598,6 +2091,13 @@ impl LeaseCoordinator {
                 .saturating_add(cur)
                 .min(86_400_000_000)
         };
+        let slice_elapsed_now = || {
+            desktop
+                .clock()
+                .now_us()
+                .saturating_sub(slice_clock_start_us)
+                .max(u64::try_from(slice_wall_start.elapsed().as_micros()).unwrap_or(u64::MAX))
+        };
 
         for (idx, event) in run.events.iter().enumerate().skip(run.start_index) {
             let delay_us = if idx == run.start_index {
@@ -1605,15 +2105,15 @@ impl LeaseCoordinator {
             } else {
                 event.delay_before_us
             };
+            next_deadline_us = next_deadline_us.saturating_add(delay_us);
 
-            let wait_wall_start = Instant::now();
-            let wait_clock_start_us = desktop.clock().now_us();
             loop {
-                let (pause_req, release_req) =
+                let (pause_req, release_req, expires_at_us) =
                     {
                         let Some(lease) = state.current_lease.as_ref().filter(|l| {
                             l.lease_id == run.lease_id && l.generation == run.generation
                         }) else {
+                            self.wait_cv.notify_all();
                             return (
                                 state,
                                 Err(PlatformError::new(
@@ -1625,14 +2125,12 @@ impl LeaseCoordinator {
                         (
                             lease.in_flight.as_ref().is_some_and(|f| f.pause_requested),
                             lease.release_waiters > 0,
+                            lease.expires_at_us,
                         )
                     };
 
-                let wall_elapsed_us =
-                    u64::try_from(wait_wall_start.elapsed().as_micros()).unwrap_or(u64::MAX);
-                let clock_elapsed_us = desktop.clock().now_us().saturating_sub(wait_clock_start_us);
-                let step_elapsed_us = wall_elapsed_us.max(clock_elapsed_us);
-                let remaining_delay_us = delay_us.saturating_sub(step_elapsed_us);
+                let now_slice_us = slice_elapsed_now();
+                let remaining_delay_us = next_deadline_us.saturating_sub(now_slice_us);
 
                 if release_req {
                     let remaining_rpc =
@@ -1647,23 +2145,9 @@ impl LeaseCoordinator {
                         idx,
                         remaining_delay_us,
                         active_elapsed_us,
+                        cumulative_shift_us,
                         remaining_rpc,
                     );
-                }
-
-                if pause_req {
-                    let active_elapsed_us = active_elapsed_now(&rpc_wall_start, seg_clock_start_us);
-                    let res = self.suspend_segment_on_pause_locked(
-                        &mut state,
-                        ctx,
-                        desktop,
-                        &run,
-                        dispatched_count,
-                        idx,
-                        remaining_delay_us,
-                        active_elapsed_us,
-                    );
-                    return (state, res);
                 }
 
                 if desktop.emergency().state() == EmergencyState::Locked {
@@ -1671,9 +2155,14 @@ impl LeaseCoordinator {
                         lease.in_flight = None;
                         lease.suspended_segment = None;
                     }
-                    self.wait_cv.notify_all();
                     if dispatched_count == 0 {
                         clear_or_reject_pending_receipt(&mut state, &run, ctx);
+                        if state.current_lease.as_ref().is_some_and(|l| {
+                            l.lease_id == run.lease_id && l.generation == run.generation
+                        }) {
+                            revoke_current_lease_locked(&mut state, desktop, "EMERGENCY_LOCKED");
+                        }
+                        self.wait_cv.notify_all();
                         return (
                             state,
                             Err(PlatformError::new(
@@ -1691,6 +2180,40 @@ impl LeaseCoordinator {
                         run.generation,
                         run.segment_id,
                         run.payload_hash,
+                    );
+                    self.wait_cv.notify_all();
+                    return (state, res);
+                }
+
+                let now_clock_us = desktop.clock().now_us();
+                if now_clock_us >= expires_at_us {
+                    let active_elapsed_us = active_elapsed_now(&rpc_wall_start, seg_clock_start_us);
+                    return self.expire_in_flight_segment_locked(
+                        state,
+                        ctx,
+                        desktop,
+                        &run,
+                        dispatched_count,
+                        idx,
+                        active_elapsed_us,
+                        cumulative_shift_us,
+                    );
+                }
+
+                if pause_req {
+                    let active_elapsed_us = active_elapsed_now(&rpc_wall_start, seg_clock_start_us);
+                    let res = self.suspend_segment_on_pause_locked(
+                        &mut state,
+                        ctx,
+                        desktop,
+                        &run,
+                        dispatched_count,
+                        idx,
+                        remaining_delay_us,
+                        active_elapsed_us,
+                        cumulative_shift_us,
+                        None,
+                        true,
                     );
                     return (state, res);
                 }
@@ -1725,63 +2248,212 @@ impl LeaseCoordinator {
                     return (state, res);
                 }
 
-                if step_elapsed_us >= delay_us {
+                if now_slice_us >= next_deadline_us {
                     break;
                 }
 
                 let remaining_rpc = rpc_deadline_budget.saturating_sub(rpc_elapsed);
-                let slice = Duration::from_micros(remaining_delay_us)
-                    .min(remaining_rpc)
-                    .min(Duration::from_millis(5));
-                let (guard, _) = self.wait_cv.wait_timeout(state, slice).unwrap();
-                state = guard;
+                let ttl_rem_us = expires_at_us.saturating_sub(now_clock_us).max(1);
+                if remaining_delay_us >= 4_000
+                    && ttl_rem_us >= 4_000
+                    && remaining_rpc >= Duration::from_millis(4)
+                {
+                    let slice = Duration::from_micros(remaining_delay_us - 3_000)
+                        .min(remaining_rpc.saturating_sub(Duration::from_millis(3)))
+                        .min(Duration::from_micros(ttl_rem_us - 3_000))
+                        .min(Duration::from_millis(5));
+                    let (guard, _) = self.wait_cv.wait_timeout(state, slice).unwrap();
+                    state = guard;
+                } else {
+                    // Sub-4ms waits avoid OS condvar tick overshoot while still yielding every <= 250us for pause/release checks.
+                    drop(state);
+                    let spin_start = Instant::now();
+                    while spin_start.elapsed() < Duration::from_micros(250)
+                        && slice_elapsed_now() < next_deadline_us
+                        && rpc_wall_start.elapsed() < rpc_deadline_budget
+                        && desktop.clock().now_us() < expires_at_us
+                    {
+                        std::hint::spin_loop();
+                    }
+                    state = self.state.lock().unwrap();
+                }
             }
 
             {
-                let target_check =
-                    verify_target_expiry_locked(&state, &run.target_token).and_then(|()| {
-                        match verify_target_checked(desktop, &run.target_token)? {
-                            TargetStatus::Active => Ok(()),
-                            _ => Err(PlatformError::target_lost("输入目标已失焦、失效或丢失。")),
-                        }
-                    });
-                if let Err(err) = target_check {
-                    let (pause_req, release_req, should_finalize_pausing) = {
-                        let lease = state.current_lease.as_mut().unwrap();
-                        let pause_req = lease.in_flight.as_ref().is_some_and(|f| f.pause_requested);
-                        let release_req = lease.release_waiters > 0;
-                        lease.in_flight = None;
-                        lease.suspended_segment = None;
-                        let should_fin =
-                            lease.state == LeaseState::Pausing && lease.pending_pause.is_none();
-                        (pause_req, release_req, should_fin)
-                    };
-                    if dispatched_count == 0 {
-                        clear_or_reject_pending_receipt(&mut state, &run, ctx);
-                        if !release_req && (pause_req || should_finalize_pausing) {
-                            finalize_or_uncertain_pausing_locked(
-                                &mut state,
-                                &run.lease_id,
-                                run.generation,
-                                ctx,
-                                desktop,
-                            );
-                        }
-                        self.wait_cv.notify_all();
-                        return (state, Err(err));
-                    }
-                    let res = finish_uncertain_segment_locked(
-                        &mut state,
-                        desktop,
-                        ctx,
-                        run.receipt_key,
-                        run.lease_id,
-                        run.generation,
-                        run.segment_id,
-                        run.payload_hash,
-                    );
+                let Some(lease_exp) = state
+                    .current_lease
+                    .as_ref()
+                    .filter(|l| l.lease_id == run.lease_id && l.generation == run.generation)
+                    .map(|l| l.expires_at_us)
+                else {
                     self.wait_cv.notify_all();
-                    return (state, res);
+                    return (
+                        state,
+                        Err(PlatformError::new(
+                            "LEASE_EXPIRED",
+                            "输入段执行期间桌面租约已失效或撤销。",
+                        )),
+                    );
+                };
+                if desktop.clock().now_us() >= lease_exp {
+                    let active_elapsed_us = active_elapsed_now(&rpc_wall_start, seg_clock_start_us);
+                    return self.expire_in_flight_segment_locked(
+                        state,
+                        ctx,
+                        desktop,
+                        &run,
+                        dispatched_count,
+                        idx,
+                        active_elapsed_us,
+                        cumulative_shift_us,
+                    );
+                }
+
+                enum DriftOutcome {
+                    Ok,
+                    HardLoss(PlatformError),
+                    PausableDrift(PlatformError, &'static str),
+                }
+
+                let drift = match verify_target_expiry_locked(&state, &run.target_token) {
+                    Err(e) => DriftOutcome::HardLoss(e),
+                    Ok(()) => match verify_target_checked(desktop, &run.target_token) {
+                        Err(e) => DriftOutcome::HardLoss(e),
+                        Ok(TargetStatus::Unfocused) => DriftOutcome::PausableDrift(
+                            PlatformError::target_lost("输入目标已失去前台焦点。"),
+                            "TARGET_LOST",
+                        ),
+                        Ok(TargetStatus::Lost | TargetStatus::Expired) => DriftOutcome::HardLoss(
+                            PlatformError::target_lost("输入目标已失效或丢失。"),
+                        ),
+                        Ok(TargetStatus::Active) => {
+                            match read_live_target_version(&state, &run.target_token, desktop) {
+                                Err(e) => DriftOutcome::PausableDrift(e, "TARGET_LOST"),
+                                Ok(tv) if tv != run.expected_target_version => {
+                                    DriftOutcome::PausableDrift(
+                                        PlatformError::target_lost("输入目标版本已发生变化。"),
+                                        "TARGET_LOST",
+                                    )
+                                }
+                                Ok(_) => match current_topology_version(desktop) {
+                                    Err(e) => DriftOutcome::PausableDrift(e, "TOPOLOGY_CHANGED"),
+                                    Ok(topo_ver) if topo_ver != run.expected_topology_version => {
+                                        DriftOutcome::PausableDrift(
+                                            PlatformError::target_lost("显示拓扑代次已发生变化。"),
+                                            "TOPOLOGY_CHANGED",
+                                        )
+                                    }
+                                    Ok(_) => DriftOutcome::Ok,
+                                },
+                            }
+                        }
+                    },
+                };
+
+                match drift {
+                    DriftOutcome::Ok => {}
+                    DriftOutcome::HardLoss(err) => {
+                        let (pause_req, release_req, should_finalize_pausing, has_held) = {
+                            let lease = state.current_lease.as_mut().unwrap();
+                            let pause_req =
+                                lease.in_flight.as_ref().is_some_and(|f| f.pause_requested);
+                            let release_req = lease.release_waiters > 0;
+                            lease.in_flight = None;
+                            lease.suspended_segment = None;
+                            let should_fin =
+                                lease.state == LeaseState::Pausing && lease.pending_pause.is_none();
+                            (
+                                pause_req,
+                                release_req,
+                                should_fin,
+                                !lease.held_inputs.is_empty(),
+                            )
+                        };
+                        if dispatched_count == 0 {
+                            clear_or_reject_pending_receipt(&mut state, &run, ctx);
+                            if !release_req && has_held {
+                                self.handle_admission_target_loss_locked(
+                                    &mut state,
+                                    &run.lease_id,
+                                    run.generation,
+                                    ctx,
+                                    desktop,
+                                    "TARGET_LOST",
+                                );
+                            } else if !release_req && (pause_req || should_finalize_pausing) {
+                                finalize_or_uncertain_pausing_locked(
+                                    &mut state,
+                                    &run.lease_id,
+                                    run.generation,
+                                    ctx,
+                                    desktop,
+                                );
+                            }
+                            self.wait_cv.notify_all();
+                            return (state, Err(err));
+                        }
+                        let res = finish_uncertain_segment_locked(
+                            &mut state,
+                            desktop,
+                            ctx,
+                            run.receipt_key,
+                            run.lease_id,
+                            run.generation,
+                            run.segment_id,
+                            run.payload_hash,
+                        );
+                        self.wait_cv.notify_all();
+                        return (state, res);
+                    }
+                    DriftOutcome::PausableDrift(err, drift_reason) => {
+                        if dispatched_count == 0 {
+                            let (pause_req, release_req, should_finalize_pausing, has_held) = {
+                                let lease = state.current_lease.as_mut().unwrap();
+                                let pause_req =
+                                    lease.in_flight.as_ref().is_some_and(|f| f.pause_requested);
+                                let release_req = lease.release_waiters > 0;
+                                lease.in_flight = None;
+                                lease.suspended_segment = None;
+                                let should_fin = lease.state == LeaseState::Pausing
+                                    && lease.pending_pause.is_none();
+                                (
+                                    pause_req,
+                                    release_req,
+                                    should_fin,
+                                    !lease.held_inputs.is_empty(),
+                                )
+                            };
+                            clear_or_reject_pending_receipt(&mut state, &run, ctx);
+                            if !release_req && (has_held || pause_req || should_finalize_pausing) {
+                                self.handle_admission_target_loss_locked(
+                                    &mut state,
+                                    &run.lease_id,
+                                    run.generation,
+                                    ctx,
+                                    desktop,
+                                    drift_reason,
+                                );
+                            }
+                            self.wait_cv.notify_all();
+                            return (state, Err(err));
+                        }
+                        let active_elapsed_us =
+                            active_elapsed_now(&rpc_wall_start, seg_clock_start_us);
+                        let res = self.suspend_segment_on_pause_locked(
+                            &mut state,
+                            ctx,
+                            desktop,
+                            &run,
+                            dispatched_count,
+                            idx,
+                            0,
+                            active_elapsed_us,
+                            cumulative_shift_us,
+                            Some(drift_reason),
+                            false,
+                        );
+                        return (state, res);
+                    }
                 }
 
                 let would_exceed_held = {
@@ -1844,6 +2516,58 @@ impl LeaseCoordinator {
                     self.wait_cv.notify_all();
                     return (state, res);
                 }
+
+                if run.original_duration_us > 0 {
+                    let now_slice_us = slice_elapsed_now();
+                    let lateness_us = now_slice_us.saturating_sub(next_deadline_us);
+                    if lateness_us > MAX_SINGLE_LATENESS_US {
+                        let active_elapsed_us =
+                            active_elapsed_now(&rpc_wall_start, seg_clock_start_us);
+                        let res = self.suspend_segment_on_pause_locked(
+                            &mut state,
+                            ctx,
+                            desktop,
+                            &run,
+                            dispatched_count,
+                            idx,
+                            0,
+                            active_elapsed_us,
+                            cumulative_shift_us,
+                            Some("INPUT_TIMING_OVERRUN"),
+                            false,
+                        );
+                        return (state, res);
+                    }
+                    let next_event_delay_us = run
+                        .events
+                        .get(idx + 1)
+                        .map_or(0, |next| next.delay_before_us);
+                    if lateness_us >= 1_000
+                        || (next_event_delay_us > 0 && lateness_us >= next_event_delay_us)
+                    {
+                        if cumulative_shift_us.saturating_add(lateness_us) > max_cumulative_shift_us
+                        {
+                            let active_elapsed_us =
+                                active_elapsed_now(&rpc_wall_start, seg_clock_start_us);
+                            let res = self.suspend_segment_on_pause_locked(
+                                &mut state,
+                                ctx,
+                                desktop,
+                                &run,
+                                dispatched_count,
+                                idx,
+                                0,
+                                active_elapsed_us,
+                                cumulative_shift_us,
+                                Some("INPUT_TIMING_OVERRUN"),
+                                false,
+                            );
+                            return (state, res);
+                        }
+                        cumulative_shift_us = cumulative_shift_us.saturating_add(lateness_us);
+                        next_deadline_us = next_deadline_us.saturating_add(lateness_us);
+                    }
+                }
             }
 
             // Release coordinator lock around native event emission so concurrent pause/status/release never blocks.
@@ -1856,6 +2580,7 @@ impl LeaseCoordinator {
                 .as_ref()
                 .is_some_and(|l| l.lease_id == run.lease_id && l.generation == run.generation);
             if !lease_still_matches {
+                self.wait_cv.notify_all();
                 return (
                     state,
                     Err(PlatformError::new(
@@ -1885,7 +2610,9 @@ impl LeaseCoordinator {
                     };
                     let rec_res =
                         record_rejected_segment_locked(&mut state, &run, ctx, run.generation);
-                    if !release_req && (pause_req || should_finalize_pausing) {
+                    if !release_req && desktop.emergency().state() == EmergencyState::Locked {
+                        revoke_current_lease_locked(&mut state, desktop, "EMERGENCY_LOCKED");
+                    } else if !release_req && (pause_req || should_finalize_pausing) {
                         finalize_or_uncertain_pausing_locked(
                             &mut state,
                             &run.lease_id,
@@ -1897,8 +2624,8 @@ impl LeaseCoordinator {
                     self.wait_cv.notify_all();
                     return (state, rec_res);
                 }
-                Err(err) if dispatched_count == 0 => {
-                    let (pause_req, release_req, should_finalize_pausing) = {
+                Err(err) if dispatched_count == 0 && is_pre_dispatch_error(&err) => {
+                    let (pause_req, release_req, should_finalize_pausing, has_held) = {
                         let lease = state.current_lease.as_mut().unwrap();
                         let pause_req = lease.in_flight.as_ref().is_some_and(|f| f.pause_requested);
                         let release_req = lease.release_waiters > 0;
@@ -1906,10 +2633,26 @@ impl LeaseCoordinator {
                         lease.suspended_segment = None;
                         let should_fin =
                             lease.state == LeaseState::Pausing && lease.pending_pause.is_none();
-                        (pause_req, release_req, should_fin)
+                        (
+                            pause_req,
+                            release_req,
+                            should_fin,
+                            !lease.held_inputs.is_empty(),
+                        )
                     };
                     clear_or_reject_pending_receipt(&mut state, &run, ctx);
-                    if !release_req && (pause_req || should_finalize_pausing) {
+                    if !release_req && desktop.emergency().state() == EmergencyState::Locked {
+                        revoke_current_lease_locked(&mut state, desktop, "EMERGENCY_LOCKED");
+                    } else if !release_req && (err.code == "TARGET_LOST" && has_held) {
+                        self.handle_admission_target_loss_locked(
+                            &mut state,
+                            &run.lease_id,
+                            run.generation,
+                            ctx,
+                            desktop,
+                            "TARGET_LOST",
+                        );
+                    } else if !release_req && (pause_req || should_finalize_pausing) {
                         finalize_or_uncertain_pausing_locked(
                             &mut state,
                             &run.lease_id,
@@ -1921,8 +2664,48 @@ impl LeaseCoordinator {
                     self.wait_cv.notify_all();
                     return (state, Err(err));
                 }
-                Ok(SubmissionOutcome::Rejected | SubmissionOutcome::Uncertain) | Err(_) => {
+                Ok(SubmissionOutcome::Rejected) => {
                     if let Some(lease) = state.current_lease.as_mut() {
+                        lease.in_flight = None;
+                        lease.suspended_segment = None;
+                    }
+                    let res = finish_uncertain_segment_locked(
+                        &mut state,
+                        desktop,
+                        ctx,
+                        run.receipt_key,
+                        run.lease_id,
+                        run.generation,
+                        run.segment_id,
+                        run.payload_hash,
+                    );
+                    self.wait_cv.notify_all();
+                    return (state, res);
+                }
+                Ok(SubmissionOutcome::Uncertain) => {
+                    if let Some(lease) = state.current_lease.as_mut() {
+                        record_potentially_held_press(&mut lease.held_inputs, &event.action);
+                        lease.in_flight = None;
+                        lease.suspended_segment = None;
+                    }
+                    let res = finish_uncertain_segment_locked(
+                        &mut state,
+                        desktop,
+                        ctx,
+                        run.receipt_key,
+                        run.lease_id,
+                        run.generation,
+                        run.segment_id,
+                        run.payload_hash,
+                    );
+                    self.wait_cv.notify_all();
+                    return (state, res);
+                }
+                Err(err) => {
+                    if let Some(lease) = state.current_lease.as_mut() {
+                        if !is_pre_dispatch_error(&err) {
+                            record_potentially_held_press(&mut lease.held_inputs, &event.action);
+                        }
                         lease.in_flight = None;
                         lease.suspended_segment = None;
                     }
@@ -1942,14 +2725,12 @@ impl LeaseCoordinator {
             }
         }
 
-        let now_us = desktop.clock().now_us();
         let (pause_req, release_req, should_finalize_pausing) = {
             let lease = state.current_lease.as_mut().unwrap();
             let pause_req = lease.in_flight.as_ref().is_some_and(|f| f.pause_requested);
             let release_req = lease.release_waiters > 0;
             lease.in_flight = None;
             lease.suspended_segment = None;
-            lease.expires_at_us = now_us.saturating_add(LEASE_TTL_US);
             let should_fin = lease.state == LeaseState::Pausing && lease.pending_pause.is_none();
             (pause_req, release_req, should_fin)
         };
@@ -1986,10 +2767,105 @@ impl LeaseCoordinator {
                 ctx,
                 desktop,
             );
+        } else if !release_req {
+            if desktop.emergency().state() == EmergencyState::Locked {
+                revoke_current_lease_locked(&mut state, desktop, "EMERGENCY_LOCKED");
+            } else {
+                self.refresh_lease_expiry_locked(&mut state, desktop);
+            }
         }
 
         self.wait_cv.notify_all();
         (state, Ok(result))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn expire_in_flight_segment_locked<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, CoordinatorState>,
+        ctx: &SessionContext,
+        desktop: &dyn DesktopSession,
+        run: &SegmentRun,
+        dispatched_count: usize,
+        next_event_index: usize,
+        active_elapsed_us: u64,
+        cumulative_shift_us: u64,
+    ) -> (
+        MutexGuard<'a, CoordinatorState>,
+        Result<SegmentResult, PlatformError>,
+    ) {
+        if dispatched_count == 0 {
+            if let Some(lease) = state
+                .current_lease
+                .as_mut()
+                .filter(|l| l.lease_id == run.lease_id && l.generation == run.generation)
+            {
+                lease.in_flight = None;
+                lease.release_pending = false;
+                lease.suspended_segment = None;
+            }
+            clear_or_reject_pending_receipt(&mut state, run, ctx);
+            if state
+                .current_lease
+                .as_ref()
+                .is_some_and(|l| l.lease_id == run.lease_id && l.generation == run.generation)
+            {
+                revoke_current_lease_locked(&mut state, desktop, "LEASE_EXPIRED");
+            }
+            self.wait_cv.notify_all();
+            return (
+                state,
+                Err(PlatformError::new(
+                    "LEASE_EXPIRED",
+                    "输入段执行期间桌面租约已过期。",
+                )),
+            );
+        }
+
+        if let Some(lease) = state
+            .current_lease
+            .as_mut()
+            .filter(|l| l.lease_id == run.lease_id && l.generation == run.generation)
+        {
+            lease.in_flight = None;
+            lease.release_pending = false;
+            lease.suspended_segment = Some(SuspendedSegment {
+                receipt_key: run.receipt_key.clone(),
+                segment_id: run.segment_id.clone(),
+                payload_hash: run.payload_hash.clone(),
+                target_token: run.target_token.clone(),
+                events: run.events.clone(),
+                next_event_index,
+                remaining_delay_us: 0,
+                active_elapsed_us,
+                original_duration_us: run.original_duration_us,
+                cumulative_shift_us,
+                dispatched_count,
+                pause_cleanup: CleanupOutcome::NotRequired,
+            });
+            revoke_current_lease_locked(&mut state, desktop, "LEASE_EXPIRED");
+        }
+        self.wait_cv.notify_all();
+        if let Some(res) = state
+            .segment_receipts
+            .get(&run.receipt_key)
+            .filter(|receipt| {
+                receipt.lease_id == run.lease_id
+                    && receipt.generation == run.generation
+                    && receipt.payload_hash == run.payload_hash
+                    && receipt.result.state != SegmentState::Running
+            })
+            .map(|receipt| receipt.result.clone())
+        {
+            return (state, Ok(res));
+        }
+        (
+            state,
+            Err(PlatformError::new(
+                "LEASE_EXPIRED",
+                "输入段执行期间桌面租约已过期。",
+            )),
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2003,6 +2879,9 @@ impl LeaseCoordinator {
         next_event_index: usize,
         remaining_delay_us: u64,
         active_elapsed_us: u64,
+        cumulative_shift_us: u64,
+        pause_reason: Option<&str>,
+        refresh_ttl: bool,
     ) -> Result<SegmentResult, PlatformError> {
         let cursor = SegmentCursor {
             segment_id: run.segment_id.clone(),
@@ -2021,6 +2900,8 @@ impl LeaseCoordinator {
             next_event_index,
             remaining_delay_us,
             active_elapsed_us,
+            original_duration_us: run.original_duration_us,
+            cumulative_shift_us,
             dispatched_count,
             pause_cleanup: CleanupOutcome::NotRequired,
         };
@@ -2035,6 +2916,8 @@ impl LeaseCoordinator {
             desktop,
             Some(cursor),
             Some(suspended),
+            pause_reason,
+            refresh_ttl,
         );
         match finalize_res {
             Ok((_snap, Some(seg_result))) => {
@@ -2046,7 +2929,11 @@ impl LeaseCoordinator {
                 segment_result_from_pause_snapshot(&run.segment_id, &ctx.agent_epoch, &snap)
             }
             Err(err) => {
-                if dispatched_count == 0 {
+                let has_held = state
+                    .current_lease
+                    .as_ref()
+                    .is_some_and(|l| !l.held_inputs.is_empty());
+                if dispatched_count == 0 && !has_held {
                     if let Some(lease) = state.current_lease.as_mut()
                         && lease.state == LeaseState::Pausing
                         && lease.pending_pause.is_none()
@@ -2086,6 +2973,7 @@ impl LeaseCoordinator {
         next_event_index: usize,
         remaining_delay_us: u64,
         active_elapsed_us: u64,
+        cumulative_shift_us: u64,
         wait_budget: Duration,
     ) -> (
         MutexGuard<'a, CoordinatorState>,
@@ -2128,6 +3016,8 @@ impl LeaseCoordinator {
                 next_event_index,
                 remaining_delay_us,
                 active_elapsed_us,
+                original_duration_us: run.original_duration_us,
+                cumulative_shift_us,
                 dispatched_count,
                 pause_cleanup: CleanupOutcome::NotRequired,
             });
@@ -2250,12 +3140,174 @@ struct SegmentRun {
     segment_id: String,
     payload_hash: String,
     target_token: String,
+    expected_target_version: String,
+    expected_topology_version: String,
     events: Vec<AtomicInputEvent>,
     start_index: usize,
     first_delay_override: Option<u64>,
     prior_active_elapsed_us: u64,
+    original_duration_us: u64,
+    prior_cumulative_shift_us: u64,
     dispatched_count: usize,
     fresh_submit: bool,
+}
+
+#[cfg(windows)]
+struct HighResTimerGuard {
+    active: bool,
+}
+
+#[cfg(windows)]
+impl HighResTimerGuard {
+    fn new() -> Self {
+        use std::ffi::c_void;
+        use std::sync::Once;
+
+        const PROCESS_POWER_THROTTLING: u32 = 4;
+        const PROCESS_POWER_THROTTLING_CURRENT_VERSION: u32 = 1;
+        const PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION: u32 = 0x4;
+
+        #[repr(C)]
+        struct ProcessPowerThrottlingState {
+            version: u32,
+            control_mask: u32,
+            state_mask: u32,
+        }
+
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetCurrentProcess() -> *mut c_void;
+            fn SetProcessInformation(
+                process: *mut c_void,
+                class: u32,
+                info: *const c_void,
+                size: u32,
+            ) -> i32;
+        }
+        #[link(name = "winmm")]
+        unsafe extern "system" {
+            fn timeBeginPeriod(uPeriod: u32) -> u32;
+        }
+
+        static TIMER_THROTTLING_INIT: Once = Once::new();
+        TIMER_THROTTLING_INIT.call_once(|| {
+            let state = ProcessPowerThrottlingState {
+                version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+                control_mask: PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION,
+                state_mask: 0,
+            };
+            unsafe {
+                let _ = SetProcessInformation(
+                    GetCurrentProcess(),
+                    PROCESS_POWER_THROTTLING,
+                    (&raw const state).cast(),
+                    size_of::<ProcessPowerThrottlingState>() as u32,
+                );
+            }
+        });
+
+        let active = unsafe { timeBeginPeriod(1) } == 0;
+        Self { active }
+    }
+
+    fn disabled() -> Self {
+        Self { active: false }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for HighResTimerGuard {
+    fn drop(&mut self) {
+        if self.active {
+            #[link(name = "winmm")]
+            unsafe extern "system" {
+                fn timeEndPeriod(uPeriod: u32) -> u32;
+            }
+            unsafe {
+                let _ = timeEndPeriod(1);
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+struct HighResTimerGuard;
+
+#[cfg(not(windows))]
+impl HighResTimerGuard {
+    fn new() -> Self {
+        Self
+    }
+
+    fn disabled() -> Self {
+        Self
+    }
+}
+
+fn record_potentially_held_press(held_inputs: &mut Vec<HeldInput>, action: &NativeInputAction) {
+    match action {
+        NativeInputAction::KeyDown(key) => {
+            let item = HeldInput::Key { key: key.clone() };
+            if !held_inputs.contains(&item) {
+                held_inputs.push(item);
+                sort_held_inputs(held_inputs);
+            }
+        }
+        NativeInputAction::PointerButtonDown(button) => {
+            let item = HeldInput::Button { button: *button };
+            if !held_inputs.contains(&item) {
+                held_inputs.push(item);
+                sort_held_inputs(held_inputs);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_pre_dispatch_error(err: &PlatformError) -> bool {
+    matches!(
+        err.code,
+        "CAPABILITY_NOT_IMPLEMENTED"
+            | "INVALID_ARGUMENT"
+            | "TARGET_LOST"
+            | "SESSION_UNAVAILABLE"
+            | "ACCESS_DENIED"
+            | "RESOURCE_DENIED"
+    )
+}
+
+fn query_pointer_position(desktop: &dyn DesktopSession) -> Result<PausePoint, PlatformError> {
+    match desktop.pointer_position() {
+        Ok(point) => {
+            point.validate()?;
+            Ok(point)
+        }
+        #[cfg(feature = "test-authority")]
+        Err(err) if err.code == "CAPABILITY_NOT_IMPLEMENTED" => {
+            Ok(PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }))
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn read_live_target_version(
+    state: &CoordinatorState,
+    token: &str,
+    desktop: &dyn DesktopSession,
+) -> Result<String, PlatformError> {
+    let bound = state
+        .bound_targets
+        .get(token)
+        .ok_or_else(|| PlatformError::target_lost("租约绑定的目标令牌已不存在。"))?;
+    match desktop.targets().target_version(&bound.descriptor.token) {
+        Ok(Some(v)) => Ok(v),
+        Ok(None) => Ok(bound.descriptor.target_version.clone()),
+        #[cfg(feature = "test-authority")]
+        Err(err) if err.code == "CAPABILITY_NOT_IMPLEMENTED" => {
+            Ok(bound.descriptor.target_version.clone())
+        }
+        Err(err) => Err(err),
+    }
 }
 
 fn clear_or_reject_pending_receipt(
@@ -2303,7 +3355,23 @@ fn finalize_or_uncertain_pausing_locked(
     ctx: &SessionContext,
     desktop: &dyn DesktopSession,
 ) {
-    if finalize_pause_locked(state, lease_id, generation, ctx, desktop, None, None).is_err()
+    if desktop.emergency().state() == EmergencyState::Locked {
+        revoke_current_lease_locked(state, desktop, "EMERGENCY_LOCKED");
+        return;
+    }
+    let now_us = desktop.clock().now_us();
+    if state.current_lease.as_ref().is_some_and(|lease| {
+        lease.lease_id == lease_id
+            && lease.generation == generation
+            && now_us >= lease.expires_at_us
+    }) {
+        revoke_current_lease_locked(state, desktop, "LEASE_EXPIRED");
+        return;
+    }
+    if finalize_pause_locked(
+        state, lease_id, generation, ctx, desktop, None, None, None, true,
+    )
+    .is_err()
         && let Some(lease) = state.current_lease.as_mut()
     {
         let cleanup = release_held_inputs(desktop, &mut lease.held_inputs);
@@ -2400,19 +3468,7 @@ fn build_target_states(
     let topology_version = current_topology_version(desktop)?;
     let mut target_states = Vec::with_capacity(targets.len());
     for token in targets {
-        let bound = state
-            .bound_targets
-            .get(token)
-            .ok_or_else(|| PlatformError::target_lost("租约绑定的目标令牌已不存在。"))?;
-        let live_version = match desktop.targets().target_version(&bound.descriptor.token) {
-            Ok(Some(v)) => v,
-            Ok(None) => bound.descriptor.target_version.clone(),
-            #[cfg(feature = "test-authority")]
-            Err(err) if err.code == "CAPABILITY_NOT_IMPLEMENTED" => {
-                bound.descriptor.target_version.clone()
-            }
-            Err(err) => return Err(err),
-        };
+        let live_version = read_live_target_version(state, token, desktop)?;
         target_states.push(TargetState {
             target_token: token.clone(),
             target_version: live_version,
@@ -2423,6 +3479,7 @@ fn build_target_states(
     Ok(target_states)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn finalize_pause_locked(
     state: &mut CoordinatorState,
     lease_id: &str,
@@ -2431,8 +3488,17 @@ fn finalize_pause_locked(
     desktop: &dyn DesktopSession,
     cursor: Option<SegmentCursor>,
     mut suspended: Option<SuspendedSegment>,
+    pause_reason: Option<&str>,
+    refresh_ttl: bool,
 ) -> Result<(LeaseSnapshot, Option<SegmentResult>), PlatformError> {
-    let (targets, pointer, input_target_token, mut held_before_release, lease_epoch, lease_id_str) = {
+    let (
+        targets,
+        lease_pointer,
+        input_target_token,
+        mut held_before_release,
+        lease_epoch,
+        lease_id_str,
+    ) = {
         let lease = require_active_owner_lease_mut(state, lease_id, generation, ctx)?;
         if !matches!(lease.state, LeaseState::Active | LeaseState::Pausing) {
             return Err(PlatformError::new(
@@ -2448,6 +3514,11 @@ fn finalize_pause_locked(
             lease.agent_epoch.clone(),
             lease.lease_id.clone(),
         )
+    };
+
+    let pointer = match lease_pointer {
+        Some(ptr) => ptr,
+        None => query_pointer_position(desktop)?,
     };
 
     sort_held_inputs(&mut held_before_release);
@@ -2475,7 +3546,7 @@ fn finalize_pause_locked(
         expires_at,
         cursor,
         held_before_release,
-        pointer,
+        pointer.clone(),
         target_states,
         snapshot_input_target,
     )?;
@@ -2484,6 +3555,10 @@ fn finalize_pause_locked(
     let now_us = desktop.clock().now_us();
     let cleanup = {
         let lease = state.current_lease.as_mut().unwrap();
+        lease.pointer = Some(pointer.clone());
+        if let PausePoint::Physical(pt) = pointer {
+            lease.physical_pointer = Some(pt);
+        }
         release_held_inputs(desktop, &mut lease.held_inputs)
     };
 
@@ -2496,8 +3571,10 @@ fn finalize_pause_locked(
                 lease.pause_snapshot = Some(candidate_snapshot.clone());
                 lease.pending_pause = None;
                 lease.pause_expires_at_us = Some(now_us.saturating_add(PAUSE_RETENTION_US));
-                lease.expires_at_us = now_us.saturating_add(LEASE_TTL_US);
-                lease.reason = None;
+                if refresh_ttl {
+                    lease.expires_at_us = now_us.saturating_add(LEASE_TTL_US);
+                }
+                lease.reason = pause_reason.map(str::to_owned);
             }
             if let Some(mut seg) = suspended.take() {
                 seg.pause_cleanup = cleanup;
@@ -2753,50 +3830,58 @@ fn revoke_current_lease_locked(
     (new_generation, cleanup)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn verify_confirmation_grant(
     state: &CoordinatorState,
+    workspace_id: &str,
+    now_us: u64,
     grant: &str,
     lease_id: &str,
     generation: u64,
     pause_snapshot: &PauseSnapshot,
     resume_plan_hash: &str,
-) -> Result<(), PlatformError> {
+) -> Result<RegisteredConfirmation, PlatformError> {
     if state.consumed_confirmations.contains(grant) {
         return Err(PlatformError::new(
             "RESOURCE_DENIED",
             "恢复确认授权已消耗或无效。",
         ));
     }
-    if let Some(reg) = state.registered_confirmations.get(grant) {
-        if reg.lease_id != lease_id
-            || reg.pause_id != pause_snapshot.pause_id
-            || reg.agent_epoch != pause_snapshot.agent_epoch
-            || reg.generation != generation
-            || reg.checkpoint_hash != pause_snapshot.checkpoint_hash
-            || reg.resume_plan_hash != resume_plan_hash
-            || reg.restore_target_token != pause_snapshot.input_target_token
-        {
-            return Err(PlatformError::new(
-                "RESOURCE_DENIED",
-                "恢复确认授权与检查点或计划不匹配。",
-            ));
-        }
-        return Ok(());
+    let Some(reg) = state.registered_confirmations.get(grant) else {
+        return Err(PlatformError::new(
+            "RESOURCE_DENIED",
+            "恢复确认授权未登记或无效。",
+        ));
+    };
+    if now_us >= reg.expires_at_us {
+        return Err(PlatformError::new(
+            "RESOURCE_DENIED",
+            "恢复确认授权已超过有效期。",
+        ));
     }
-    #[cfg(feature = "test-authority")]
+    if reg.owner_workspace != workspace_id
+        || reg.lease_id != lease_id
+        || reg.pause_id != pause_snapshot.pause_id
+        || reg.agent_epoch != pause_snapshot.agent_epoch
+        || reg.generation != generation
+        || reg.checkpoint_hash != pause_snapshot.checkpoint_hash
+        || reg.resume_plan_hash != resume_plan_hash
+        || reg.restore_target_token != pause_snapshot.input_target_token
     {
-        let expected = format!(
-            "test-confirm:{}:{}:{}",
-            pause_snapshot.pause_id, pause_snapshot.checkpoint_hash, resume_plan_hash
-        );
-        if grant == expected {
-            return Ok(());
-        }
+        return Err(PlatformError::new(
+            "RESOURCE_DENIED",
+            "恢复确认授权与检查点或计划不匹配。",
+        ));
     }
-    Err(PlatformError::new(
-        "RESOURCE_DENIED",
-        "恢复确认授权未登记或无效。",
-    ))
+    if let Some(ref ptr) = reg.pointer_to_restore
+        && *ptr != pause_snapshot.pointer
+    {
+        return Err(PlatformError::new(
+            "RESOURCE_DENIED",
+            "恢复确认授权的指针目标与检查点不匹配。",
+        ));
+    }
+    Ok(reg.clone())
 }
 
 fn apply_action_to_lease_ledger(lease: &mut ActiveLease, action: &NativeInputAction) {
@@ -2806,34 +3891,41 @@ fn apply_action_to_lease_ledger(lease: &mut ActiveLease, action: &NativeInputAct
                 x: pt.x.clamp(MIN_COORD_I64, MAX_COORD_I64),
                 y: pt.y.clamp(MIN_COORD_I64, MAX_COORD_I64),
             };
-            lease.physical_pointer = clamped;
-            lease.pointer = PausePoint::Physical(clamped);
+            lease.physical_pointer = Some(clamped);
+            lease.pointer = Some(PausePoint::Physical(clamped));
         }
         NativeInputAction::PointerMoveDisplay(pt) => {
             let mut bounded = pt.clone();
             bounded.x = bounded.x.clamp(0.0, MAX_COORD_F64);
             bounded.y = bounded.y.clamp(0.0, MAX_COORD_F64);
-            lease.pointer = PausePoint::Display(bounded);
+            lease.pointer = Some(PausePoint::Display(bounded));
         }
         NativeInputAction::PointerDelta { dx, dy } => {
-            lease.physical_pointer.x = lease
-                .physical_pointer
-                .x
-                .saturating_add(dx.round() as i64)
-                .clamp(MIN_COORD_I64, MAX_COORD_I64);
-            lease.physical_pointer.y = lease
-                .physical_pointer
-                .y
-                .saturating_add(dy.round() as i64)
-                .clamp(MIN_COORD_I64, MAX_COORD_I64);
+            if let Some(ref mut phys) = lease.physical_pointer {
+                phys.x = phys
+                    .x
+                    .saturating_add(dx.round() as i64)
+                    .clamp(MIN_COORD_I64, MAX_COORD_I64);
+                phys.y = phys
+                    .y
+                    .saturating_add(dy.round() as i64)
+                    .clamp(MIN_COORD_I64, MAX_COORD_I64);
+            }
             match &mut lease.pointer {
-                PausePoint::Physical(pt) => {
-                    *pt = lease.physical_pointer;
+                Some(PausePoint::Physical(pt)) => {
+                    pt.x =
+                        pt.x.saturating_add(dx.round() as i64)
+                            .clamp(MIN_COORD_I64, MAX_COORD_I64);
+                    pt.y =
+                        pt.y.saturating_add(dy.round() as i64)
+                            .clamp(MIN_COORD_I64, MAX_COORD_I64);
+                    lease.physical_pointer = Some(*pt);
                 }
-                PausePoint::Display(pt) => {
+                Some(PausePoint::Display(pt)) => {
                     pt.x = (pt.x + dx).clamp(0.0, MAX_COORD_F64);
                     pt.y = (pt.y + dy).clamp(0.0, MAX_COORD_F64);
                 }
+                None => {}
             }
         }
         NativeInputAction::PointerButtonDown(button) => {
@@ -3134,4 +4226,166 @@ fn current_and_expiry_utc_timestamps(ttl_secs: i64) -> (String, String) {
         format_utc_timestamp(now_secs),
         format_utc_timestamp(exp_secs),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use deskweave_platform_api::{
+        AtomicInputEvent, BackendKind, CapabilitySnapshot, DesktopSession, DisplayTopology,
+        EmergencyState, FakeDesktopSession, FeatureSet, FeatureStatus, LeaseState,
+        NativeInputAction, PlatformArch, PlatformOs, SegmentState, TargetDescriptor, TargetKind,
+        TargetToken, TopologyCoverage, TrajectoryVersion, compute_segment_payload_hash,
+    };
+    use serde_json::{Map, Value, json};
+
+    use super::*;
+
+    fn to_obj(val: Value) -> Map<String, Value> {
+        match val {
+            Value::Object(map) => map,
+            _ => panic!("expected json object"),
+        }
+    }
+
+    #[test]
+    fn emergency_lock_before_first_event_clears_pausing_state_without_wedging() {
+        let topo_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/platform/macos-topology.json");
+        let topology: DisplayTopology =
+            serde_json::from_slice(&fs::read(topo_path).unwrap()).unwrap();
+        let caps = CapabilitySnapshot {
+            os: PlatformOs::Macos,
+            arch: PlatformArch::Arm64,
+            backend: BackendKind::MacosQuartz,
+            backend_version: "0.1.0".to_owned(),
+            generation: 1,
+            topology_version: Some(topology.version()),
+            topology_coverage: TopologyCoverage::All,
+            trajectory_versions: vec![TrajectoryVersion::V1_0, TrajectoryVersion::V1_1],
+            features: FeatureSet::all(FeatureStatus::available()),
+        };
+        let fake = Arc::new(FakeDesktopSession::new(caps, Ok(topology.clone())));
+        fake.register_grant(
+            "grant-a",
+            TargetDescriptor {
+                token: TargetToken("target-a".to_owned()),
+                display_name: "Target A".to_owned(),
+                kind: TargetKind::Window,
+                target_version: "1".to_owned(),
+                expires_at: "2099-01-01T00:00:00Z".to_owned(),
+            },
+        );
+
+        let leases = LeaseCoordinator::new();
+        let ctx = SessionContext {
+            agent_epoch: "a".repeat(64),
+            session_id: "sess-pausing-emg".to_owned(),
+            workspace_id: "ws-pausing-emg".to_owned(),
+        };
+        leases
+            .handle_target_bind(
+                &to_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                fake.as_ref(),
+            )
+            .unwrap();
+        let acq = leases
+            .handle_lease_acquire(
+                &to_obj(json!({"runId": "run-pausing-emg", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                fake.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+
+        let op = json!({
+            "id": "pausing-emg",
+            "title": "暂停态急停",
+            "action": "keyboard.text",
+            "params": {"target": "main", "text": "a", "intervalMs": 200},
+            "on": {}
+        });
+        let payload_hash = compute_segment_payload_hash("target-a", &op, None).unwrap();
+        let receipt_key = (ctx.workspace_id.clone(), "seg-pausing-emg".to_owned());
+
+        let run = {
+            let mut state = leases.state.lock().unwrap();
+            let lease = state.current_lease.as_mut().unwrap();
+            assert!(lease.held_inputs.is_empty());
+            lease.state = LeaseState::Pausing;
+            lease.in_flight = Some(InFlightSegment {
+                pause_requested: true,
+            });
+            let tv = fake
+                .targets()
+                .target_version(&TargetToken("target-a".to_owned()))
+                .unwrap()
+                .unwrap();
+            let topov = fake.topology().unwrap().version().to_string();
+            let running_res = SegmentResult {
+                segment_id: "seg-pausing-emg".to_owned(),
+                state: SegmentState::Running,
+                cleanup: CleanupOutcome::NotRequired,
+                agent_epoch: ctx.agent_epoch.clone(),
+                pause_id: None,
+            };
+            state
+                .record_segment_receipt(
+                    receipt_key.clone(),
+                    SegmentReceipt {
+                        lease_id: acq.lease_id.clone(),
+                        generation: acq.generation,
+                        payload_hash: payload_hash.clone(),
+                        result: running_res,
+                    },
+                )
+                .unwrap();
+            SegmentRun {
+                lease_id: acq.lease_id.clone(),
+                generation: acq.generation,
+                receipt_key: receipt_key.clone(),
+                segment_id: "seg-pausing-emg".to_owned(),
+                payload_hash,
+                target_token: "target-a".to_owned(),
+                expected_target_version: tv,
+                expected_topology_version: topov,
+                events: vec![AtomicInputEvent {
+                    delay_before_us: 100_000,
+                    action: NativeInputAction::KeyDown("KeyA".to_owned()),
+                }],
+                start_index: 0,
+                first_delay_override: None,
+                prior_active_elapsed_us: 0,
+                original_duration_us: 100_000,
+                prior_cumulative_shift_us: 0,
+                dispatched_count: 0,
+                fresh_submit: true,
+            }
+        };
+
+        assert_eq!(fake.emergency().state(), EmergencyState::Armed);
+        fake.emergency().trigger_lock().unwrap();
+
+        let state = leases.state.lock().unwrap();
+        let (state, res) = leases.drive_segment_events(state, &ctx, fake.as_ref(), run, 5000);
+        assert!(!state.segment_receipts.contains_key(&receipt_key));
+        drop(state);
+
+        let err = res.unwrap_err();
+        assert_eq!(err.code, "RESOURCE_DENIED");
+        let status = leases
+            .handle_lease_status(
+                &to_obj(json!({"leaseId": acq.lease_id})),
+                &ctx,
+                fake.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status.state, LeaseState::Released);
+        assert_eq!(status.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+    }
 }

@@ -10,8 +10,8 @@ use crate::error::PlatformError;
 use crate::jcs::jcs_sha256_hex;
 use crate::ports::{CleanupOutcome, HeldInput, NativeInputAction, TargetKind};
 use crate::topology::{
-    DisplayPoint, DisplayTopology, MAX_COORD_F64, MAX_COORD_I64, MIN_COORD_I64, PhysicalPoint,
-    valid_id,
+    DisplayLocalTopology, DisplayPoint, DisplayTopology, LocalDisplay, MAX_COORD_F64,
+    MAX_COORD_I64, MIN_COORD_I64, PhysicalPoint, PhysicalTopology, Rotation, valid_id,
 };
 use crate::trajectory::{MAX_AT_US, PointerButton};
 
@@ -899,82 +899,347 @@ pub struct AtomicInputEvent {
 fn smooth_step_count(duration_ms: u64, distance: f64) -> u64 {
     let by_time = (duration_ms / SMOOTH_STEP_INTERVAL_MS).max(2);
     let by_space = (distance.ceil() as u64).max(2);
-    by_time.max(by_space.min(250)).min(MAX_SMOOTH_STEPS)
+    let rate_cap = duration_ms.max(2);
+    by_time
+        .max(by_space.min(250))
+        .min(rate_cap)
+        .min(MAX_SMOOTH_STEPS)
+}
+
+fn interpolate_physical_moves(
+    p0: PhysicalPoint,
+    p1: PhysicalPoint,
+    duration_ms: u64,
+) -> Vec<AtomicInputEvent> {
+    let dx = (p1.x - p0.x) as f64;
+    let dy = (p1.y - p0.y) as f64;
+    let steps = smooth_step_count(duration_ms, dx.hypot(dy));
+    let total_us = duration_ms * 1_000;
+    let mut events = Vec::with_capacity(steps as usize);
+    let mut prev_us = 0_u64;
+    for i in 1..=steps {
+        let target_us = (total_us * i) / steps;
+        let delay = target_us - prev_us;
+        prev_us = target_us;
+        let point = if i == steps {
+            p1
+        } else {
+            let s = quintic_progress(i as f64 / steps as f64);
+            PhysicalPoint {
+                x: p0.x + (dx * s).round() as i64,
+                y: p0.y + (dy * s).round() as i64,
+            }
+        };
+        events.push(AtomicInputEvent {
+            delay_before_us: delay,
+            action: NativeInputAction::PointerMovePhysical(point),
+        });
+    }
+    events
+}
+
+fn interpolate_same_display_moves(
+    d0: &DisplayPoint,
+    d1: &DisplayPoint,
+    duration_ms: u64,
+) -> Vec<AtomicInputEvent> {
+    let dx = d1.x - d0.x;
+    let dy = d1.y - d0.y;
+    let steps = smooth_step_count(duration_ms, dx.hypot(dy));
+    let total_us = duration_ms * 1_000;
+    let mut events = Vec::with_capacity(steps as usize);
+    let mut prev_us = 0_u64;
+    for i in 1..=steps {
+        let target_us = (total_us * i) / steps;
+        let delay = target_us - prev_us;
+        prev_us = target_us;
+        let point = if i == steps {
+            d1.clone()
+        } else {
+            let s = quintic_progress(i as f64 / steps as f64);
+            DisplayPoint {
+                display_id: d1.display_id.clone(),
+                x: d0.x + dx * s,
+                y: d0.y + dy * s,
+            }
+        };
+        events.push(AtomicInputEvent {
+            delay_before_us: delay,
+            action: NativeInputAction::PointerMoveDisplay(point),
+        });
+    }
+    events
+}
+
+fn map_native_to_display(
+    display: &LocalDisplay,
+    nx: f64,
+    ny: f64,
+) -> Result<Option<DisplayPoint>, PlatformError> {
+    let Some(transform) = display.pixel_to_native else {
+        return Ok(None);
+    };
+    let (raw_x, raw_y) = transform.native_to_pixel(nx, ny)?;
+    let px = if raw_x == 0.0 { 0.0 } else { raw_x };
+    let py = if raw_y == 0.0 { 0.0 } else { raw_y };
+    if display.contains_pixel(px, py) && px <= MAX_COORD_F64 && py <= MAX_COORD_F64 {
+        Ok(Some(DisplayPoint {
+            display_id: display.display_id.clone(),
+            x: px,
+            y: py,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+fn interpolate_cross_display_local(
+    d0: &DisplayPoint,
+    d1: &DisplayPoint,
+    duration_ms: u64,
+    local: &DisplayLocalTopology,
+) -> Result<Vec<AtomicInputEvent>, PlatformError> {
+    let find_display = |pt: &DisplayPoint| -> Result<&LocalDisplay, PlatformError> {
+        let disp = local
+            .displays
+            .iter()
+            .find(|d| d.display_id == pt.display_id)
+            .ok_or_else(|| {
+                PlatformError::invalid_argument("跨屏移动引用的 displayId 不在当前拓扑中。")
+            })?;
+        if !disp.contains_pixel(pt.x, pt.y) {
+            return Err(PlatformError::invalid_argument(
+                "跨屏移动坐标超出显示屏像素范围。",
+            ));
+        }
+        if disp.pixel_to_native.is_none() {
+            return Err(PlatformError::invalid_argument(
+                "跨屏移动显示屏缺少 pixelToNative 坐标变换。",
+            ));
+        }
+        Ok(disp)
+    };
+    let disp0 = find_display(d0)?;
+    let disp1 = find_display(d1)?;
+    let (nx0, ny0) = disp0
+        .pixel_to_native
+        .expect("verified above")
+        .pixel_to_native(d0.x, d0.y)?;
+    let (nx1, ny1) = disp1
+        .pixel_to_native
+        .expect("verified above")
+        .pixel_to_native(d1.x, d1.y)?;
+
+    let dx = nx1 - nx0;
+    let dy = ny1 - ny0;
+    let steps = smooth_step_count(duration_ms, dx.hypot(dy));
+    let total_us = duration_ms * 1_000;
+    let mut events = Vec::with_capacity(steps as usize);
+    let mut prev_us = 0_u64;
+    for i in 1..=steps {
+        let target_us = (total_us * i) / steps;
+        let delay = target_us - prev_us;
+        prev_us = target_us;
+        let point = if i == steps {
+            d1.clone()
+        } else {
+            let s = quintic_progress(i as f64 / steps as f64);
+            let nx = nx0 + dx * s;
+            let ny = ny0 + dy * s;
+            let mut mapped = map_native_to_display(disp0, nx, ny)?;
+            if mapped.is_none() {
+                mapped = map_native_to_display(disp1, nx, ny)?;
+            }
+            if mapped.is_none() {
+                for candidate in &local.displays {
+                    if candidate.display_id != disp0.display_id
+                        && candidate.display_id != disp1.display_id
+                        && let Some(pt) = map_native_to_display(candidate, nx, ny)?
+                    {
+                        mapped = Some(pt);
+                        break;
+                    }
+                }
+            }
+            mapped.ok_or_else(|| {
+                PlatformError::invalid_argument(
+                    "跨屏平滑移动中间点超出可用显示区域或缺少坐标变换。",
+                )
+            })?
+        };
+        events.push(AtomicInputEvent {
+            delay_before_us: delay,
+            action: NativeInputAction::PointerMoveDisplay(point),
+        });
+    }
+    Ok(events)
+}
+
+fn display_point_to_physical(
+    pt: &DisplayPoint,
+    phys: &PhysicalTopology,
+) -> Result<PhysicalPoint, PlatformError> {
+    let disp = phys
+        .displays
+        .iter()
+        .find(|d| d.display_id == pt.display_id)
+        .ok_or_else(|| {
+            PlatformError::invalid_argument("屏内坐标引用的 displayId 不在物理拓扑中。")
+        })?;
+    if disp.rotation != Rotation::Deg0 {
+        return Err(PlatformError::invalid_argument(
+            "带旋转角度的显示屏不支持与全局物理坐标混合平滑插值。",
+        ));
+    }
+    if pt.x < 0.0
+        || pt.x >= disp.bounds.width as f64
+        || pt.y < 0.0
+        || pt.y >= disp.bounds.height as f64
+    {
+        return Err(PlatformError::invalid_argument(
+            "屏内坐标超出对应显示区域范围。",
+        ));
+    }
+    let max_x = disp.bounds.x + disp.bounds.width - 1;
+    let max_y = disp.bounds.y + disp.bounds.height - 1;
+    Ok(PhysicalPoint {
+        x: (disp.bounds.x + pt.x.round() as i64).clamp(disp.bounds.x, max_x),
+        y: (disp.bounds.y + pt.y.round() as i64).clamp(disp.bounds.y, max_y),
+    })
+}
+
+fn interpolate_cross_display_physical(
+    d0: &DisplayPoint,
+    d1: &DisplayPoint,
+    duration_ms: u64,
+    phys: &PhysicalTopology,
+) -> Result<Vec<AtomicInputEvent>, PlatformError> {
+    let p0 = display_point_to_physical(d0, phys)?;
+    let p1 = display_point_to_physical(d1, phys)?;
+    let dx = (p1.x - p0.x) as f64;
+    let dy = (p1.y - p0.y) as f64;
+    let steps = smooth_step_count(duration_ms, dx.hypot(dy));
+    let total_us = duration_ms * 1_000;
+    let mut events = Vec::with_capacity(steps as usize);
+    let mut prev_us = 0_u64;
+    for i in 1..=steps {
+        let target_us = (total_us * i) / steps;
+        let delay = target_us - prev_us;
+        prev_us = target_us;
+        let point = if i == steps {
+            d1.clone()
+        } else {
+            let s = quintic_progress(i as f64 / steps as f64);
+            let pt = PhysicalPoint {
+                x: p0.x + (dx * s).round() as i64,
+                y: p0.y + (dy * s).round() as i64,
+            };
+            let disp = phys
+                .displays
+                .iter()
+                .find(|d| d.rotation == Rotation::Deg0 && d.bounds.contains_point(pt))
+                .ok_or_else(|| {
+                    PlatformError::invalid_argument("跨屏平滑移动中间点超出可用显示区域。")
+                })?;
+            DisplayPoint {
+                display_id: disp.display_id.clone(),
+                x: (pt.x - disp.bounds.x) as f64,
+                y: (pt.y - disp.bounds.y) as f64,
+            }
+        };
+        events.push(AtomicInputEvent {
+            delay_before_us: delay,
+            action: NativeInputAction::PointerMoveDisplay(point),
+        });
+    }
+    Ok(events)
+}
+
+fn interpolate_mixed_space(
+    start: &ResolvedPosition,
+    end: &ResolvedPosition,
+    duration_ms: u64,
+    topology: Option<&DisplayTopology>,
+) -> Result<Vec<AtomicInputEvent>, PlatformError> {
+    let Some(DisplayTopology::Physical(phys)) = topology else {
+        return Err(PlatformError::invalid_argument(
+            "正时长混合坐标空间移动需要物理显示拓扑支持。",
+        ));
+    };
+    let to_phys = |pos: &ResolvedPosition| -> Result<PhysicalPoint, PlatformError> {
+        match pos {
+            ResolvedPosition::Physical(pt) => Ok(*pt),
+            ResolvedPosition::Display(d) => display_point_to_physical(d, phys),
+        }
+    };
+    let p0 = to_phys(start)?;
+    let p1 = to_phys(end)?;
+    let dx = (p1.x - p0.x) as f64;
+    let dy = (p1.y - p0.y) as f64;
+    let steps = smooth_step_count(duration_ms, dx.hypot(dy));
+    let total_us = duration_ms * 1_000;
+    let mut events = Vec::with_capacity(steps as usize);
+    let mut prev_us = 0_u64;
+    for i in 1..=steps {
+        let target_us = (total_us * i) / steps;
+        let delay = target_us - prev_us;
+        prev_us = target_us;
+        let action = if i == steps {
+            end.to_move_action()
+        } else {
+            let s = quintic_progress(i as f64 / steps as f64);
+            let pt = PhysicalPoint {
+                x: p0.x + (dx * s).round() as i64,
+                y: p0.y + (dy * s).round() as i64,
+            };
+            if !phys.displays.iter().any(|d| d.bounds.contains_point(pt)) {
+                return Err(PlatformError::invalid_argument(
+                    "混合坐标平滑移动中间点超出可用显示区域。",
+                ));
+            }
+            NativeInputAction::PointerMovePhysical(pt)
+        };
+        events.push(AtomicInputEvent {
+            delay_before_us: delay,
+            action,
+        });
+    }
+    Ok(events)
 }
 
 fn generate_smooth_moves(
     start: &ResolvedPosition,
     end: &ResolvedPosition,
     duration_ms: u64,
-) -> Vec<AtomicInputEvent> {
+    topology: Option<&DisplayTopology>,
+) -> Result<Vec<AtomicInputEvent>, PlatformError> {
     if duration_ms == 0 {
-        return vec![AtomicInputEvent {
+        return Ok(vec![AtomicInputEvent {
             delay_before_us: 0,
             action: end.to_move_action(),
-        }];
+        }]);
     }
     match (start, end) {
         (ResolvedPosition::Physical(p0), ResolvedPosition::Physical(p1)) => {
-            let dx = (p1.x - p0.x) as f64;
-            let dy = (p1.y - p0.y) as f64;
-            let steps = smooth_step_count(duration_ms, dx.hypot(dy));
-            let total_us = duration_ms * 1_000;
-            let mut events = Vec::with_capacity(steps as usize);
-            let mut prev_us = 0_u64;
-            for i in 1..=steps {
-                let target_us = (total_us * i) / steps;
-                let delay = target_us - prev_us;
-                prev_us = target_us;
-                let point = if i == steps {
-                    *p1
-                } else {
-                    let s = quintic_progress(i as f64 / steps as f64);
-                    PhysicalPoint {
-                        x: p0.x + (dx * s).round() as i64,
-                        y: p0.y + (dy * s).round() as i64,
-                    }
-                };
-                events.push(AtomicInputEvent {
-                    delay_before_us: delay,
-                    action: NativeInputAction::PointerMovePhysical(point),
-                });
-            }
-            events
+            Ok(interpolate_physical_moves(*p0, *p1, duration_ms))
         }
         (ResolvedPosition::Display(d0), ResolvedPosition::Display(d1))
             if d0.display_id == d1.display_id =>
         {
-            let dx = d1.x - d0.x;
-            let dy = d1.y - d0.y;
-            let steps = smooth_step_count(duration_ms, dx.hypot(dy));
-            let total_us = duration_ms * 1_000;
-            let mut events = Vec::with_capacity(steps as usize);
-            let mut prev_us = 0_u64;
-            for i in 1..=steps {
-                let target_us = (total_us * i) / steps;
-                let delay = target_us - prev_us;
-                prev_us = target_us;
-                let point = if i == steps {
-                    d1.clone()
-                } else {
-                    let s = quintic_progress(i as f64 / steps as f64);
-                    DisplayPoint {
-                        display_id: d1.display_id.clone(),
-                        x: d0.x + dx * s,
-                        y: d0.y + dy * s,
-                    }
-                };
-                events.push(AtomicInputEvent {
-                    delay_before_us: delay,
-                    action: NativeInputAction::PointerMoveDisplay(point),
-                });
-            }
-            events
+            Ok(interpolate_same_display_moves(d0, d1, duration_ms))
         }
-        _ => vec![AtomicInputEvent {
-            delay_before_us: duration_ms * 1_000,
-            action: end.to_move_action(),
-        }],
+        (ResolvedPosition::Display(d0), ResolvedPosition::Display(d1)) => match topology {
+            Some(DisplayTopology::DisplayLocal(local)) => {
+                interpolate_cross_display_local(d0, d1, duration_ms, local)
+            }
+            Some(DisplayTopology::Physical(phys)) => {
+                interpolate_cross_display_physical(d0, d1, duration_ms, phys)
+            }
+            None => Err(PlatformError::invalid_argument(
+                "正时长跨屏指针移动缺少有效的显示拓扑映射。",
+            )),
+        },
+        _ => interpolate_mixed_space(start, end, duration_ms, topology),
     }
 }
 
@@ -1026,7 +1291,8 @@ fn generate_smooth_deltas(dx: i64, dy: i64, duration_ms: u64) -> Vec<AtomicInput
 pub fn expand_input_operation(
     operation: &Value,
     trajectory_ref: Option<&TrajectoryRef>,
-    current_pointer: &PausePoint,
+    current_pointer: Option<&PausePoint>,
+    topology: Option<&DisplayTopology>,
 ) -> Result<Vec<AtomicInputEvent>, PlatformError> {
     reject_unresolved_expressions(operation)?;
     let Some(obj) = operation.as_object() else {
@@ -1090,8 +1356,17 @@ pub fn expand_input_operation(
                     .ok_or_else(|| PlatformError::invalid_argument("缺少 position。"))?,
             )?;
             let duration_ms = parse_u64_in(params.get("durationMs"), 0, 86_400_000)?;
-            let start = ResolvedPosition::from_pause_point(current_pointer);
-            Ok(generate_smooth_moves(&start, &pos, duration_ms))
+            if duration_ms == 0 {
+                return Ok(vec![AtomicInputEvent {
+                    delay_before_us: 0,
+                    action: pos.to_move_action(),
+                }]);
+            }
+            let current = current_pointer.ok_or_else(|| {
+                PlatformError::invalid_argument("正时长指针移动缺少已核实的起始指针位置。")
+            })?;
+            let start = ResolvedPosition::from_pause_point(current);
+            generate_smooth_moves(&start, &pos, duration_ms, topology)
         }
         "pointer.delta" => {
             if params.len() != 4 {
@@ -1153,7 +1428,7 @@ pub fn expand_input_operation(
             )?;
             let button = parse_button(params.get("button"))?;
             let duration_ms = parse_u64_in(params.get("durationMs"), 0, 86_400_000)?;
-            let move_steps = generate_smooth_moves(&from, &to, duration_ms);
+            let move_steps = generate_smooth_moves(&from, &to, duration_ms, topology)?;
             let mut events = Vec::with_capacity(move_steps.len() + 3);
             events.push(AtomicInputEvent {
                 delay_before_us: 0,

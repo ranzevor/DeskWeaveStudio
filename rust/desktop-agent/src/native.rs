@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
 #[cfg(unix)]
@@ -331,7 +331,28 @@ fn random_hex(byte_len: usize) -> io::Result<String> {
     Ok(encoded)
 }
 
+pub(crate) trait SessionRead: Send {
+    fn read_chunk(
+        &mut self,
+        buf: &mut [u8],
+        deadline: Option<Instant>,
+        stop: &StopSignal,
+    ) -> io::Result<usize>;
+}
+
+pub(crate) trait SessionWrite: Send {
+    fn write_chunk(
+        &mut self,
+        buf: &[u8],
+        deadline: Option<Instant>,
+        stop: &StopSignal,
+    ) -> io::Result<usize>;
+}
+
 pub(crate) trait SessionStream: Send {
+    type Reader: SessionRead + 'static;
+    type Writer: SessionWrite + 'static;
+
     fn read_chunk(
         &mut self,
         buf: &mut [u8],
@@ -345,6 +366,8 @@ pub(crate) trait SessionStream: Send {
         deadline: Option<Instant>,
         stop: &StopSignal,
     ) -> io::Result<usize>;
+
+    fn split(self) -> io::Result<(Self::Reader, Self::Writer)>;
 }
 
 pub(crate) trait SessionListener: Send {
@@ -385,9 +408,58 @@ impl<S: SessionStream> Write for DeadlineIo<'_, S> {
     }
 }
 
+pub(crate) struct DeadlineReader<'a, R: SessionRead> {
+    reader: &'a mut R,
+    deadline: Option<Instant>,
+    stop: &'a StopSignal,
+}
+
+impl<'a, R: SessionRead> DeadlineReader<'a, R> {
+    pub(crate) fn new(reader: &'a mut R, deadline: Option<Instant>, stop: &'a StopSignal) -> Self {
+        Self {
+            reader,
+            deadline,
+            stop,
+        }
+    }
+}
+
+impl<R: SessionRead> Read for DeadlineReader<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reader.read_chunk(buf, self.deadline, self.stop)
+    }
+}
+
+pub(crate) struct DeadlineWriter<'a, W: SessionWrite> {
+    writer: &'a mut W,
+    deadline: Option<Instant>,
+    stop: &'a StopSignal,
+}
+
+impl<'a, W: SessionWrite> DeadlineWriter<'a, W> {
+    pub(crate) fn new(writer: &'a mut W, deadline: Option<Instant>, stop: &'a StopSignal) -> Self {
+        Self {
+            writer,
+            deadline,
+            stop,
+        }
+    }
+}
+
+impl<W: SessionWrite> Write for DeadlineWriter<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.writer.write_chunk(buf, self.deadline, self.stop)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 #[cfg(unix)]
 struct StopInner {
     stopped: AtomicBool,
+    children: Mutex<Vec<Weak<StopInner>>>,
     read: OwnedFd,
     write: OwnedFd,
 }
@@ -395,6 +467,7 @@ struct StopInner {
 #[cfg(windows)]
 struct StopInner {
     stopped: AtomicBool,
+    children: Mutex<Vec<Weak<StopInner>>>,
     event: OwnedHandle,
 }
 
@@ -422,6 +495,7 @@ impl StopSignal {
         Ok(Self {
             inner: Arc::new(StopInner {
                 stopped: AtomicBool::new(false),
+                children: Mutex::new(Vec::new()),
                 read,
                 write,
             }),
@@ -434,9 +508,26 @@ impl StopSignal {
         Ok(Self {
             inner: Arc::new(StopInner {
                 stopped: AtomicBool::new(false),
+                children: Mutex::new(Vec::new()),
                 event,
             }),
         })
+    }
+
+    pub(crate) fn child(&self) -> io::Result<Self> {
+        let child = Self::new()?;
+        let mut guard = self
+            .inner
+            .children
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.retain(|w| w.strong_count() > 0);
+        if self.is_triggered() {
+            child.trigger();
+        } else {
+            guard.push(Arc::downgrade(&child.inner));
+        }
+        Ok(child)
     }
 
     pub(crate) fn trigger(&self) {
@@ -456,6 +547,21 @@ impl StopSignal {
             }
             #[cfg(windows)]
             win_ipc::set_event(&self.inner.event);
+        }
+        let children: Vec<StopSignal> = {
+            let mut guard = self
+                .inner
+                .children
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.retain(|w| w.strong_count() > 0);
+            guard
+                .iter()
+                .filter_map(|w| w.upgrade().map(|inner| StopSignal { inner }))
+                .collect()
+        };
+        for child in children {
+            child.trigger();
         }
     }
 
@@ -527,6 +633,84 @@ fn poll_fd(
 }
 
 #[cfg(unix)]
+fn read_unix_chunk(
+    stream: &mut UnixStream,
+    buf: &mut [u8],
+    deadline: Option<Instant>,
+    stop: &StopSignal,
+) -> io::Result<usize> {
+    loop {
+        if stop.is_triggered() {
+            return Err(io::ErrorKind::ConnectionAborted.into());
+        }
+        match stream.read(buf) {
+            Ok(count) => return Ok(count),
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                poll_fd(stream.as_raw_fd(), libc::POLLIN, stop, deadline)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+#[cfg(unix)]
+fn write_unix_chunk(
+    stream: &mut UnixStream,
+    buf: &[u8],
+    deadline: Option<Instant>,
+    stop: &StopSignal,
+) -> io::Result<usize> {
+    loop {
+        if stop.is_triggered() {
+            return Err(io::ErrorKind::ConnectionAborted.into());
+        }
+        match stream.write(buf) {
+            Ok(count) => return Ok(count),
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                poll_fd(stream.as_raw_fd(), libc::POLLOUT, stop, deadline)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+#[cfg(unix)]
+pub(crate) struct NativeReader {
+    stream: UnixStream,
+}
+
+#[cfg(unix)]
+impl SessionRead for NativeReader {
+    fn read_chunk(
+        &mut self,
+        buf: &mut [u8],
+        deadline: Option<Instant>,
+        stop: &StopSignal,
+    ) -> io::Result<usize> {
+        read_unix_chunk(&mut self.stream, buf, deadline, stop)
+    }
+}
+
+#[cfg(unix)]
+pub(crate) struct NativeWriter {
+    stream: UnixStream,
+}
+
+#[cfg(unix)]
+impl SessionWrite for NativeWriter {
+    fn write_chunk(
+        &mut self,
+        buf: &[u8],
+        deadline: Option<Instant>,
+        stop: &StopSignal,
+    ) -> io::Result<usize> {
+        write_unix_chunk(&mut self.stream, buf, deadline, stop)
+    }
+}
+
+#[cfg(unix)]
 pub(crate) struct NativeStream {
     stream: UnixStream,
 }
@@ -541,25 +725,16 @@ impl NativeStream {
 
 #[cfg(unix)]
 impl SessionStream for NativeStream {
+    type Reader = NativeReader;
+    type Writer = NativeWriter;
+
     fn read_chunk(
         &mut self,
         buf: &mut [u8],
         deadline: Option<Instant>,
         stop: &StopSignal,
     ) -> io::Result<usize> {
-        loop {
-            if stop.is_triggered() {
-                return Err(io::ErrorKind::ConnectionAborted.into());
-            }
-            match self.stream.read(buf) {
-                Ok(count) => return Ok(count),
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    poll_fd(self.stream.as_raw_fd(), libc::POLLIN, stop, deadline)?;
-                }
-                Err(error) => return Err(error),
-            }
-        }
+        read_unix_chunk(&mut self.stream, buf, deadline, stop)
     }
 
     fn write_chunk(
@@ -568,19 +743,19 @@ impl SessionStream for NativeStream {
         deadline: Option<Instant>,
         stop: &StopSignal,
     ) -> io::Result<usize> {
-        loop {
-            if stop.is_triggered() {
-                return Err(io::ErrorKind::ConnectionAborted.into());
-            }
-            match self.stream.write(buf) {
-                Ok(count) => return Ok(count),
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    poll_fd(self.stream.as_raw_fd(), libc::POLLOUT, stop, deadline)?;
-                }
-                Err(error) => return Err(error),
-            }
-        }
+        write_unix_chunk(&mut self.stream, buf, deadline, stop)
+    }
+
+    fn split(self) -> io::Result<(Self::Reader, Self::Writer)> {
+        let writer_stream = self.stream.try_clone()?;
+        Ok((
+            NativeReader {
+                stream: self.stream,
+            },
+            NativeWriter {
+                stream: writer_stream,
+            },
+        ))
     }
 }
 
@@ -1452,19 +1627,58 @@ mod win_ipc {
 }
 
 #[cfg(windows)]
+pub(crate) struct NativeReader {
+    handle: Arc<OwnedHandle>,
+}
+
+#[cfg(windows)]
+impl SessionRead for NativeReader {
+    fn read_chunk(
+        &mut self,
+        buf: &mut [u8],
+        deadline: Option<Instant>,
+        stop: &StopSignal,
+    ) -> io::Result<usize> {
+        win_ipc::read_overlapped(&self.handle, buf, deadline, stop)
+    }
+}
+
+#[cfg(windows)]
+pub(crate) struct NativeWriter {
+    handle: Arc<OwnedHandle>,
+}
+
+#[cfg(windows)]
+impl SessionWrite for NativeWriter {
+    fn write_chunk(
+        &mut self,
+        buf: &[u8],
+        deadline: Option<Instant>,
+        stop: &StopSignal,
+    ) -> io::Result<usize> {
+        win_ipc::write_overlapped(&self.handle, buf, deadline, stop)
+    }
+}
+
+#[cfg(windows)]
 pub(crate) struct NativeStream {
-    handle: OwnedHandle,
+    handle: Arc<OwnedHandle>,
 }
 
 #[cfg(windows)]
 impl NativeStream {
     fn from_handle(handle: OwnedHandle) -> Self {
-        Self { handle }
+        Self {
+            handle: Arc::new(handle),
+        }
     }
 }
 
 #[cfg(windows)]
 impl SessionStream for NativeStream {
+    type Reader = NativeReader;
+    type Writer = NativeWriter;
+
     fn read_chunk(
         &mut self,
         buf: &mut [u8],
@@ -1481,6 +1695,18 @@ impl SessionStream for NativeStream {
         stop: &StopSignal,
     ) -> io::Result<usize> {
         win_ipc::write_overlapped(&self.handle, buf, deadline, stop)
+    }
+
+    fn split(self) -> io::Result<(Self::Reader, Self::Writer)> {
+        let writer_handle = Arc::clone(&self.handle);
+        Ok((
+            NativeReader {
+                handle: self.handle,
+            },
+            NativeWriter {
+                handle: writer_handle,
+            },
+        ))
     }
 }
 

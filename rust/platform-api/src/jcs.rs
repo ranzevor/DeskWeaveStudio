@@ -133,20 +133,49 @@ pub fn format_jcs_f64(value: f64) -> Result<String, PlatformError> {
 
     let negative = value.is_sign_negative();
     let abs = value.abs();
-    let sci = format!("{abs:e}");
-    let (mantissa, exp_str) = sci
-        .split_once('e')
-        .ok_or_else(|| PlatformError::invalid_argument("数值无法按 RFC 8785 编码。"))?;
-    let exp: i32 = exp_str
-        .parse()
-        .map_err(|_| PlatformError::invalid_argument("数值指数无法按 RFC 8785 编码。"))?;
+    let rendered = serde_json::to_string(&abs)
+        .map_err(|_| PlatformError::invalid_argument("数值无法按 RFC 8785 编码。"))?;
+    let (mantissa, exp_offset) = match rendered.split_once(['e', 'E']) {
+        Some((m, e)) => {
+            let parsed: i32 = e
+                .parse()
+                .map_err(|_| PlatformError::invalid_argument("数值指数无法按 RFC 8785 编码。"))?;
+            (m, parsed)
+        }
+        None => (rendered.as_str(), 0),
+    };
+    let (int_part, frac_part) = mantissa.split_once('.').unwrap_or((mantissa, ""));
 
     let mut digits = String::with_capacity(mantissa.len());
-    for ch in mantissa.chars() {
-        if ch != '.' {
+    let mut first_exp: Option<i32> = None;
+    for (idx, ch) in int_part.chars().enumerate() {
+        if !ch.is_ascii_digit() {
+            return Err(PlatformError::invalid_argument(
+                "数值无法按 RFC 8785 编码。",
+            ));
+        }
+        if first_exp.is_none() && ch != '0' {
+            first_exp = Some(((int_part.len() - 1 - idx) as i32) + exp_offset);
+        }
+        if first_exp.is_some() {
             digits.push(ch);
         }
     }
+    for (idx, ch) in frac_part.chars().enumerate() {
+        if !ch.is_ascii_digit() {
+            return Err(PlatformError::invalid_argument(
+                "数值无法按 RFC 8785 编码。",
+            ));
+        }
+        if first_exp.is_none() && ch != '0' {
+            first_exp = Some(-((idx + 1) as i32) + exp_offset);
+        }
+        if first_exp.is_some() {
+            digits.push(ch);
+        }
+    }
+    let exp =
+        first_exp.ok_or_else(|| PlatformError::invalid_argument("数值无法按 RFC 8785 编码。"))?;
     while digits.len() > 1 && digits.ends_with('0') {
         digits.pop();
     }
@@ -284,4 +313,44 @@ pub fn canonical_json_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, Platform
 pub fn jcs_sha256_hex<T: Serialize>(value: &T) -> Result<String, PlatformError> {
     let bytes = canonical_json_bytes(value)?;
     Ok(sha256_hex(&bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_jcs_f64;
+
+    #[test]
+    fn format_jcs_f64_matches_ecmascript_round_half_to_even_and_rfc8785_vectors() {
+        // Dyadic halfway ties that differ under Rust's round-half-away-from-zero `{:e}`.
+        assert_eq!(
+            format_jcs_f64(1.0000076293945312).unwrap(),
+            "1.0000076293945312"
+        );
+        assert_eq!(
+            format_jcs_f64(-1.0000076293945312).unwrap(),
+            "-1.0000076293945312"
+        );
+        assert_eq!(format_jcs_f64(1.0 / 3.0).unwrap(), "0.3333333333333333");
+        assert_eq!(format_jcs_f64(0.1 + 0.2).unwrap(), "0.30000000000000004");
+        // RFC 8785 §3.2.2.3 & Appendix B edge cases
+        assert_eq!(format_jcs_f64(0.0).unwrap(), "0");
+        assert_eq!(format_jcs_f64(-0.0).unwrap(), "0");
+        assert_eq!(format_jcs_f64(1e20).unwrap(), "100000000000000000000");
+        assert_eq!(format_jcs_f64(1e21).unwrap(), "1e+21");
+        assert_eq!(format_jcs_f64(1e-6).unwrap(), "0.000001");
+        assert_eq!(format_jcs_f64(1e-7).unwrap(), "1e-7");
+        assert_eq!(format_jcs_f64(5e-324).unwrap(), "5e-324");
+        assert_eq!(format_jcs_f64(1e-323).unwrap(), "1e-323");
+        assert_eq!(
+            format_jcs_f64(f64::from_bits(0x4340_0000_0000_0000)).unwrap(),
+            "9007199254740992"
+        );
+        assert_eq!(
+            format_jcs_f64(f64::from_bits(0x7fef_ffff_ffff_ffff)).unwrap(),
+            "1.7976931348623157e+308"
+        );
+        assert_eq!(format_jcs_f64(1e-16).unwrap(), "1e-16");
+        assert!(format_jcs_f64(f64::NAN).is_err());
+        assert!(format_jcs_f64(f64::INFINITY).is_err());
+    }
 }

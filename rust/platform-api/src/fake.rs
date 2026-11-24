@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::capabilities::{BackendKind, CapabilitySnapshot, PlatformArch, PlatformOs};
+use crate::control::PausePoint;
 use crate::error::PlatformError;
 use crate::ports::{
     CaptureRoi, CaptureSource, CapturedFrame, CleanupOutcome, CredentialStore, DesktopSession,
@@ -10,7 +11,7 @@ use crate::ports::{
     InputRecorder, NativeInputAction, RecordedBatch, RecordingConfig, RecordingHandle,
     SubmissionOutcome, TargetBinding, TargetDescriptor, TargetKind, TargetStatus, TargetToken,
 };
-use crate::topology::{DisplayTopology, PhysicalPoint};
+use crate::topology::{DisplayTopology, MAX_COORD_F64, PhysicalPoint};
 
 /// Deterministic manual clock for unit and integration tests.
 pub struct FakeClock {
@@ -43,7 +44,8 @@ struct FakeState {
     hotkey_ready: bool,
     submission_outcome: SubmissionOutcome,
     cleanup_outcome: CleanupOutcome,
-    pointer: PhysicalPoint,
+    pointer: PausePoint,
+    pointer_error: Option<PlatformError>,
     targets: HashMap<String, (TargetDescriptor, TargetStatus)>,
     grants: HashMap<String, TargetDescriptor>,
     submitted: Vec<(TargetToken, NativeInputAction)>,
@@ -75,7 +77,8 @@ impl FakeDesktopSession {
                 hotkey_ready: true,
                 submission_outcome: SubmissionOutcome::Submitted,
                 cleanup_outcome: CleanupOutcome::Succeeded,
-                pointer: PhysicalPoint { x: 0, y: 0 },
+                pointer: PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }),
+                pointer_error: None,
                 targets: HashMap::new(),
                 grants: HashMap::new(),
                 submitted: Vec::new(),
@@ -110,11 +113,30 @@ impl FakeDesktopSession {
     }
 
     pub fn set_pointer(&self, point: PhysicalPoint) {
-        self.state.lock().unwrap().pointer = point;
+        let mut state = self.state.lock().unwrap();
+        state.pointer = PausePoint::Physical(point);
+        state.pointer_error = None;
+    }
+
+    pub fn set_pause_pointer(&self, point: PausePoint) {
+        let mut state = self.state.lock().unwrap();
+        state.pointer = point;
+        state.pointer_error = None;
+    }
+
+    pub fn set_pointer_error(&self, error: Option<PlatformError>) {
+        self.state.lock().unwrap().pointer_error = error;
     }
 
     pub fn pointer(&self) -> PhysicalPoint {
-        self.state.lock().unwrap().pointer
+        match self.state.lock().unwrap().pointer {
+            PausePoint::Physical(pt) => pt,
+            PausePoint::Display(_) => PhysicalPoint { x: 0, y: 0 },
+        }
+    }
+
+    pub fn pause_pointer(&self) -> PausePoint {
+        self.state.lock().unwrap().pointer.clone()
     }
 
     pub fn register_grant(&self, selection_grant: impl Into<String>, descriptor: TargetDescriptor) {
@@ -180,6 +202,14 @@ impl DesktopSession for FakeDesktopSession {
 
     fn topology(&self) -> Result<DisplayTopology, PlatformError> {
         self.state.lock().unwrap().topology.clone()
+    }
+
+    fn pointer_position(&self) -> Result<PausePoint, PlatformError> {
+        let state = self.state.lock().unwrap();
+        if let Some(err) = &state.pointer_error {
+            return Err(err.clone());
+        }
+        Ok(state.pointer.clone())
     }
 
     fn clock(&self) -> &dyn InputClock {
@@ -340,12 +370,21 @@ impl InputEmitter for FakeDesktopSession {
         if state.submission_outcome == SubmissionOutcome::Submitted {
             match action {
                 NativeInputAction::PointerMovePhysical(pt) => {
-                    state.pointer = *pt;
+                    state.pointer = PausePoint::Physical(*pt);
                 }
-                NativeInputAction::PointerDelta { dx, dy } => {
-                    state.pointer.x = state.pointer.x.saturating_add(dx.round() as i64);
-                    state.pointer.y = state.pointer.y.saturating_add(dy.round() as i64);
+                NativeInputAction::PointerMoveDisplay(pt) => {
+                    state.pointer = PausePoint::Display(pt.clone());
                 }
+                NativeInputAction::PointerDelta { dx, dy } => match &mut state.pointer {
+                    PausePoint::Physical(pt) => {
+                        pt.x = pt.x.saturating_add(dx.round() as i64);
+                        pt.y = pt.y.saturating_add(dy.round() as i64);
+                    }
+                    PausePoint::Display(pt) => {
+                        pt.x = (pt.x + dx).clamp(0.0, MAX_COORD_F64);
+                        pt.y = (pt.y + dy).clamp(0.0, MAX_COORD_F64);
+                    }
+                },
                 _ => {}
             }
         }

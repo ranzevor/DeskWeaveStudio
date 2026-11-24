@@ -3,6 +3,7 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::capabilities::{BackendKind, CapabilitySnapshot, PlatformArch, PlatformOs};
+use crate::control::PausePoint;
 use crate::error::PlatformError;
 use crate::topology::{DisplayPoint, DisplayTopology, PhysicalPoint, PhysicalRect};
 use crate::trajectory::{CoordinateMode, PointerButton, TrajectoryEvent};
@@ -266,6 +267,11 @@ pub trait DesktopSession: Send + Sync {
     fn backend_version(&self) -> &str;
     fn capabilities(&self) -> CapabilitySnapshot;
     fn topology(&self) -> Result<DisplayTopology, PlatformError>;
+    fn pointer_position(&self) -> Result<PausePoint, PlatformError> {
+        Err(PlatformError::capability_not_implemented(
+            "当前平台适配器尚未实现原生指针位置查询。",
+        ))
+    }
     fn clock(&self) -> &dyn InputClock;
     fn targets(&self) -> &dyn TargetBinding;
     fn capture(&self) -> &dyn CaptureSource;

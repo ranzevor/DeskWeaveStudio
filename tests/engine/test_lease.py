@@ -444,7 +444,7 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
                 "on": {},
             }
             seg_move = first.segment_submit(lease_a, gen_a, "seg-move-1", "target-win-a", op_move)
-            self.assertEqual(seg_move["state"], "sent")
+            self.assertEqual(seg_move["state"], "sent", seg_move)
 
             op_chord = {
                 "id": "save-shortcut",
@@ -537,8 +537,28 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
                 )
             self.assertEqual(confirm_forged.exception.code, "RESOURCE_DENIED")
 
-            # Resuming with bound confirmationGrant restores held ShiftLeft and returns to active.
-            bound_grant = f"test-confirm:{pause_id}:{pause_snap['checkpointHash']}:{plan_hash}"
+            # Legacy test-confirm bypass must be rejected cleanly.
+            with self.assertRaises(DeskWeaveError) as legacy_forged:
+                first.lease_resume(
+                    lease_a,
+                    gen_a,
+                    pause_id,
+                    "attempt-1",
+                    plan_hash,
+                    confirmation_grant=f"test-confirm:{pause_id}:{pause_snap['checkpointHash']}:{plan_hash}",
+                )
+            self.assertEqual(legacy_forged.exception.code, "RESOURCE_DENIED")
+
+            # Register real Host-signed confirmation via Agent channel and restore held ShiftLeft.
+            bound_grant = first.register_resume_confirmation(
+                lease_id=lease_a,
+                pause_id=pause_id,
+                generation=gen_a,
+                checkpoint_hash=pause_snap["checkpointHash"],
+                resume_plan_hash=plan_hash,
+                restore_target_token="target-win-a",
+                pointer_to_restore=pause_snap["pointer"],
+            )
             resumed = first.lease_resume(
                 lease_a,
                 gen_a,
@@ -572,6 +592,137 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
                 )
             self.assertEqual(resume_conflict.exception.code, "REQUEST_CONFLICT")
 
+            # Release restored ShiftLeft before pointer-only & multiplexing checks.
+            op_up = {
+                "id": "release-shift",
+                "title": "释放 ShiftLeft",
+                "action": "keyboard.up",
+                "params": {"target": "main", "key": "ShiftLeft"},
+                "on": {},
+            }
+            self.assertEqual(
+                first.segment_submit(lease_a, gen_a, "seg-up-1", "target-win-a", op_up)["state"],
+                "sent",
+            )
+
+            # RFC 8785 fractional tie-breaking parity (1.0000076293945312).
+            op_frac = {
+                "id": "frac-move",
+                "title": "RFC8785 舍入一致性校验",
+                "action": "pointer.move",
+                "params": {
+                    "target": "main",
+                    "position": {
+                        "kind": "point",
+                        "space": "displayPixels",
+                        "displayId": "main",
+                        "x": 1.0000076293945312,
+                        "y": 2.0,
+                    },
+                    "durationMs": 0,
+                },
+                "on": {},
+            }
+            frac_seg = first.segment_submit(lease_a, gen_a, "seg-frac-1", "target-win-a", op_frac)
+            self.assertEqual(frac_seg["state"], "sent")
+
+            # Pause with empty heldInputs/cursor, then exercise pointer-only resume.
+            ptr_paused = first.lease_pause(lease_a, gen_a)
+            self.assertEqual(ptr_paused["state"], "paused")
+            ptr_snap = ptr_paused["pauseSnapshot"]
+            self.assertIsNotNone(ptr_snap)
+            assert ptr_snap is not None
+            validate_pause_snapshot(ptr_snap)
+            self.assertEqual(ptr_snap["pointer"]["x"], 1.0000076293945312)
+            self.assertEqual(ptr_snap["heldInputs"], [])
+            self.assertIsNone(ptr_snap["cursor"])
+            ptr_plan_hash = "c" * 64
+            ptr_grant = first.register_resume_confirmation(
+                lease_id=lease_a,
+                pause_id=ptr_snap["pauseId"],
+                generation=gen_a,
+                checkpoint_hash=ptr_snap["checkpointHash"],
+                resume_plan_hash=ptr_plan_hash,
+                restore_target_token="target-win-a",
+                pointer_to_restore=ptr_snap["pointer"],
+            )
+            ptr_resumed = first.lease_resume(
+                lease_a,
+                gen_a,
+                ptr_snap["pauseId"],
+                "attempt-ptr-only",
+                ptr_plan_hash,
+                confirmation_grant=ptr_grant,
+            )
+            self.assertEqual(ptr_resumed["state"], "active")
+
+            # Mid-segment multiplexed controls (lease.renew + lease.pause) on the SAME connection.
+            op_long = {
+                "id": "mux-long-text",
+                "title": "并发多路复用测试",
+                "action": "keyboard.text",
+                "params": {"target": "main", "text": "abcdefgh", "intervalMs": 150},
+                "on": {},
+            }
+            long_hash = compute_segment_payload_hash("target-win-a", op_long)
+            seg_box: dict[str, object] = {}
+
+            def _run_long_segment():
+                try:
+                    seg_box["result"] = first.segment_submit(
+                        lease_a,
+                        gen_a,
+                        "seg-mux-1",
+                        "target-win-a",
+                        op_long,
+                        payload_hash=long_hash,
+                        timeout=8,
+                    )
+                except BaseException as exc:
+                    seg_box["error"] = exc
+
+            seg_thread = threading.Thread(target=_run_long_segment)
+            seg_thread.start()
+            wait_running = time.monotonic() + 3.0
+            while time.monotonic() < wait_running:
+                try:
+                    if first.segment_status("seg-mux-1", long_hash)["state"] == "running":
+                        break
+                except DeskWeaveError:
+                    pass
+                time.sleep(0.02)
+            mux_renew = first.lease_renew(lease_a, gen_a)
+            self.assertEqual(mux_renew["leaseId"], lease_a)
+            mux_pause = first.lease_pause(lease_a, gen_a)
+            self.assertEqual(mux_pause["state"], "paused")
+            seg_thread.join(timeout=5)
+            self.assertNotIn("error", seg_box, seg_box.get("error"))
+            mux_seg = seg_box["result"]
+            assert isinstance(mux_seg, dict)
+            self.assertEqual(mux_seg["state"], "paused")
+            self.assertEqual(mux_seg["pauseId"], mux_pause["pauseSnapshot"]["pauseId"])
+
+            mux_snap = mux_pause["pauseSnapshot"]
+            mux_plan_hash = "b" * 64
+            mux_grant = first.register_resume_confirmation(
+                lease_id=lease_a,
+                pause_id=mux_snap["pauseId"],
+                generation=gen_a,
+                checkpoint_hash=mux_snap["checkpointHash"],
+                resume_plan_hash=mux_plan_hash,
+                restore_target_token="target-win-a",
+                pointer_to_restore=mux_snap["pointer"],
+            )
+            mux_resumed = first.lease_resume(
+                lease_a,
+                gen_a,
+                mux_snap["pauseId"],
+                "attempt-mux-res",
+                mux_plan_hash,
+                confirmation_grant=mux_grant,
+            )
+            self.assertEqual(mux_resumed["state"], "active", mux_resumed)
+
             # 5. FIFO wait queue + Engine A disconnect auto-revocation (Q10 + Q19).
             waiter_result: dict[str, object] = {}
 
@@ -601,6 +752,533 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
             engine_b.close()
             if process is not None:
                 self.assertEqual(process.wait(timeout=5), 0)
+
+
+class MuxChannelRegressionTests(unittest.TestCase):
+    def _make_stub_process(self, channel):
+        class _Closable:
+            def __init__(self):
+                self.closed = False
+
+            def close(self):
+                self.closed = True
+
+        class _StubPeer(_Closable):
+            def _check_process(self):
+                pass
+
+        seen_nonces: list[bytes] = []
+
+        def _confirmation_claim(_local, _peer, _owner, _ws, nonce, **_kw):
+            seen_nonces.append(bytes(nonce))
+            return b'{"claim":1}'
+
+        proc = object.__new__(agent.AgentProcess)
+        proc.session = "0" * 32
+        proc.workspace_id = "ws-mux"
+        proc.epoch = "a" * 64
+        proc._stopping = threading.Event()
+        proc._io = threading.RLock()
+        proc._runtime_dir = _Closable()
+        proc._owner_identity = ("dev", "ino")
+        proc._channel = channel
+        proc._signature = proc._registration_dir = proc._listener = None
+        proc._process = proc._owner = None
+        proc._peer = _StubPeer()
+        proc._published = False
+        proc.authority = type(
+            "_StubAuth",
+            (),
+            {
+                "seen_nonces": seen_nonces,
+                "confirmation_claim": staticmethod(_confirmation_claim),
+                "submit_signature": staticmethod(
+                    lambda _c, _b: type("_Sig", (), {"close": lambda s: None})()
+                ),
+            },
+        )()
+        proc.local = object()
+        return proc
+
+    def test_caller_timeout_in_send_or_wait_preserves_healthy_concurrent_call(self):
+        import queue
+
+        class _DuplexChannel:
+            def __init__(self):
+                self.inbox: queue.Queue[dict | BaseException] = queue.Queue()
+                self.sent: list[dict] = []
+                self.closed = False
+                self.send_gate = threading.Event()
+                self.send_gate.set()
+                self.send_entered = threading.Event()
+
+            def send(self, value, *, budget):
+                while not self.send_gate.is_set():
+                    self.send_entered.set()
+                    delay = budget.check()
+                    self.send_gate.wait(delay)
+                self.sent.append(value)
+
+            def receive(self, *, budget):
+                while True:
+                    delay = budget.check()
+                    if self.closed:
+                        raise agent.closed()
+                    try:
+                        item = self.inbox.get(timeout=min(delay, 0.02))
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, BaseException):
+                        raise item
+                    return item
+
+            def close(self):
+                self.closed = True
+                self.send_gate.set()
+                self.inbox.put(agent.closed())
+
+        chan = _DuplexChannel()
+        proc = self._make_stub_process(chan)
+        with (
+            patch.object(agent, "_check_owner", return_value=None),
+            patch.object(agent, "_signature_result", return_value=b"\x01" * 64),
+        ):
+            try:
+                # 1. Slow caller times out waiting for its reply while reader is active.
+                with self.assertRaises(DeskWeaveError) as caught:
+                    proc.call("segment.submit", {"leaseId": "l1"}, timeout=0.05)
+                self.assertEqual(caught.exception.code, "DEADLINE_EXCEEDED")
+                self.assertFalse(chan.closed)
+                slow_id = chan.sent[0]["id"]
+
+                # 2. Healthy concurrent caller succeeds over the same intact channel.
+                def _deliver_fast_then_late():
+                    deadline = time.monotonic() + 2.0
+                    while len(chan.sent) < 2:
+                        if time.monotonic() >= deadline:
+                            return
+                        time.sleep(0.01)
+                    fast_id = chan.sent[1]["id"]
+                    chan.inbox.put(
+                        {
+                            "protocolVersion": "1.0",
+                            "kind": "response",
+                            "replyTo": fast_id,
+                            "ok": True,
+                            "result": {"leaseId": "l1", "generation": 1, "agentEpoch": "a" * 64},
+                        }
+                    )
+                    chan.inbox.put(
+                        {
+                            "protocolVersion": "1.0",
+                            "kind": "response",
+                            "replyTo": slow_id,
+                            "ok": True,
+                            "result": {},
+                        }
+                    )
+
+                feeder = threading.Thread(target=_deliver_fast_then_late, daemon=True)
+                feeder.start()
+                renew_res = proc.call("lease.renew", {"leaseId": "l1"}, timeout=2.0)
+                self.assertEqual(renew_res["leaseId"], "l1")
+                feeder.join(timeout=2)
+                time.sleep(0.05)
+                self.assertFalse(chan.closed)
+
+                # 3. Caller timing out on _send_lock before writing does not abort shared channel.
+                chan.send_gate.clear()
+                chan.send_entered.clear()
+                holder_results: list[dict] = []
+                holder_errors: list[BaseException] = []
+
+                def _run_holder():
+                    try:
+                        holder_results.append(
+                            proc.call("lease.status", {"leaseId": "l1"}, timeout=2.0)
+                        )
+                    except BaseException as exc:
+                        holder_errors.append(exc)
+
+                holder = threading.Thread(target=_run_holder, daemon=True)
+                holder.start()
+                self.assertTrue(chan.send_entered.wait(2.0))
+                with self.assertRaises(DeskWeaveError) as send_wait_err:
+                    proc.call("segment.submit", {"leaseId": "l1"}, timeout=0.04)
+                self.assertEqual(send_wait_err.exception.code, "DEADLINE_EXCEEDED")
+                self.assertFalse(chan.closed)
+                chan.send_gate.set()
+                deadline = time.monotonic() + 2.0
+                while not any(item.get("method") == "lease.status" for item in chan.sent[2:]):
+                    if time.monotonic() >= deadline:
+                        self.fail("Timed out waiting for lease.status frame")
+                    time.sleep(0.01)
+                status_id = next(
+                    item["id"] for item in chan.sent[2:] if item["method"] == "lease.status"
+                )
+                chan.inbox.put(
+                    {
+                        "protocolVersion": "1.0",
+                        "kind": "response",
+                        "replyTo": status_id,
+                        "ok": True,
+                        "result": {"state": "active"},
+                    }
+                )
+                holder.join(timeout=2)
+                self.assertEqual(holder_errors, [])
+                self.assertEqual(holder_results, [{"state": "active"}])
+                self.assertFalse(chan.closed)
+            finally:
+                proc.close()
+
+    def test_orphaned_probe_and_confirmation_replies_drain_without_breaking_session(self):
+        import queue
+
+        class _CtrlChannel:
+            def __init__(self):
+                self.inbox: queue.Queue[dict | BaseException] = queue.Queue()
+                self.sent: list[dict] = []
+                self.closed = False
+
+            def send(self, value, *, budget):
+                budget.check()
+                self.sent.append(value)
+
+            def receive(self, *, budget):
+                while True:
+                    delay = budget.check()
+                    if self.closed:
+                        raise agent.closed()
+                    try:
+                        item = self.inbox.get(timeout=min(delay, 0.02))
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, BaseException):
+                        raise item
+                    return item
+
+            def close(self):
+                self.closed = True
+                self.inbox.put(agent.closed())
+
+        chan = _CtrlChannel()
+        proc = self._make_stub_process(chan)
+        with (
+            patch.object(agent, "_check_owner", return_value=None),
+            patch.object(agent, "_signature_result", return_value=b"\x01" * 64),
+        ):
+            try:
+                # 1. Timed-out probe orphans __pong__; delayed pong drains alongside RPC.
+                with self.assertRaises(DeskWeaveError) as p_err:
+                    proc.probe(timeout=0.04)
+                self.assertEqual(p_err.exception.code, "DEADLINE_EXCEEDED")
+
+                def _feed_pong_and_rpc():
+                    deadline = time.monotonic() + 2.0
+                    while not any(m.get("kind") == "request" for m in chan.sent):
+                        if time.monotonic() >= deadline:
+                            return
+                        time.sleep(0.01)
+                    rpc_id = next(m["id"] for m in chan.sent if m.get("kind") == "request")
+                    chan.inbox.put({"kind": "agent.pong", "agentEpoch": "a" * 64})
+                    chan.inbox.put(
+                        {
+                            "protocolVersion": "1.0",
+                            "kind": "response",
+                            "replyTo": rpc_id,
+                            "ok": True,
+                            "result": {"ok": True},
+                        }
+                    )
+
+                feeder = threading.Thread(target=_feed_pong_and_rpc, daemon=True)
+                feeder.start()
+                res = proc.call("lease.status", {"leaseId": "l1"}, timeout=2.0)
+                self.assertEqual(res, {"ok": True})
+                feeder.join(timeout=2)
+                self.assertFalse(chan.closed)
+
+                # 2. Timed-out confirmation challenge drains stale nonce before retry.
+                with self.assertRaises(DeskWeaveError) as c_err:
+                    proc.register_resume_confirmation(
+                        lease_id="l1",
+                        pause_id="p1",
+                        generation=1,
+                        checkpoint_hash="0" * 64,
+                        resume_plan_hash="1" * 64,
+                        timeout=0.04,
+                    )
+                self.assertEqual(c_err.exception.code, "DEADLINE_EXCEEDED")
+
+                def _feed_confirm_sequence():
+                    time.sleep(0.02)
+                    # Stale challenge from timed-out call
+                    chan.inbox.put(
+                        {
+                            "kind": "agent.confirmation.challenge",
+                            "version": 1,
+                            "agentEpoch": "a" * 64,
+                            "nonce": [1] * 32,
+                        }
+                    )
+                    deadline = time.monotonic() + 2.0
+                    req_kind = "agent.confirmation.challenge.request"
+                    while sum(1 for m in chan.sent if m.get("kind") == req_kind) < 2:
+                        if time.monotonic() >= deadline:
+                            return
+                        time.sleep(0.01)
+                    chan.inbox.put(
+                        {
+                            "kind": "agent.confirmation.challenge",
+                            "version": 1,
+                            "agentEpoch": "a" * 64,
+                            "nonce": [2] * 32,
+                        }
+                    )
+                    reg_kind = "agent.confirmation.register"
+                    while not any(m.get("kind") == reg_kind for m in chan.sent):
+                        if time.monotonic() >= deadline:
+                            return
+                        time.sleep(0.01)
+                    chan.inbox.put(
+                        {
+                            "kind": "agent.confirmation.registered",
+                            "confirmationGrant": "f" * 64,
+                            "expiresInMs": 5000,
+                        }
+                    )
+
+                c_feeder = threading.Thread(target=_feed_confirm_sequence, daemon=True)
+                c_feeder.start()
+                grant = proc.register_resume_confirmation(
+                    lease_id="l1",
+                    pause_id="p1",
+                    generation=1,
+                    checkpoint_hash="0" * 64,
+                    resume_plan_hash="1" * 64,
+                    timeout=2.0,
+                )
+                self.assertEqual(grant, "f" * 64)
+                self.assertEqual(proc.authority.seen_nonces, [bytes([2] * 32)])
+                c_feeder.join(timeout=2)
+                self.assertFalse(chan.closed)
+            finally:
+                proc.close()
+
+    def test_concurrent_close_during_exchange_frame_raises_transport_closed(self):
+        import queue
+
+        class _ClosingChannel:
+            def __init__(self):
+                self.inbox: queue.Queue[dict | BaseException] = queue.Queue()
+                self.sent_event = threading.Event()
+                self.closed = False
+
+            def send(self, _value, *, budget):
+                budget.check()
+                self.sent_event.set()
+
+            def receive(self, *, budget):
+                while True:
+                    delay = budget.check()
+                    if self.closed:
+                        raise agent.closed()
+                    try:
+                        item = self.inbox.get(timeout=min(delay, 0.02))
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, BaseException):
+                        raise item
+                    return item
+
+            def close(self):
+                self.closed = True
+                self.inbox.put(agent.closed())
+
+        chan = _ClosingChannel()
+        proc = self._make_stub_process(chan)
+        with patch.object(agent, "_check_owner", return_value=None):
+            close_errors: list[BaseException] = []
+
+            def _close_proc():
+                try:
+                    chan.sent_event.wait(2.0)
+                    proc.close()
+                except BaseException as exc:
+                    close_errors.append(exc)
+
+            closer = threading.Thread(target=_close_proc, daemon=True)
+            closer.start()
+            with self.assertRaises(DeskWeaveError) as caught:
+                proc.call("lease.acquire", {"runId": "r1"}, timeout=2.0)
+            self.assertEqual(caught.exception.code, "TRANSPORT_CLOSED")
+            closer.join(timeout=2)
+            self.assertEqual(close_errors, [])
+
+    def test_reader_fatal_error_while_draining_orphan_marks_not_running_and_aborts_on_next_call(
+        self,
+    ):
+        import queue
+
+        class _QueueChannel:
+            def __init__(self):
+                self.inbox: queue.Queue[dict | BaseException] = queue.Queue()
+                self.sent: list[dict] = []
+                self.closed = False
+
+            def send(self, value, *, budget):
+                budget.check()
+                self.sent.append(value)
+
+            def receive(self, *, budget):
+                while True:
+                    delay = budget.check()
+                    if self.closed:
+                        raise agent.closed()
+                    try:
+                        item = self.inbox.get(timeout=min(delay, 0.02))
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, BaseException):
+                        raise item
+                    return item
+
+            def close(self):
+                self.closed = True
+                self.inbox.put(agent.closed())
+
+        chan = _QueueChannel()
+        proc = self._make_stub_process(chan)
+        runtime_dir = proc._runtime_dir
+        peer = proc._peer
+        with patch.object(agent, "_check_owner", return_value=None):
+            try:
+                self.assertTrue(proc.running)
+                with self.assertRaises(DeskWeaveError) as t_err:
+                    proc.call("segment.submit", {"leaseId": "l1"}, timeout=0.04)
+                self.assertEqual(t_err.exception.code, "DEADLINE_EXCEEDED")
+
+                chan.inbox.put(DeskWeaveError("RESOURCE_DENIED", "owner mismatch"))
+                deadline = time.monotonic() + 2.0
+                while True:
+                    with proc._mux_lock:
+                        if proc._reader_thread is None:
+                            break
+                    if time.monotonic() >= deadline:
+                        self.fail("Timed out waiting for reader thread exit on fatal error")
+                    time.sleep(0.01)
+
+                self.assertFalse(proc.running)
+                with self.assertRaises(DeskWeaveError) as p_err:
+                    proc.probe(timeout=1.0)
+                self.assertEqual(p_err.exception.code, "RESOURCE_DENIED")
+                self.assertTrue(proc._stopping.is_set())
+                self.assertTrue(runtime_dir.closed)
+                self.assertTrue(peer.closed)
+                self.assertFalse(proc.running)
+            finally:
+                proc.close()
+
+    def test_caller_cancel_during_channel_send_preserves_healthy_concurrent_call(self):
+        import queue
+
+        class _CancelOnSendChannel:
+            def __init__(self, cancel_ev: threading.Event):
+                self.inbox: queue.Queue[dict | BaseException] = queue.Queue()
+                self.sent: list[dict] = []
+                self.closed = False
+                self._cancel_ev = cancel_ev
+
+            def send(self, value, *, budget):
+                if value.get("method") == "segment.submit":
+                    self._cancel_ev.set()
+                    budget.check()
+                self.sent.append(value)
+
+            def receive(self, *, budget):
+                while True:
+                    delay = budget.check()
+                    if self.closed:
+                        raise agent.closed()
+                    try:
+                        item = self.inbox.get(timeout=min(delay, 0.02))
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, BaseException):
+                        raise item
+                    return item
+
+            def close(self):
+                self.closed = True
+                self.inbox.put(agent.closed())
+
+        cancel_ev = threading.Event()
+        chan = _CancelOnSendChannel(cancel_ev)
+        proc = self._make_stub_process(chan)
+        with patch.object(agent, "_check_owner", return_value=None):
+            try:
+                h_results: list[dict] = []
+                h_errors: list[BaseException] = []
+
+                def _run_healthy():
+                    try:
+                        h_results.append(proc.call("lease.status", {"leaseId": "l1"}, timeout=2.0))
+                    except BaseException as exc:
+                        h_errors.append(exc)
+
+                healthy = threading.Thread(target=_run_healthy, daemon=True)
+                healthy.start()
+                deadline = time.monotonic() + 2.0
+                while not any(m.get("method") == "lease.status" for m in chan.sent):
+                    if time.monotonic() >= deadline:
+                        self.fail("Timed out waiting for healthy caller send")
+                    time.sleep(0.01)
+
+                with self.assertRaises(DeskWeaveError) as c_err:
+                    proc.call(
+                        "segment.submit",
+                        {"leaseId": "l1"},
+                        timeout=2.0,
+                        cancel=cancel_ev,
+                    )
+                self.assertEqual(c_err.exception.code, "CANCELLED")
+                self.assertFalse(chan.closed)
+
+                h_id = next(m["id"] for m in chan.sent if m.get("method") == "lease.status")
+                t_id = next(m["id"] for m in chan.sent if m.get("method") == "segment.submit")
+                chan.inbox.put(
+                    {
+                        "protocolVersion": "1.0",
+                        "kind": "response",
+                        "replyTo": h_id,
+                        "ok": True,
+                        "result": {"state": "active"},
+                    }
+                )
+                chan.inbox.put(
+                    {
+                        "protocolVersion": "1.0",
+                        "kind": "response",
+                        "replyTo": t_id,
+                        "ok": True,
+                        "result": {},
+                    }
+                )
+                healthy.join(timeout=2)
+                self.assertEqual(h_errors, [])
+                self.assertEqual(h_results, [{"state": "active"}])
+                deadline = time.monotonic() + 2.0
+                while True:
+                    with proc._mux_lock:
+                        if proc._reader_thread is None:
+                            break
+                    if time.monotonic() >= deadline:
+                        self.fail("Timed out waiting for orphan drain")
+                    time.sleep(0.01)
+                self.assertFalse(chan.closed)
+            finally:
+                proc.close()
 
 
 if __name__ == "__main__":

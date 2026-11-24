@@ -562,7 +562,8 @@ mod tests {
             expand_input_operation(
                 &bad_expr["params"]["operation"],
                 None,
-                &PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }),
+                Some(&PausePoint::Physical(PhysicalPoint { x: 0, y: 0 })),
+                None,
             )
             .is_err()
         );
@@ -708,7 +709,8 @@ mod tests {
         let delta_events = expand_input_operation(
             &delta_op,
             None,
-            &PausePoint::Physical(PhysicalPoint { x: 100, y: 100 }),
+            Some(&PausePoint::Physical(PhysicalPoint { x: 100, y: 100 })),
+            None,
         )
         .unwrap();
         assert!(delta_events.len() >= 5);
@@ -744,7 +746,8 @@ mod tests {
         let drag_events = expand_input_operation(
             &drag_op,
             None,
-            &PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }),
+            Some(&PausePoint::Physical(PhysicalPoint { x: 0, y: 0 })),
+            None,
         )
         .unwrap();
         assert!(drag_events.len() >= 10);
@@ -780,11 +783,12 @@ mod tests {
         let disp_events = expand_input_operation(
             &disp_move_op,
             None,
-            &PausePoint::Display(DisplayPoint {
+            Some(&PausePoint::Display(DisplayPoint {
                 display_id: "main".to_owned(),
                 x: 10.0,
                 y: 20.0,
-            }),
+            })),
+            None,
         )
         .unwrap();
         assert!(disp_events.len() >= 5);
@@ -814,7 +818,8 @@ mod tests {
         let chord_events = expand_input_operation(
             &chord_op,
             None,
-            &PausePoint::Physical(PhysicalPoint { x: 0, y: 0 }),
+            Some(&PausePoint::Physical(PhysicalPoint { x: 0, y: 0 })),
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -845,6 +850,135 @@ mod tests {
                     action: NativeInputAction::KeyUp("Control".to_owned()),
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn cross_display_and_mixed_space_smooth_motion_resolve_or_reject_upfront() {
+        let mac_topo: DisplayTopology = load_json("macos-topology.json").unwrap();
+        let cross_drag_op = serde_json::json!({
+            "id": "crossDrag",
+            "title": "跨屏平滑拖拽",
+            "action": "pointer.drag",
+            "params": {
+                "target": "main",
+                "from": {"kind": "point", "space": "displayPixels", "displayId": "left", "x": 1820.0, "y": 100.0},
+                "to": {"kind": "point", "space": "displayPixels", "displayId": "main", "x": 200.0, "y": 200.0},
+                "button": "left",
+                "durationMs": 64
+            },
+            "on": {}
+        });
+        // Without topology -> rejected upfront instead of silent endpoint jump.
+        assert_eq!(
+            expand_input_operation(&cross_drag_op, None, None, None)
+                .unwrap_err()
+                .code,
+            "INVALID_ARGUMENT"
+        );
+        // With macOS DisplayLocalTopology -> continuous intermediate moves across left & main.
+        let events = expand_input_operation(&cross_drag_op, None, None, Some(&mac_topo)).unwrap();
+        assert!(events.len() >= 10);
+        let move_ids: Vec<String> = events
+            .iter()
+            .filter_map(|ev| match &ev.action {
+                NativeInputAction::PointerMoveDisplay(pt) => Some(pt.display_id.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(move_ids.iter().any(|id| id == "left"));
+        assert!(move_ids.iter().any(|id| id == "main"));
+
+        // Gap between disconnected displays in DisplayLocal -> rejected upfront.
+        let mut gapped = match mac_topo.clone() {
+            DisplayTopology::DisplayLocal(local) => local,
+            _ => unreachable!(),
+        };
+        gapped.displays[1].pixel_to_native =
+            Some(AffineTransform2D([1.0, 0.0, 0.0, 1.0, -2500.0, 0.0]));
+        let gapped_topo = DisplayTopology::DisplayLocal(gapped);
+        assert_eq!(
+            expand_input_operation(&cross_drag_op, None, None, Some(&gapped_topo))
+                .unwrap_err()
+                .code,
+            "INVALID_ARGUMENT"
+        );
+
+        // Mixed Physical -> Display on DisplayLocal -> rejected upfront; on PhysicalTopology -> smoothly interpolated.
+        let mixed_move_op = serde_json::json!({
+            "id": "mixedMove",
+            "title": "混合空间移动",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "displayPixels", "displayId": "main", "x": 200.0, "y": 150.0},
+                "durationMs": 40
+            },
+            "on": {}
+        });
+        let phys_start = PausePoint::Physical(PhysicalPoint { x: 10, y: 15 });
+        assert_eq!(
+            expand_input_operation(&mixed_move_op, None, Some(&phys_start), Some(&mac_topo))
+                .unwrap_err()
+                .code,
+            "INVALID_ARGUMENT"
+        );
+        let phys_topo = DisplayTopology::Physical(PhysicalTopology {
+            version: 1,
+            virtual_bounds: PhysicalRect {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+            displays: vec![PhysicalDisplay {
+                display_id: "main".to_owned(),
+                name: "Primary".to_owned(),
+                output_names: vec!["DP-1".to_owned()],
+                bounds: PhysicalRect {
+                    x: 0,
+                    y: 0,
+                    width: 1920,
+                    height: 1080,
+                },
+                rotation: Rotation::Deg0,
+                dpi_x: 96.0,
+                dpi_y: 96.0,
+                primary: true,
+            }],
+        });
+        let mixed_events =
+            expand_input_operation(&mixed_move_op, None, Some(&phys_start), Some(&phys_topo))
+                .unwrap();
+        assert!(mixed_events.len() >= 5);
+        assert!(matches!(
+            mixed_events.last().unwrap().action,
+            NativeInputAction::PointerMoveDisplay(ref pt) if pt.display_id == "main" && pt.x == 200.0 && pt.y == 150.0
+        ));
+
+        // FakeDesktopSession tracks pause_pointer and pointer_position.
+        let caps = CapabilitySnapshot {
+            os: PlatformOs::Linux,
+            arch: PlatformArch::X64,
+            backend: BackendKind::LinuxX11,
+            backend_version: "0.1.0".to_owned(),
+            generation: 1,
+            topology_version: Some(1),
+            topology_coverage: TopologyCoverage::All,
+            trajectory_versions: vec![TrajectoryVersion::V1_0],
+            features: FeatureSet::all(FeatureStatus::available()),
+        };
+        let fake = FakeDesktopSession::new(caps, Ok(phys_topo));
+        fake.set_pause_pointer(PausePoint::Display(DisplayPoint {
+            display_id: "main".to_owned(),
+            x: 12.0,
+            y: 34.0,
+        }));
+        assert_eq!(fake.pointer_position().unwrap(), fake.pause_pointer());
+        fake.set_pointer_error(Some(PlatformError::session_unavailable("no cursor")));
+        assert_eq!(
+            fake.pointer_position().unwrap_err().code,
+            "SESSION_UNAVAILABLE"
         );
     }
 }

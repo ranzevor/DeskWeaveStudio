@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -48,6 +49,17 @@ _STARTUP = ".agent-start.lock"
 _DISCOVERY = "agent.json"
 _MAX_FRAME = 4096
 _DISCOVERY_LIMIT = 16384
+_MAX_SAFE_INT = 9_007_199_254_740_991
+_MAX_IGNORED_IDS = 256
+
+
+class _PendingWaiter:
+    __slots__ = ("done", "error", "frame")
+
+    def __init__(self):
+        self.done = False
+        self.frame = None
+        self.error = None
 
 
 def _is_local_x11_display(value: str) -> bool:
@@ -570,6 +582,97 @@ class AgentAuthority:
         finally:
             self._lock.release()
 
+    def confirmation_claim(
+        self,
+        engine,
+        peer,
+        owner_identity,
+        workspace_id,
+        nonce,
+        *,
+        lease_id,
+        pause_id,
+        generation,
+        checkpoint_hash,
+        resume_plan_hash,
+        restore_target_token=None,
+        pointer_to_restore=None,
+        ttl_ms=60_000,
+        budget=None,
+    ):
+        budget = budget or Budget(5)
+        registered = self.check_engine(engine, budget)
+        peer.check(budget.check_time)
+        self._check_namespaces(peer.identity)
+        if (
+            registered.identity.platform,
+            registered.identity.user_id,
+            registered.identity.os_session_id,
+        ) != (
+            peer.identity.platform,
+            peer.identity.user_id,
+            peer.identity.os_session_id,
+        ):
+            raise rejected()
+        workspace_id = _check_workspace_id(workspace_id)
+        if (
+            type(owner_identity) not in (list, tuple)
+            or len(owner_identity) != 2
+            or any(type(item) is not str or not 1 <= len(item) <= 128 for item in owner_identity)
+        ):
+            raise ValueError("桌面 Agent 所有权身份无效。")
+        owner_tuple = tuple(owner_identity)
+        if type(nonce) not in (bytes, bytearray) or len(nonce) != 32:
+            raise ValueError("确认声明挑战 nonce 必须为 32 字节。")
+        for field_name, ident in (("leaseId", lease_id), ("pauseId", pause_id)):
+            if type(ident) is not str or not 1 <= len(ident) <= 256 or "\x00" in ident:
+                raise ValueError(f"字段 {field_name} 无效。")
+        if type(generation) is not int or not 0 <= generation <= _MAX_SAFE_INT:
+            raise ValueError("字段 generation 无效。")
+        if not _is_hex(checkpoint_hash) or not _is_hex(resume_plan_hash):
+            raise ValueError("确认声明摘要字段必须为 64 位小写十六进制字符串。")
+        if restore_target_token is not None and (
+            type(restore_target_token) is not str
+            or not 1 <= len(restore_target_token) <= 256
+            or "\x00" in restore_target_token
+        ):
+            raise ValueError("字段 restoreTargetToken 无效。")
+        if pointer_to_restore is not None and type(pointer_to_restore) is not dict:
+            raise ValueError("字段 pointerToRestore 必须为对象或 null。")
+        if type(ttl_ms) is not int or not 1 <= ttl_ms <= 60_000:
+            raise ValueError("字段 ttlMs 必须在 1..=60000 之间。")
+        scope = _scope(registered)
+        budget.acquire(self._lock)
+        try:
+            self._match_owner(scope, owner_tuple)
+            claim = dumps(
+                {
+                    "kind": "deskweave/agent-confirmation/v1",
+                    "agentPid": peer.identity.process_id,
+                    "agentEpoch": peer.identity.instance_epoch,
+                    "owner": list(owner_tuple),
+                    "scope": scope,
+                    "workspaceId": workspace_id,
+                    "purpose": "lease.resume",
+                    "nonce": list(nonce),
+                    "leaseId": lease_id,
+                    "pauseId": pause_id,
+                    "generation": generation,
+                    "checkpointHash": checkpoint_hash,
+                    "resumePlanHash": resume_plan_hash,
+                    "restoreTargetToken": restore_target_token,
+                    "pointerToRestore": pointer_to_restore,
+                    "ttlMs": ttl_ms,
+                },
+                max_bytes=_MAX_FRAME,
+                checkpoint=budget.check,
+            )
+            budget.check()
+            self._owners[scope] = owner_tuple
+            return claim
+        finally:
+            self._lock.release()
+
 
 def _linux_namespaces(pid):
     try:
@@ -1003,7 +1106,12 @@ class AgentProcess(Resource):
 
     @property
     def running(self):
-        if self._stopping.is_set() or self._channel is None or self._peer is None:
+        if (
+            self._stopping.is_set()
+            or getattr(self, "_fatal_error", None) is not None
+            or self._channel is None
+            or self._peer is None
+        ):
             return False
         if self._process is not None and self._process.poll() is not None:
             return False
@@ -1013,24 +1121,424 @@ class AgentProcess(Resource):
             return False
         return True
 
+    def _ensure_mux(self):
+        with self._io:
+            if not hasattr(self, "_mux_lock"):
+                self._send_lock = threading.Lock()
+                self._mux_lock = threading.Lock()
+                self._mux_cond = threading.Condition(self._mux_lock)
+                self._pending: dict[str, _PendingWaiter] = {}
+                self._orphaned_rpc_ids: deque[str] = deque()
+                self._orphaned_rpc_set: set[str] = set()
+                self._orphaned_control: dict[str, int] = {}
+                self._reader_thread: threading.Thread | None = None
+                self._fatal_error: BaseException | None = None
+                self._ping_lock = threading.Lock()
+                self._confirm_lock = threading.Lock()
+
+    def _has_outstanding_replies_locked(self) -> bool:
+        return (
+            bool(self._pending)
+            or bool(self._orphaned_rpc_set)
+            or any(count > 0 for count in self._orphaned_control.values())
+        )
+
+    def _mark_orphaned_locked(self, key: str, *, is_control: bool) -> None:
+        if is_control:
+            self._orphaned_control[key] = self._orphaned_control.get(key, 0) + 1
+            return
+        if key in self._orphaned_rpc_set:
+            return
+        while len(self._orphaned_rpc_ids) >= _MAX_IGNORED_IDS:
+            evicted = self._orphaned_rpc_ids.popleft()
+            self._orphaned_rpc_set.discard(evicted)
+        self._orphaned_rpc_ids.append(key)
+        self._orphaned_rpc_set.add(key)
+
+    def _drain_orphaned_control(self, keys: tuple[str, ...], budget: Budget) -> None:
+        fatal_to_abort: BaseException | None = None
+        with self._mux_lock:
+            while any(self._orphaned_control.get(key, 0) > 0 for key in keys):
+                if self._stopping.is_set() or self._channel is None:
+                    raise closed()
+                if self._fatal_error is not None:
+                    fatal_to_abort = self._fatal_error
+                    break
+                delay = budget.check_time()
+                self._mux_cond.wait(delay)
+        if fatal_to_abort is not None:
+            if not self._stopping.is_set():
+                self._abort(fatal_to_abort)
+            raise fatal_to_abort
+
+    def _fail_all_waiters_locked(self, error: BaseException) -> None:
+        for waiter in self._pending.values():
+            if not waiter.done:
+                waiter.error = error
+                waiter.done = True
+        self._pending.clear()
+        self._orphaned_rpc_ids.clear()
+        self._orphaned_rpc_set.clear()
+        self._orphaned_control.clear()
+        self._mux_cond.notify_all()
+
+    def _route_incoming_locked(self, response: object) -> None:
+        if type(response) is not dict:
+            raise rejected()
+        kind = response.get("kind")
+        if kind == "response":
+            reply_to = response.get("replyTo")
+            if type(reply_to) is not str:
+                raise rejected()
+            waiter = self._pending.pop(reply_to, None)
+            if waiter is not None:
+                waiter.frame = response
+                waiter.done = True
+                return
+            if reply_to in self._orphaned_rpc_set:
+                self._orphaned_rpc_set.discard(reply_to)
+                try:
+                    self._orphaned_rpc_ids.remove(reply_to)
+                except ValueError:
+                    pass
+                return
+            raise rejected()
+        if kind == "agent.pong":
+            key = "__pong__"
+        elif kind == "agent.confirmation.challenge":
+            key = "__confirm_challenge__"
+        elif kind == "agent.confirmation.registered":
+            key = "__confirm_register__"
+        elif kind == "agent.confirmation.error":
+            if (
+                self._orphaned_control.get("__confirm_register__", 0) > 0
+                or "__confirm_register__" in self._pending
+            ):
+                key = "__confirm_register__"
+            elif (
+                self._orphaned_control.get("__confirm_challenge__", 0) > 0
+                or "__confirm_challenge__" in self._pending
+            ):
+                key = "__confirm_challenge__"
+            else:
+                raise rejected()
+        else:
+            raise rejected()
+        orphaned_count = self._orphaned_control.get(key, 0)
+        if orphaned_count > 0:
+            if orphaned_count == 1:
+                self._orphaned_control.pop(key, None)
+            else:
+                self._orphaned_control[key] = orphaned_count - 1
+            return
+        waiter = self._pending.pop(key, None)
+        if waiter is None:
+            raise rejected()
+        waiter.frame = response
+        waiter.done = True
+
+    def _ensure_reader_locked(self, channel, runtime_dir) -> None:
+        if self._reader_thread is None:
+            thread = threading.Thread(
+                target=self._reader_loop,
+                args=(channel, runtime_dir),
+                name="deskweave-agent-mux-reader",
+                daemon=True,
+            )
+            self._reader_thread = thread
+            thread.start()
+
+    def _reader_loop(self, channel, runtime_dir) -> None:
+        while True:
+            with self._mux_lock:
+                if self._stopping.is_set() or not self._has_outstanding_replies_locked():
+                    self._reader_thread = None
+                    self._mux_cond.notify_all()
+                    return
+            try:
+                read_budget = Budget(86_400, Cancellation(None, self._stopping))
+                response = channel.receive(budget=read_budget)
+                _check_owner(runtime_dir, self._owner_identity)
+            except BaseException as error:
+                recorded: BaseException = closed() if self._stopping.is_set() else error
+                with self._mux_lock:
+                    if self._fatal_error is None:
+                        self._fatal_error = recorded
+                    self._fail_all_waiters_locked(self._fatal_error)
+                    self._reader_thread = None
+                    self._mux_cond.notify_all()
+                try:
+                    channel.close()
+                except BaseException:
+                    pass
+                return
+            with self._mux_lock:
+                try:
+                    self._route_incoming_locked(response)
+                except BaseException as error:
+                    recorded = closed() if self._stopping.is_set() else error
+                    if self._fatal_error is None:
+                        self._fatal_error = recorded
+                    self._fail_all_waiters_locked(self._fatal_error)
+                    self._reader_thread = None
+                    self._mux_cond.notify_all()
+                    break
+                if not self._has_outstanding_replies_locked():
+                    self._reader_thread = None
+                    self._mux_cond.notify_all()
+                    return
+                self._mux_cond.notify_all()
+        try:
+            channel.close()
+        except BaseException:
+            pass
+
+    def _exchange_frame(
+        self,
+        key: str,
+        outgoing: dict,
+        *,
+        budget: Budget,
+        is_control: bool = False,
+    ) -> dict:
+        self._ensure_mux()
+        waiter = _PendingWaiter()
+        pending_raise: BaseException | None = None
+        send_error_to_abort: BaseException | None = None
+        budget.acquire(self._send_lock)
+        try:
+            with self._mux_lock:
+                channel = self._channel
+                runtime_dir = self._runtime_dir
+                if self._stopping.is_set() or channel is None or runtime_dir is None:
+                    raise closed()
+                if self._fatal_error is not None:
+                    pending_raise = self._fatal_error
+                    if not self._stopping.is_set():
+                        send_error_to_abort = self._fatal_error
+                else:
+                    budget.check_time()
+                    if key in self._pending:
+                        raise DeskWeaveError("REQUEST_CONFLICT", "并发请求标识符冲突。")
+                    self._pending[key] = waiter
+            if pending_raise is None:
+                sent = False
+                try:
+                    _check_owner(runtime_dir, self._owner_identity)
+                    send_budget = Budget(10.0, Cancellation(None, self._stopping))
+                    channel.send(outgoing, budget=send_budget)
+                    sent = True
+                    with self._mux_lock:
+                        if self._stopping.is_set():
+                            if self._pending.pop(key, None) is not None:
+                                self._mark_orphaned_locked(key, is_control=is_control)
+                            self._mux_cond.notify_all()
+                            raise closed()
+                        if self._fatal_error is not None:
+                            if self._pending.pop(key, None) is not None:
+                                self._mark_orphaned_locked(key, is_control=is_control)
+                            self._mux_cond.notify_all()
+                            raise self._fatal_error
+                        self._ensure_reader_locked(channel, runtime_dir)
+                except BaseException as error:
+                    with self._mux_lock:
+                        if not sent:
+                            self._pending.pop(key, None)
+                        recorded = closed() if self._stopping.is_set() else error
+                        if self._fatal_error is None:
+                            self._fatal_error = recorded
+                        self._mux_cond.notify_all()
+                    pending_raise = recorded
+                    if not self._stopping.is_set():
+                        send_error_to_abort = recorded
+        finally:
+            self._send_lock.release()
+        if send_error_to_abort is not None and not self._stopping.is_set():
+            self._abort(send_error_to_abort)
+        if pending_raise is not None:
+            raise pending_raise
+
+        fatal_to_abort: BaseException | None = None
+        with self._mux_lock:
+            while not waiter.done:
+                if self._stopping.is_set():
+                    if self._pending.pop(key, None) is not None:
+                        self._mark_orphaned_locked(key, is_control=is_control)
+                    self._mux_cond.notify_all()
+                    raise closed()
+                try:
+                    delay = budget.check_time()
+                except BaseException:
+                    if self._pending.pop(key, None) is not None:
+                        self._mark_orphaned_locked(key, is_control=is_control)
+                    self._mux_cond.notify_all()
+                    raise
+                self._mux_cond.wait(delay)
+
+            if waiter.error is not None:
+                fatal_to_abort = closed() if self._stopping.is_set() else waiter.error
+            else:
+                assert waiter.frame is not None
+                return waiter.frame
+
+        if fatal_to_abort is not None and not self._stopping.is_set():
+            self._abort(fatal_to_abort)
+        raise fatal_to_abort
+
+    @staticmethod
+    def _validate_confirmation_error(frame: dict) -> DeskWeaveError | None:
+        if (
+            frame.keys() != {"kind", "code", "message", "retry"}
+            or type(frame["code"]) is not str
+            or not 1 <= len(frame["code"]) <= 80
+            or type(frame["message"]) is not str
+            or not 1 <= len(frame["message"]) <= 1000
+            or frame["retry"] not in {"never", "sameRequest", "afterQuery"}
+        ):
+            return None
+        return DeskWeaveError(frame["code"], frame["message"], retry=frame["retry"])
+
     def probe(self, *, timeout=10, cancel=None):
         if self._stopping.is_set():
             raise closed()
+        self._ensure_mux()
         budget = Budget(timeout, Cancellation(cancel, self._stopping))
-        budget.acquire(self._io)
+        budget.acquire(self._ping_lock)
         try:
-            _check_owner(self._runtime_dir, self._owner_identity)
-            self._channel.send({"kind": "agent.ping", "agentEpoch": self.epoch}, budget=budget)
-            response = self._channel.receive(budget=budget)
-            _check_owner(self._runtime_dir, self._owner_identity)
+            self._drain_orphaned_control(("__pong__",), budget)
+            response = self._exchange_frame(
+                "__pong__",
+                {"kind": "agent.ping", "agentEpoch": self.epoch},
+                budget=budget,
+                is_control=True,
+            )
             if response != {"kind": "agent.pong", "agentEpoch": self.epoch}:
+                self._abort(rejected())
                 raise rejected()
             return self.epoch
-        except BaseException as error:
-            self._abort(error)
-            raise
         finally:
-            self._io.release()
+            self._ping_lock.release()
+
+    def register_resume_confirmation(
+        self,
+        *,
+        lease_id: str,
+        pause_id: str,
+        generation: int,
+        checkpoint_hash: str,
+        resume_plan_hash: str,
+        restore_target_token: str | None = None,
+        pointer_to_restore: dict | None = None,
+        ttl_ms: int = 60_000,
+        timeout=10,
+        cancel=None,
+    ) -> str:
+        if (
+            self._stopping.is_set()
+            or self.session is None
+            or self.epoch is None
+            or self._peer is None
+        ):
+            raise closed()
+        self._ensure_mux()
+        budget = Budget(timeout, Cancellation(cancel, self._stopping))
+        budget.acquire(self._confirm_lock)
+        try:
+            self._drain_orphaned_control(("__confirm_challenge__", "__confirm_register__"), budget)
+            challenge = self._exchange_frame(
+                "__confirm_challenge__",
+                {"kind": "agent.confirmation.challenge.request"},
+                budget=budget,
+                is_control=True,
+            )
+            if type(challenge) is not dict:
+                err = rejected()
+                self._abort(err)
+                raise err
+            if challenge.get("kind") == "agent.confirmation.error":
+                parsed_err = self._validate_confirmation_error(challenge)
+                if parsed_err is None:
+                    err = rejected()
+                    self._abort(err)
+                    raise err
+                raise parsed_err
+            if (
+                challenge.keys() != {"kind", "version", "agentEpoch", "nonce"}
+                or challenge["kind"] != "agent.confirmation.challenge"
+                or type(challenge["version"]) is not int
+                or challenge["version"] != 1
+                or challenge["agentEpoch"] != self.epoch
+            ):
+                err = rejected()
+                self._abort(err)
+                raise err
+            try:
+                nonce = _bytes(challenge["nonce"], 32)
+            except BaseException as error:
+                self._abort(error)
+                raise
+            claim = self.authority.confirmation_claim(
+                self.local,
+                self._peer,
+                self._owner_identity,
+                self.workspace_id,
+                nonce,
+                lease_id=lease_id,
+                pause_id=pause_id,
+                generation=generation,
+                checkpoint_hash=checkpoint_hash,
+                resume_plan_hash=resume_plan_hash,
+                restore_target_token=restore_target_token,
+                pointer_to_restore=pointer_to_restore,
+                ttl_ms=ttl_ms,
+                budget=budget,
+            )
+            sig_req = self.authority.submit_signature(claim, budget)
+            try:
+                signature = _signature_result(sig_req, budget)
+            finally:
+                sig_req.close()
+            reply = self._exchange_frame(
+                "__confirm_register__",
+                {
+                    "kind": "agent.confirmation.register",
+                    "version": 1,
+                    "claim": claim.decode("utf-8"),
+                    "signature": list(signature),
+                },
+                budget=budget,
+                is_control=True,
+            )
+            if type(reply) is not dict:
+                err = rejected()
+                self._abort(err)
+                raise err
+            kind = reply.get("kind")
+            if kind == "agent.confirmation.registered":
+                grant = reply.get("confirmationGrant")
+                exp_ms = reply.get("expiresInMs")
+                if (
+                    reply.keys() != {"kind", "confirmationGrant", "expiresInMs"}
+                    or not _is_hex(grant)
+                    or type(exp_ms) is not int
+                    or exp_ms < 1
+                ):
+                    err = rejected()
+                    self._abort(err)
+                    raise err
+                return grant
+            if kind == "agent.confirmation.error":
+                parsed_err = self._validate_confirmation_error(reply)
+                if parsed_err is None:
+                    err = rejected()
+                    self._abort(err)
+                    raise err
+                raise parsed_err
+            err = rejected()
+            self._abort(err)
+            raise err
+        finally:
+            self._confirm_lock.release()
 
     def call(
         self,
@@ -1066,17 +1574,13 @@ class AgentProcess(Resource):
             dumps(request, max_bytes=_MAX_CONTROL_FRAME, checkpoint=budget.check_time)
         except (TypeError, ValueError) as error:
             raise DeskWeaveError("INVALID_ARGUMENT", "Agent 请求参数无法编码。") from error
-        budget.acquire(self._io)
-        agent_error = None
+
+        response = self._exchange_frame(
+            request_id,
+            request,
+            budget=budget,
+        )
         try:
-            if self._stopping.is_set() or self._channel is None or self.session is None:
-                raise closed()
-            _check_owner(self._runtime_dir, self._owner_identity)
-            deadline_seconds = min(remaining(budget), 86_400)
-            request["deadlineMs"] = max(1, min(86_400_000, math.ceil(deadline_seconds * 1000)))
-            self._channel.send(request, budget=budget)
-            response = self._channel.receive(budget=budget)
-            _check_owner(self._runtime_dir, self._owner_identity)
             if (
                 type(response) is not dict
                 or response.get("protocolVersion") != "1.0"
@@ -1120,15 +1624,14 @@ class AgentProcess(Resource):
                 details = body["details"]
             else:
                 details = None
-            agent_error = DeskWeaveError(
-                body["code"], body["message"], retry=body["retry"], details=details
-            )
+        except DeskWeaveError as error:
+            if error.code in {"AUTHENTICATION_FAILED", "INTERNAL_ERROR"}:
+                self._abort(error)
+            raise
         except BaseException as error:
             self._abort(error)
             raise
-        finally:
-            self._io.release()
-        raise agent_error
+        raise DeskWeaveError(body["code"], body["message"], retry=body["retry"], details=details)
 
     def desktop_capabilities(self, *, timeout=10, cancel=None) -> dict:
         return self.call(
@@ -1327,10 +1830,34 @@ class AgentProcess(Resource):
             process.wait(timeout=5)
         self._process = None
 
+    def _join_reader(self):
+        if not hasattr(self, "_mux_lock"):
+            return
+        with self._mux_lock:
+            thread = self._reader_thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=5)
+        with self._mux_lock:
+            self._reader_thread = None
+
+    def _wait_idle_sender(self):
+        if hasattr(self, "_send_lock"):
+            with self._send_lock:
+                pass
+
     def close(self):
         self._stopping.set()
         with self._io:
-            cleanup(self._close_started, lambda: self._close_resource("_runtime_dir"))
+            if hasattr(self, "_mux_cond"):
+                with self._mux_lock:
+                    if self._fatal_error is None:
+                        self._fatal_error = closed()
+                    self._fail_all_waiters_locked(self._fatal_error)
+            cleanup(
+                self._close_started,
+                self._wait_idle_sender,
+                lambda: self._close_resource("_runtime_dir"),
+            )
 
     def _close_started(self):
         cleanup(
@@ -1338,6 +1865,7 @@ class AgentProcess(Resource):
             lambda: self._close_resource("_registration_dir"),
             lambda: self._close_resource("_channel"),
             lambda: self._close_resource("_listener"),
+            self._join_reader,
             self._reap,
             lambda: self._close_resource("_peer"),
             lambda: self._close_resource("_owner"),
