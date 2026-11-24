@@ -5281,7 +5281,7 @@ mod tests {
             "id": "rel-timeout-text",
             "title": "释放超时清理等待计数",
             "action": "keyboard.text",
-            "params": {"target": "main", "text": "ab", "intervalMs": 20},
+            "params": {"target": "main", "text": "ab", "intervalMs": 0},
             "on": {}
         });
         let h_text = compute_segment_payload_hash("target-a", &text_op, None).unwrap();
