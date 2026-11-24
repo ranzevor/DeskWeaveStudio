@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import socket
+import sys
 import tempfile
 import threading
 import time
@@ -333,6 +335,35 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
         scope = hashlib.sha256(os.fsencode(self.runtime)).hexdigest()
         self.stack.enter_context(patch.object(agent, "_scope", return_value=scope))
         self.authority = agent.AgentAuthority((self.local,), _SignatureRequest)
+        self._wayland_backend: str | None = None
+        if sys.platform == "linux":
+            priv_dir = Path(self.stack.enter_context(tempfile.TemporaryDirectory(prefix="dw-wl-")))
+            os.chmod(priv_dir, 0o700)
+            wayland_path = priv_dir / "wayland-lease-0"
+            wl_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            wl_sock.bind(str(wayland_path))
+            wl_sock.listen(1)
+            self.stack.callback(wl_sock.close)
+            self.stack.enter_context(patch.dict(os.environ, {}, clear=False))
+            for key in (
+                "DISPLAY",
+                "XDG_SESSION_ID",
+                "XDG_SESSION_TYPE",
+                "XDG_RUNTIME_DIR",
+                "WAYLAND_DISPLAY",
+                "DBUS_SESSION_BUS_ADDRESS",
+                "DESKWEAVE_WAYLAND_COMPOSITOR_SOCKET",
+                "DESKWEAVE_WAYLAND_BACKEND",
+            ):
+                os.environ.pop(key, None)
+            os.environ.update(
+                {
+                    "XDG_SESSION_TYPE": "wayland",
+                    "XDG_RUNTIME_DIR": str(priv_dir),
+                    "WAYLAND_DISPLAY": wayland_path.name,
+                }
+            )
+            self._wayland_backend = "compositor"
 
     def _runtime(self, local):
         from deskweave.coordination.directory import runtime_directory
@@ -346,11 +377,19 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
         process = None
         try:
             first = engine_a.start_desktop_agent(
-                self.local, self.agent_installation, self.authority, idle_grace=0.25
+                self.local,
+                self.agent_installation,
+                self.authority,
+                idle_grace=0.25,
+                wayland_backend=self._wayland_backend,
             )
             process = first._process
             second = engine_b.start_desktop_agent(
-                self.local, self.agent_installation, authority_b, idle_grace=0.25
+                self.local,
+                self.agent_installation,
+                authority_b,
+                idle_grace=0.25,
+                wayland_backend=self._wayland_backend,
             )
             self.assertEqual(first.pid, second.pid)
 
