@@ -851,6 +851,65 @@ mod tests {
                 },
             ]
         );
+
+        // Smooth physical move respects 250 Hz ceiling (4 ms/step) and 8 ms/8 px cadence.
+        let fast_move_op = serde_json::json!({
+            "id": "fastMove",
+            "title": "短时平滑移动步频上限",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 240, "y": 180},
+                "durationMs": 32
+            },
+            "on": {}
+        });
+        let fast_events = expand_input_operation(
+            &fast_move_op,
+            None,
+            Some(&PausePoint::Physical(PhysicalPoint { x: 0, y: 0 })),
+            None,
+        )
+        .unwrap();
+        assert_eq!(fast_events.len(), 8);
+        assert!(fast_events.iter().all(|e| e.delay_before_us == 4_000));
+        assert_eq!(
+            fast_events.iter().map(|e| e.delay_before_us).sum::<u64>(),
+            32_000
+        );
+        assert_eq!(
+            fast_events.last().unwrap().action,
+            NativeInputAction::PointerMovePhysical(PhysicalPoint { x: 240, y: 180 })
+        );
+
+        let short_move_op = serde_json::json!({
+            "id": "shortMove",
+            "title": "短距离平滑移动基准步频",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 4, "y": 3},
+                "durationMs": 32
+            },
+            "on": {}
+        });
+        let short_events = expand_input_operation(
+            &short_move_op,
+            None,
+            Some(&PausePoint::Physical(PhysicalPoint { x: 0, y: 0 })),
+            None,
+        )
+        .unwrap();
+        assert_eq!(short_events.len(), 4);
+        assert!(short_events.iter().all(|e| e.delay_before_us == 8_000));
+        assert_eq!(
+            short_events.iter().map(|e| e.delay_before_us).sum::<u64>(),
+            32_000
+        );
+        assert_eq!(
+            short_events.last().unwrap().action,
+            NativeInputAction::PointerMovePhysical(PhysicalPoint { x: 4, y: 3 })
+        );
     }
 
     #[test]

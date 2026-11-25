@@ -3451,11 +3451,7 @@ fn current_topology_version(desktop: &dyn DesktopSession) -> Result<String, Plat
     match desktop.topology() {
         Ok(t) => Ok(t.version().to_string()),
         #[cfg(feature = "test-authority")]
-        Err(err) if err.code == "CAPABILITY_NOT_IMPLEMENTED" => Ok(desktop
-            .capabilities()
-            .topology_version
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| "1".to_owned())),
+        Err(err) if err.code == "CAPABILITY_NOT_IMPLEMENTED" => Ok("1".to_owned()),
         Err(err) => Err(err),
     }
 }

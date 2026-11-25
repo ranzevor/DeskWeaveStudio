@@ -19,6 +19,8 @@ pub const MAX_SEGMENT_EVENTS: u64 = 1_000_000;
 pub const DEFAULT_PRESS_DURATION_MS: u64 = 50;
 pub const MAX_PRESS_DURATION_MS: u64 = 10_000;
 pub const SMOOTH_STEP_INTERVAL_MS: u64 = 8;
+pub const MIN_SMOOTH_STEP_INTERVAL_MS: u64 = 4;
+const SMOOTH_STEP_TARGET_PX: f64 = 8.0;
 pub const MAX_SMOOTH_STEPS: u64 = 2_000;
 
 fn is_lower_hex_64(value: &str) -> bool {
@@ -898,8 +900,8 @@ pub struct AtomicInputEvent {
 
 fn smooth_step_count(duration_ms: u64, distance: f64) -> u64 {
     let by_time = (duration_ms / SMOOTH_STEP_INTERVAL_MS).max(2);
-    let by_space = (distance.ceil() as u64).max(2);
-    let rate_cap = duration_ms.max(2);
+    let by_space = ((distance / SMOOTH_STEP_TARGET_PX).ceil() as u64).max(2);
+    let rate_cap = (duration_ms / MIN_SMOOTH_STEP_INTERVAL_MS).max(2);
     by_time
         .max(by_space.min(250))
         .min(rate_cap)
