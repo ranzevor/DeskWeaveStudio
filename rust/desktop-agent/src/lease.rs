@@ -3290,34 +3290,15 @@ mod macos_qos {
     pub(super) const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
     #[cfg(test)]
     pub(super) const QOS_CLASS_DEFAULT: u32 = 0x15;
-    pub(super) const THREAD_LATENCY_QOS_POLICY: u32 = 7;
-    const THREAD_LATENCY_QOS_POLICY_COUNT: u32 = 1;
-    pub(super) const LATENCY_QOS_TIER_0: u32 = (0xFF << 16) | 1;
-    const KERN_SUCCESS: i32 = 0;
-
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct ThreadLatencyQosPolicy {
-        thread_latency_qos_tier: u32,
-    }
 
     unsafe extern "C" {
         fn pthread_self() -> *mut c_void;
-        fn pthread_mach_thread_np(thread: *mut c_void) -> u32;
         fn pthread_get_qos_class_np(
             thread: *mut c_void,
             qos_class: *mut u32,
             relative_priority: *mut i32,
         ) -> i32;
         fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
-        fn thread_policy_get(
-            thread: u32,
-            flavor: u32,
-            policy_info: *mut i32,
-            count: *mut u32,
-            get_default: *mut i32,
-        ) -> i32;
-        fn thread_policy_set(thread: u32, flavor: u32, policy_info: *const i32, count: u32) -> i32;
     }
 
     pub(super) fn current_thread_qos() -> Option<(u32, i32)> {
@@ -3332,93 +3313,37 @@ mod macos_qos {
     pub(super) fn set_current_thread_qos(qos_class: u32, rel_prio: i32) -> bool {
         unsafe { pthread_set_qos_class_self_np(qos_class, rel_prio) == 0 }
     }
-
-    pub(super) fn current_latency_qos_tier() -> Option<u32> {
-        let mut policy = ThreadLatencyQosPolicy {
-            thread_latency_qos_tier: 0,
-        };
-        let mut count = THREAD_LATENCY_QOS_POLICY_COUNT;
-        let mut get_default: i32 = 0;
-        let kr = unsafe {
-            let thread = pthread_mach_thread_np(pthread_self());
-            thread_policy_get(
-                thread,
-                THREAD_LATENCY_QOS_POLICY,
-                (&raw mut policy).cast::<i32>(),
-                &raw mut count,
-                &raw mut get_default,
-            )
-        };
-        (kr == KERN_SUCCESS && count == THREAD_LATENCY_QOS_POLICY_COUNT)
-            .then_some(policy.thread_latency_qos_tier)
-    }
-
-    pub(super) fn set_current_latency_qos_tier(tier: u32) -> bool {
-        let policy = ThreadLatencyQosPolicy {
-            thread_latency_qos_tier: tier,
-        };
-        unsafe {
-            let thread = pthread_mach_thread_np(pthread_self());
-            thread_policy_set(
-                thread,
-                THREAD_LATENCY_QOS_POLICY,
-                (&raw const policy).cast::<i32>(),
-                THREAD_LATENCY_QOS_POLICY_COUNT,
-            ) == KERN_SUCCESS
-        }
-    }
 }
 
 #[cfg(target_os = "macos")]
 struct HighResTimerGuard {
-    restore_qos: Option<(u32, i32)>,
-    restore_latency: Option<u32>,
+    restore: Option<(u32, i32)>,
 }
 
 #[cfg(target_os = "macos")]
 impl HighResTimerGuard {
     fn new() -> Self {
         let prev = macos_qos::current_thread_qos();
-        let restore_qos = if matches!(prev, Some((macos_qos::QOS_CLASS_USER_INTERACTIVE, 0))) {
-            None
-        } else {
-            let ok = macos_qos::set_current_thread_qos(macos_qos::QOS_CLASS_USER_INTERACTIVE, 0);
-            match prev {
-                Some((prev_class, prev_prio)) if ok && prev_class != 0 => {
-                    Some((prev_class, prev_prio))
-                }
-                _ => None,
-            }
-        };
-        let prev_latency = macos_qos::current_latency_qos_tier();
-        let restore_latency = if prev_latency != Some(macos_qos::LATENCY_QOS_TIER_0)
-            && macos_qos::set_current_latency_qos_tier(macos_qos::LATENCY_QOS_TIER_0)
-        {
-            prev_latency
-        } else {
-            None
-        };
-        Self {
-            restore_qos,
-            restore_latency,
+        if matches!(prev, Some((macos_qos::QOS_CLASS_USER_INTERACTIVE, 0))) {
+            return Self { restore: None };
         }
+        let ok = macos_qos::set_current_thread_qos(macos_qos::QOS_CLASS_USER_INTERACTIVE, 0);
+        let restore = match prev {
+            Some((prev_class, prev_prio)) if ok && prev_class != 0 => Some((prev_class, prev_prio)),
+            _ => None,
+        };
+        Self { restore }
     }
 
     fn disabled() -> Self {
-        Self {
-            restore_qos: None,
-            restore_latency: None,
-        }
+        Self { restore: None }
     }
 }
 
 #[cfg(target_os = "macos")]
 impl Drop for HighResTimerGuard {
     fn drop(&mut self) {
-        if let Some(tier) = self.restore_latency {
-            let _ = macos_qos::set_current_latency_qos_tier(tier);
-        }
-        if let Some((qos_class, rel_prio)) = self.restore_qos {
+        if let Some((qos_class, rel_prio)) = self.restore {
             let _ = macos_qos::set_current_thread_qos(qos_class, rel_prio);
         }
     }
@@ -4645,24 +4570,16 @@ mod tests {
                 macos_qos::current_thread_qos().map(|(cls, _)| cls),
                 Some(macos_qos::QOS_CLASS_DEFAULT)
             );
-            let initial_latency = macos_qos::current_latency_qos_tier();
             let guard = HighResTimerGuard::new();
             assert_eq!(
                 macos_qos::current_thread_qos().map(|(cls, _)| cls),
                 Some(macos_qos::QOS_CLASS_USER_INTERACTIVE)
             );
-            if guard.restore_latency.is_some() {
-                assert_eq!(
-                    macos_qos::current_latency_qos_tier(),
-                    Some(macos_qos::LATENCY_QOS_TIER_0)
-                );
-            }
             drop(guard);
             assert_eq!(
                 macos_qos::current_thread_qos().map(|(cls, _)| cls),
                 Some(macos_qos::QOS_CLASS_DEFAULT)
             );
-            assert_eq!(macos_qos::current_latency_qos_tier(), initial_latency);
         })
         .join()
         .unwrap();
