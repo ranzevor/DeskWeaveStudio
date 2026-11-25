@@ -32,6 +32,15 @@ const MAX_CONSUMED_TOKENS: usize = 4096;
 const MAX_REGISTERED_CONFIRMATIONS: usize = 256;
 const MAX_SINGLE_LATENESS_US: u64 = 20_000;
 const MIN_CUMULATIVE_SHIFT_US: u64 = 50_000;
+#[cfg(target_os = "macos")]
+const BASE_CONDVAR_CUSHION_US: u64 = 12_000;
+#[cfg(not(target_os = "macos"))]
+const BASE_CONDVAR_CUSHION_US: u64 = 3_000;
+const MAX_CONDVAR_CUSHION_US: u64 = 35_000;
+const CONDVAR_OVERSHOOT_MARGIN_US: u64 = 4_000;
+const CONDVAR_SLICE_MAX_US: u64 = 5_000;
+const MIN_CONDVAR_SLICE_US: u64 = 1_000;
+const CONTROL_DEADLINE_CUSHION_US: u64 = 3_000;
 
 #[derive(Clone)]
 pub(crate) struct RegisteredConfirmation {
@@ -2080,6 +2089,7 @@ impl LeaseCoordinator {
         let mut next_deadline_us: u64 = 0;
         let mut cumulative_shift_us = run.prior_cumulative_shift_us;
         let max_cumulative_shift_us = MIN_CUMULATIVE_SHIFT_US.max(run.original_duration_us / 50);
+        let mut condvar_cushion_us = BASE_CONDVAR_CUSHION_US;
 
         let active_elapsed_now = |wall_start: &Instant, clock_start_us: u64| {
             let cur = desktop
@@ -2254,18 +2264,24 @@ impl LeaseCoordinator {
 
                 let remaining_rpc = rpc_deadline_budget.saturating_sub(rpc_elapsed);
                 let ttl_rem_us = expires_at_us.saturating_sub(now_clock_us).max(1);
-                if remaining_delay_us >= 4_000
-                    && ttl_rem_us >= 4_000
-                    && remaining_rpc >= Duration::from_millis(4)
-                {
-                    let slice = Duration::from_micros(remaining_delay_us - 3_000)
-                        .min(remaining_rpc.saturating_sub(Duration::from_millis(3)))
-                        .min(Duration::from_micros(ttl_rem_us - 3_000))
-                        .min(Duration::from_millis(5));
-                    let (guard, _) = self.wait_cv.wait_timeout(state, slice).unwrap();
+                if let Some(slice) = next_condvar_wait_slice(
+                    remaining_delay_us,
+                    ttl_rem_us,
+                    remaining_rpc,
+                    condvar_cushion_us,
+                ) {
+                    let wait_started = Instant::now();
+                    let (guard, wait_result) = self.wait_cv.wait_timeout(state, slice).unwrap();
                     state = guard;
+                    if wait_result.timed_out() {
+                        condvar_cushion_us = update_condvar_cushion_us(
+                            condvar_cushion_us,
+                            slice,
+                            wait_started.elapsed(),
+                        );
+                    }
                 } else {
-                    // Sub-4ms waits avoid OS condvar tick overshoot while still yielding every <= 250us for pause/release checks.
+                    // Sub-cushion waits avoid OS condvar tick overshoot while still yielding the coordinator lock every <= 250us for pause/release checks.
                     drop(state);
                     let spin_start = Instant::now();
                     while spin_start.elapsed() < Duration::from_micros(250)
@@ -3230,6 +3246,43 @@ impl Drop for HighResTimerGuard {
     }
 }
 
+fn next_condvar_wait_slice(
+    remaining_delay_us: u64,
+    ttl_rem_us: u64,
+    remaining_rpc: Duration,
+    condvar_cushion_us: u64,
+) -> Option<Duration> {
+    let delay_budget_us = remaining_delay_us.checked_sub(condvar_cushion_us)?;
+    let ttl_budget_us = ttl_rem_us.checked_sub(CONTROL_DEADLINE_CUSHION_US)?;
+    let rpc_budget_us = u64::try_from(
+        remaining_rpc
+            .checked_sub(Duration::from_micros(CONTROL_DEADLINE_CUSHION_US))?
+            .as_micros(),
+    )
+    .unwrap_or(u64::MAX);
+    let slice_us = delay_budget_us
+        .min(ttl_budget_us)
+        .min(rpc_budget_us)
+        .min(CONDVAR_SLICE_MAX_US);
+    (slice_us >= MIN_CONDVAR_SLICE_US).then(|| Duration::from_micros(slice_us))
+}
+
+fn update_condvar_cushion_us(
+    current_cushion_us: u64,
+    requested_slice: Duration,
+    actual_elapsed: Duration,
+) -> u64 {
+    let requested_us = u64::try_from(requested_slice.as_micros()).unwrap_or(u64::MAX);
+    let actual_us = u64::try_from(actual_elapsed.as_micros()).unwrap_or(u64::MAX);
+    let overshoot_us = actual_us.saturating_sub(requested_us);
+    if overshoot_us == 0 {
+        return current_cushion_us;
+    }
+    current_cushion_us
+        .max(overshoot_us.saturating_add(CONDVAR_OVERSHOOT_MARGIN_US))
+        .min(MAX_CONDVAR_CUSHION_US)
+}
+
 #[cfg(target_os = "macos")]
 mod macos_qos {
     use std::ffi::c_void;
@@ -3237,15 +3290,34 @@ mod macos_qos {
     pub(super) const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
     #[cfg(test)]
     pub(super) const QOS_CLASS_DEFAULT: u32 = 0x15;
+    pub(super) const THREAD_LATENCY_QOS_POLICY: u32 = 7;
+    const THREAD_LATENCY_QOS_POLICY_COUNT: u32 = 1;
+    pub(super) const LATENCY_QOS_TIER_0: u32 = (0xFF << 16) | 1;
+    const KERN_SUCCESS: i32 = 0;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct ThreadLatencyQosPolicy {
+        thread_latency_qos_tier: u32,
+    }
 
     unsafe extern "C" {
         fn pthread_self() -> *mut c_void;
+        fn pthread_mach_thread_np(thread: *mut c_void) -> u32;
         fn pthread_get_qos_class_np(
             thread: *mut c_void,
             qos_class: *mut u32,
             relative_priority: *mut i32,
         ) -> i32;
         fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
+        fn thread_policy_get(
+            thread: u32,
+            flavor: u32,
+            policy_info: *mut i32,
+            count: *mut u32,
+            get_default: *mut i32,
+        ) -> i32;
+        fn thread_policy_set(thread: u32, flavor: u32, policy_info: *const i32, count: u32) -> i32;
     }
 
     pub(super) fn current_thread_qos() -> Option<(u32, i32)> {
@@ -3260,37 +3332,93 @@ mod macos_qos {
     pub(super) fn set_current_thread_qos(qos_class: u32, rel_prio: i32) -> bool {
         unsafe { pthread_set_qos_class_self_np(qos_class, rel_prio) == 0 }
     }
+
+    pub(super) fn current_latency_qos_tier() -> Option<u32> {
+        let mut policy = ThreadLatencyQosPolicy {
+            thread_latency_qos_tier: 0,
+        };
+        let mut count = THREAD_LATENCY_QOS_POLICY_COUNT;
+        let mut get_default: i32 = 0;
+        let kr = unsafe {
+            let thread = pthread_mach_thread_np(pthread_self());
+            thread_policy_get(
+                thread,
+                THREAD_LATENCY_QOS_POLICY,
+                (&raw mut policy).cast::<i32>(),
+                &raw mut count,
+                &raw mut get_default,
+            )
+        };
+        (kr == KERN_SUCCESS && count == THREAD_LATENCY_QOS_POLICY_COUNT)
+            .then_some(policy.thread_latency_qos_tier)
+    }
+
+    pub(super) fn set_current_latency_qos_tier(tier: u32) -> bool {
+        let policy = ThreadLatencyQosPolicy {
+            thread_latency_qos_tier: tier,
+        };
+        unsafe {
+            let thread = pthread_mach_thread_np(pthread_self());
+            thread_policy_set(
+                thread,
+                THREAD_LATENCY_QOS_POLICY,
+                (&raw const policy).cast::<i32>(),
+                THREAD_LATENCY_QOS_POLICY_COUNT,
+            ) == KERN_SUCCESS
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
 struct HighResTimerGuard {
-    restore: Option<(u32, i32)>,
+    restore_qos: Option<(u32, i32)>,
+    restore_latency: Option<u32>,
 }
 
 #[cfg(target_os = "macos")]
 impl HighResTimerGuard {
     fn new() -> Self {
         let prev = macos_qos::current_thread_qos();
-        if matches!(prev, Some((macos_qos::QOS_CLASS_USER_INTERACTIVE, 0))) {
-            return Self { restore: None };
-        }
-        let ok = macos_qos::set_current_thread_qos(macos_qos::QOS_CLASS_USER_INTERACTIVE, 0);
-        let restore = match prev {
-            Some((prev_class, prev_prio)) if ok && prev_class != 0 => Some((prev_class, prev_prio)),
-            _ => None,
+        let restore_qos = if matches!(prev, Some((macos_qos::QOS_CLASS_USER_INTERACTIVE, 0))) {
+            None
+        } else {
+            let ok = macos_qos::set_current_thread_qos(macos_qos::QOS_CLASS_USER_INTERACTIVE, 0);
+            match prev {
+                Some((prev_class, prev_prio)) if ok && prev_class != 0 => {
+                    Some((prev_class, prev_prio))
+                }
+                _ => None,
+            }
         };
-        Self { restore }
+        let prev_latency = macos_qos::current_latency_qos_tier();
+        let restore_latency = if prev_latency != Some(macos_qos::LATENCY_QOS_TIER_0)
+            && macos_qos::set_current_latency_qos_tier(macos_qos::LATENCY_QOS_TIER_0)
+        {
+            prev_latency
+        } else {
+            None
+        };
+        Self {
+            restore_qos,
+            restore_latency,
+        }
     }
 
     fn disabled() -> Self {
-        Self { restore: None }
+        Self {
+            restore_qos: None,
+            restore_latency: None,
+        }
     }
 }
 
 #[cfg(target_os = "macos")]
 impl Drop for HighResTimerGuard {
     fn drop(&mut self) {
-        if let Some((qos_class, rel_prio)) = self.restore {
+        if let Some(tier) = self.restore_latency {
+            let _ = macos_qos::set_current_latency_qos_tier(tier);
+        }
+        if let Some((qos_class, rel_prio)) = self.restore_qos {
             let _ = macos_qos::set_current_thread_qos(qos_class, rel_prio);
         }
     }
@@ -4451,6 +4579,60 @@ mod tests {
         assert_eq!(status.reason.as_deref(), Some("EMERGENCY_LOCKED"));
     }
 
+    #[test]
+    fn adaptive_condvar_cushion_grows_on_overshoot_and_caps_wait_slices() {
+        let large_rpc = Duration::from_millis(500);
+        assert_eq!(
+            next_condvar_wait_slice(100_000, 100_000, large_rpc, 12_000),
+            Some(Duration::from_millis(5))
+        );
+        assert_eq!(
+            next_condvar_wait_slice(13_000, 100_000, large_rpc, 12_000),
+            Some(Duration::from_millis(1))
+        );
+        assert_eq!(
+            next_condvar_wait_slice(12_999, 100_000, large_rpc, 12_000),
+            None
+        );
+        assert_eq!(
+            next_condvar_wait_slice(100_000, 3_999, large_rpc, 12_000),
+            None
+        );
+        assert_eq!(
+            next_condvar_wait_slice(100_000, 100_000, Duration::from_micros(3_999), 12_000),
+            None
+        );
+        assert_eq!(
+            next_condvar_wait_slice(100_000, 4_500, large_rpc, 25_000),
+            Some(Duration::from_micros(1_500))
+        );
+        assert_eq!(
+            next_condvar_wait_slice(100_000, 100_000, Duration::from_micros(4_200), 25_000),
+            Some(Duration::from_micros(1_200))
+        );
+
+        let initial = 12_000;
+        assert_eq!(
+            update_condvar_cushion_us(initial, Duration::from_millis(5), Duration::from_millis(5)),
+            initial
+        );
+        assert_eq!(
+            update_condvar_cushion_us(initial, Duration::from_millis(5), Duration::from_millis(4)),
+            initial
+        );
+        let grown =
+            update_condvar_cushion_us(initial, Duration::from_millis(5), Duration::from_millis(22));
+        assert_eq!(grown, 17_000 + CONDVAR_OVERSHOOT_MARGIN_US);
+        assert_eq!(
+            update_condvar_cushion_us(grown, Duration::from_millis(5), Duration::from_millis(5)),
+            grown
+        );
+        assert_eq!(
+            update_condvar_cushion_us(grown, Duration::from_millis(5), Duration::from_millis(80)),
+            MAX_CONDVAR_CUSHION_US
+        );
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn macos_high_res_timer_guard_elevates_and_restores_qos() {
@@ -4463,16 +4645,24 @@ mod tests {
                 macos_qos::current_thread_qos().map(|(cls, _)| cls),
                 Some(macos_qos::QOS_CLASS_DEFAULT)
             );
+            let initial_latency = macos_qos::current_latency_qos_tier();
             let guard = HighResTimerGuard::new();
             assert_eq!(
                 macos_qos::current_thread_qos().map(|(cls, _)| cls),
                 Some(macos_qos::QOS_CLASS_USER_INTERACTIVE)
             );
+            if guard.restore_latency.is_some() {
+                assert_eq!(
+                    macos_qos::current_latency_qos_tier(),
+                    Some(macos_qos::LATENCY_QOS_TIER_0)
+                );
+            }
             drop(guard);
             assert_eq!(
                 macos_qos::current_thread_qos().map(|(cls, _)| cls),
                 Some(macos_qos::QOS_CLASS_DEFAULT)
             );
+            assert_eq!(macos_qos::current_latency_qos_tier(), initial_latency);
         })
         .join()
         .unwrap();
