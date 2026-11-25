@@ -661,7 +661,7 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
                 "id": "mux-long-text",
                 "title": "并发多路复用测试",
                 "action": "keyboard.text",
-                "params": {"target": "main", "text": "abcdefgh", "intervalMs": 150},
+                "params": {"target": "main", "text": "ab", "intervalMs": 450},
                 "on": {},
             }
             long_hash = compute_segment_payload_hash("target-win-a", op_long)
@@ -690,7 +690,7 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
                         break
                 except DeskWeaveError:
                     pass
-                time.sleep(0.02)
+                time.sleep(0.01)
             mux_renew = first.lease_renew(lease_a, gen_a)
             self.assertEqual(mux_renew["leaseId"], lease_a)
             mux_pause = first.lease_pause(lease_a, gen_a)
@@ -703,6 +703,7 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
             self.assertEqual(mux_seg["pauseId"], mux_pause["pauseSnapshot"]["pauseId"])
 
             mux_snap = mux_pause["pauseSnapshot"]
+            self.assertIsNotNone(mux_snap["cursor"])
             mux_plan_hash = "b" * 64
             mux_grant = first.register_resume_confirmation(
                 lease_id=lease_a,

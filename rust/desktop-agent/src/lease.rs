@@ -3230,10 +3230,76 @@ impl Drop for HighResTimerGuard {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+mod macos_qos {
+    use std::ffi::c_void;
+
+    pub(super) const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
+    #[cfg(test)]
+    pub(super) const QOS_CLASS_DEFAULT: u32 = 0x15;
+
+    unsafe extern "C" {
+        fn pthread_self() -> *mut c_void;
+        fn pthread_get_qos_class_np(
+            thread: *mut c_void,
+            qos_class: *mut u32,
+            relative_priority: *mut i32,
+        ) -> i32;
+        fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
+    }
+
+    pub(super) fn current_thread_qos() -> Option<(u32, i32)> {
+        let mut qos_class: u32 = 0;
+        let mut rel_prio: i32 = 0;
+        let ok = unsafe {
+            pthread_get_qos_class_np(pthread_self(), &raw mut qos_class, &raw mut rel_prio)
+        } == 0;
+        ok.then_some((qos_class, rel_prio))
+    }
+
+    pub(super) fn set_current_thread_qos(qos_class: u32, rel_prio: i32) -> bool {
+        unsafe { pthread_set_qos_class_self_np(qos_class, rel_prio) == 0 }
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct HighResTimerGuard {
+    restore: Option<(u32, i32)>,
+}
+
+#[cfg(target_os = "macos")]
+impl HighResTimerGuard {
+    fn new() -> Self {
+        let prev = macos_qos::current_thread_qos();
+        if matches!(prev, Some((macos_qos::QOS_CLASS_USER_INTERACTIVE, 0))) {
+            return Self { restore: None };
+        }
+        let ok = macos_qos::set_current_thread_qos(macos_qos::QOS_CLASS_USER_INTERACTIVE, 0);
+        let restore = match prev {
+            Some((prev_class, prev_prio)) if ok && prev_class != 0 => Some((prev_class, prev_prio)),
+            _ => None,
+        };
+        Self { restore }
+    }
+
+    fn disabled() -> Self {
+        Self { restore: None }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for HighResTimerGuard {
+    fn drop(&mut self) {
+        if let Some((qos_class, rel_prio)) = self.restore {
+            let _ = macos_qos::set_current_thread_qos(qos_class, rel_prio);
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 struct HighResTimerGuard;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl HighResTimerGuard {
     fn new() -> Self {
         Self
@@ -4383,5 +4449,32 @@ mod tests {
             .unwrap();
         assert_eq!(status.state, LeaseState::Released);
         assert_eq!(status.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_high_res_timer_guard_elevates_and_restores_qos() {
+        std::thread::spawn(|| {
+            assert!(macos_qos::set_current_thread_qos(
+                macos_qos::QOS_CLASS_DEFAULT,
+                0,
+            ));
+            assert_eq!(
+                macos_qos::current_thread_qos().map(|(cls, _)| cls),
+                Some(macos_qos::QOS_CLASS_DEFAULT)
+            );
+            let guard = HighResTimerGuard::new();
+            assert_eq!(
+                macos_qos::current_thread_qos().map(|(cls, _)| cls),
+                Some(macos_qos::QOS_CLASS_USER_INTERACTIVE)
+            );
+            drop(guard);
+            assert_eq!(
+                macos_qos::current_thread_qos().map(|(cls, _)| cls),
+                Some(macos_qos::QOS_CLASS_DEFAULT)
+            );
+        })
+        .join()
+        .unwrap();
     }
 }
