@@ -53,8 +53,21 @@ pub(crate) struct SessionContext {
 struct ServerState {
     active_sessions: usize,
     total_connections: usize,
+    attached_threads: usize,
     draining: bool,
     idle_since: Option<Instant>,
+}
+
+struct AttachedThreadGuard {
+    shared: Arc<Shared>,
+}
+
+impl Drop for AttachedThreadGuard {
+    fn drop(&mut self) {
+        let mut state = self.shared.state.lock().unwrap();
+        state.attached_threads -= 1;
+        self.shared.changed.notify_all();
+    }
 }
 
 struct Shared {
@@ -620,6 +633,7 @@ pub(crate) fn serve_session<S: SessionStream + 'static>(
         is_draining,
         frame_read_timeout,
         stop,
+        None,
     )
 }
 
@@ -633,6 +647,7 @@ fn serve_session_with_coordinator<S: SessionStream + 'static>(
     is_draining: Arc<dyn Fn() -> bool + Send + Sync>,
     frame_read_timeout: Duration,
     stop: &StopSignal,
+    slot: Option<ConnectionSlot>,
 ) -> io::Result<()> {
     let session_stop = stop.child()?;
     let (mut reader, writer) = stream.split()?;
@@ -834,6 +849,9 @@ fn serve_session_with_coordinator<S: SessionStream + 'static>(
         let _ = handle.join();
     }
     leases.on_session_closed(&ctx.session_id, desktop.as_ref());
+    drop(slot);
+    drop(reader);
+    drop(writer);
     loop_result
 }
 
@@ -876,6 +894,7 @@ fn verify_attach(
 }
 
 fn handle_attached<S: SessionStream + 'static>(
+    _thread_guard: AttachedThreadGuard,
     mut stream: S,
     peer_pid: u32,
     shared: Arc<Shared>,
@@ -953,10 +972,8 @@ fn handle_attached<S: SessionStream + 'static>(
         Arc::new(move || drain_shared.is_draining()),
         shared.config.frame_read_timeout,
         &shared.stop,
+        Some(slot),
     );
-    shared
-        .leases
-        .on_session_closed(&ctx.session_id, shared.config.desktop.as_ref());
 }
 
 pub(crate) fn run<S: SessionStream + 'static, L: SessionListener + 'static>(
@@ -989,6 +1006,7 @@ fn run_with_leases<S: SessionStream + 'static, L: SessionListener + 'static>(
         state: Mutex::new(ServerState {
             active_sessions: 1,
             total_connections: 1,
+            attached_threads: 0,
             draining: false,
             idle_since: None,
         }),
@@ -1003,7 +1021,6 @@ fn run_with_leases<S: SessionStream + 'static, L: SessionListener + 'static>(
         authenticated: true,
     };
     let initial_handle = thread::Builder::new().spawn(move || {
-        let _slot = initial_slot;
         let authority = ConfirmationAuthority::from_config(&initial_shared.config);
         let drain_shared = Arc::clone(&initial_shared);
         let _ = serve_session_with_coordinator(
@@ -1015,10 +1032,7 @@ fn run_with_leases<S: SessionStream + 'static, L: SessionListener + 'static>(
             Arc::new(move || drain_shared.is_draining()),
             initial_shared.config.frame_read_timeout,
             &initial_shared.stop,
-        );
-        initial_shared.leases.on_session_closed(
-            &initial_session.session_id,
-            initial_shared.config.desktop.as_ref(),
+            Some(initial_slot),
         );
     })?;
 
@@ -1044,20 +1058,27 @@ fn run_with_leases<S: SessionStream + 'static, L: SessionListener + 'static>(
                 Ok(accepted) => accepted,
                 Err(_) => break,
             };
-            let slot = {
+            let (slot, thread_guard) = {
                 let mut state = accept_shared.state.lock().unwrap();
                 if state.draining || state.total_connections >= accept_shared.config.max_clients {
                     continue;
                 }
                 state.total_connections += 1;
-                ConnectionSlot {
-                    shared: Arc::clone(&accept_shared),
-                    authenticated: false,
-                }
+                state.attached_threads += 1;
+                (
+                    ConnectionSlot {
+                        shared: Arc::clone(&accept_shared),
+                        authenticated: false,
+                    },
+                    AttachedThreadGuard {
+                        shared: Arc::clone(&accept_shared),
+                    },
+                )
             };
             let worker_shared = Arc::clone(&accept_shared);
-            let _ = thread::Builder::new()
-                .spawn(move || handle_attached(stream, peer_pid, worker_shared, slot));
+            let _ = thread::Builder::new().spawn(move || {
+                handle_attached(thread_guard, stream, peer_pid, worker_shared, slot)
+            });
         }
         drop(listener);
     }) {
@@ -1097,7 +1118,7 @@ fn run_with_leases<S: SessionStream + 'static, L: SessionListener + 'static>(
     let _ = initial_handle.join();
 
     let mut state = shared.state.lock().unwrap();
-    while state.total_connections > 0 {
+    while state.total_connections > 0 || state.attached_threads > 0 {
         state = shared.changed.wait(state).unwrap();
     }
     Ok(())
@@ -1852,6 +1873,49 @@ mod tests {
         drop(client_hdr);
         drop(client_body);
         drop(client_ok);
+        drop(client_idle);
+        server_thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn slot_is_released_before_peer_observes_session_eof() {
+        let key = SigningKey::from_bytes(&[0x5a; 32]);
+        let (server_init, client_idle) = MemStream::pair();
+        let (tx, rx) = mpsc::channel();
+        let stop = StopSignal::new().unwrap();
+        let client_stop = StopSignal::new().unwrap();
+        let desktop = fake_desktop(Err(PlatformError::capability_not_implemented("none")));
+        let config = test_config(&key, Duration::from_millis(250), 2, desktop);
+        let server_thread = thread::spawn(move || {
+            run(server_init, initial_ctx(), MemListener { rx }, config, stop)
+        });
+
+        for i in 0..20_u32 {
+            let (server_conn, mut client_conn) = MemStream::pair();
+            tx.send((server_conn, 3100 + i)).unwrap();
+            client_attach(
+                &mut client_conn,
+                &key,
+                3100 + i,
+                &format!("ws-slot-{i}"),
+                ["1", "2"],
+                &client_stop,
+            )
+            .unwrap();
+            client_conn
+                .write_chunk(b"\x02\x00\x00\x00{}", None, &client_stop)
+                .unwrap();
+            let mut probe = [0_u8; 1];
+            let closed = client_conn
+                .read_chunk(
+                    &mut probe,
+                    Some(Instant::now() + Duration::from_secs(2)),
+                    &client_stop,
+                )
+                .unwrap();
+            assert_eq!(closed, 0);
+        }
+
         drop(client_idle);
         server_thread.join().unwrap().unwrap();
     }
