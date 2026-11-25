@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -33,11 +33,13 @@ const MAX_REGISTERED_CONFIRMATIONS: usize = 256;
 const MAX_SINGLE_LATENESS_US: u64 = 20_000;
 const MIN_CUMULATIVE_SHIFT_US: u64 = 50_000;
 #[cfg(target_os = "macos")]
-const BASE_CONDVAR_CUSHION_US: u64 = 12_000;
+const BASE_CONDVAR_CUSHION_US: u64 = 25_000;
 #[cfg(not(target_os = "macos"))]
 const BASE_CONDVAR_CUSHION_US: u64 = 3_000;
-const MAX_CONDVAR_CUSHION_US: u64 = 35_000;
+const MAX_CONDVAR_CUSHION_US: u64 = 50_000;
 const CONDVAR_OVERSHOOT_MARGIN_US: u64 = 4_000;
+const CLEAN_WAIT_OVERSHOOT_US: u64 = 1_000;
+const CONDVAR_CUSHION_DECAY_US: u64 = 50;
 const CONDVAR_SLICE_MAX_US: u64 = 5_000;
 const MIN_CONDVAR_SLICE_US: u64 = 1_000;
 const CONTROL_DEADLINE_CUSHION_US: u64 = 3_000;
@@ -348,6 +350,7 @@ fn ensure_receipt_capacity<K: Ord, V>(
 pub(crate) struct LeaseCoordinator {
     state: Mutex<CoordinatorState>,
     wait_cv: Condvar,
+    condvar_cushion_us: AtomicU64,
 }
 
 impl LeaseCoordinator {
@@ -374,6 +377,7 @@ impl LeaseCoordinator {
                 segment_receipts_order: VecDeque::new(),
             }),
             wait_cv: Condvar::new(),
+            condvar_cushion_us: AtomicU64::new(BASE_CONDVAR_CUSHION_US),
         }
     }
 
@@ -2089,7 +2093,7 @@ impl LeaseCoordinator {
         let mut next_deadline_us: u64 = 0;
         let mut cumulative_shift_us = run.prior_cumulative_shift_us;
         let max_cumulative_shift_us = MIN_CUMULATIVE_SHIFT_US.max(run.original_duration_us / 50);
-        let mut condvar_cushion_us = BASE_CONDVAR_CUSHION_US;
+        let mut condvar_cushion_us = self.condvar_cushion_us.load(Ordering::Relaxed);
 
         let active_elapsed_now = |wall_start: &Instant, clock_start_us: u64| {
             let cur = desktop
@@ -2274,11 +2278,16 @@ impl LeaseCoordinator {
                     let (guard, wait_result) = self.wait_cv.wait_timeout(state, slice).unwrap();
                     state = guard;
                     if wait_result.timed_out() {
-                        condvar_cushion_us = update_condvar_cushion_us(
+                        let next_cushion_us = update_condvar_cushion_us(
                             condvar_cushion_us,
                             slice,
                             wait_started.elapsed(),
                         );
+                        if next_cushion_us != condvar_cushion_us {
+                            condvar_cushion_us = next_cushion_us;
+                            self.condvar_cushion_us
+                                .store(next_cushion_us, Ordering::Relaxed);
+                        }
                     }
                 } else {
                     // Sub-cushion waits avoid OS condvar tick overshoot while still yielding the coordinator lock every <= 250us for pause/release checks.
@@ -3275,12 +3284,20 @@ fn update_condvar_cushion_us(
     let requested_us = u64::try_from(requested_slice.as_micros()).unwrap_or(u64::MAX);
     let actual_us = u64::try_from(actual_elapsed.as_micros()).unwrap_or(u64::MAX);
     let overshoot_us = actual_us.saturating_sub(requested_us);
-    if overshoot_us == 0 {
-        return current_cushion_us;
+    if overshoot_us > 0 {
+        let target = overshoot_us
+            .saturating_add(CONDVAR_OVERSHOOT_MARGIN_US)
+            .min(MAX_CONDVAR_CUSHION_US);
+        if target > current_cushion_us {
+            return target;
+        }
+    }
+    if overshoot_us <= CLEAN_WAIT_OVERSHOOT_US && current_cushion_us > BASE_CONDVAR_CUSHION_US {
+        return current_cushion_us
+            .saturating_sub(CONDVAR_CUSHION_DECAY_US)
+            .max(BASE_CONDVAR_CUSHION_US);
     }
     current_cushion_us
-        .max(overshoot_us.saturating_add(CONDVAR_OVERSHOOT_MARGIN_US))
-        .min(MAX_CONDVAR_CUSHION_US)
 }
 
 #[cfg(target_os = "macos")]
@@ -4508,23 +4525,23 @@ mod tests {
     fn adaptive_condvar_cushion_grows_on_overshoot_and_caps_wait_slices() {
         let large_rpc = Duration::from_millis(500);
         assert_eq!(
-            next_condvar_wait_slice(100_000, 100_000, large_rpc, 12_000),
+            next_condvar_wait_slice(100_000, 100_000, large_rpc, 25_000),
             Some(Duration::from_millis(5))
         );
         assert_eq!(
-            next_condvar_wait_slice(13_000, 100_000, large_rpc, 12_000),
+            next_condvar_wait_slice(26_000, 100_000, large_rpc, 25_000),
             Some(Duration::from_millis(1))
         );
         assert_eq!(
-            next_condvar_wait_slice(12_999, 100_000, large_rpc, 12_000),
+            next_condvar_wait_slice(20_000, 100_000, large_rpc, 25_000),
             None
         );
         assert_eq!(
-            next_condvar_wait_slice(100_000, 3_999, large_rpc, 12_000),
+            next_condvar_wait_slice(100_000, 3_999, large_rpc, 25_000),
             None
         );
         assert_eq!(
-            next_condvar_wait_slice(100_000, 100_000, Duration::from_micros(3_999), 12_000),
+            next_condvar_wait_slice(100_000, 100_000, Duration::from_micros(3_999), 25_000),
             None
         );
         assert_eq!(
@@ -4536,7 +4553,7 @@ mod tests {
             Some(Duration::from_micros(1_200))
         );
 
-        let initial = 12_000;
+        let initial = BASE_CONDVAR_CUSHION_US;
         assert_eq!(
             update_condvar_cushion_us(initial, Duration::from_millis(5), Duration::from_millis(5)),
             initial
@@ -4545,15 +4562,44 @@ mod tests {
             update_condvar_cushion_us(initial, Duration::from_millis(5), Duration::from_millis(4)),
             initial
         );
+
         let grown =
-            update_condvar_cushion_us(initial, Duration::from_millis(5), Duration::from_millis(22));
-        assert_eq!(grown, 17_000 + CONDVAR_OVERSHOOT_MARGIN_US);
+            update_condvar_cushion_us(initial, Duration::from_millis(5), Duration::from_millis(35));
+        assert_eq!(grown, 30_000 + CONDVAR_OVERSHOOT_MARGIN_US);
+
+        let decayed =
+            update_condvar_cushion_us(grown, Duration::from_millis(5), Duration::from_millis(5));
+        assert_eq!(decayed, grown - CONDVAR_CUSHION_DECAY_US);
+
+        // Clean wakeups up to CLEAN_WAIT_OVERSHOOT_US (1_000us) also decay gently when above baseline.
+        let decayed_at_limit =
+            update_condvar_cushion_us(decayed, Duration::from_millis(5), Duration::from_millis(6));
+        assert_eq!(decayed_at_limit, decayed - CONDVAR_CUSHION_DECAY_US);
+
+        // Moderate overshoot (> 1_000us) whose target <= current holds steady without decaying.
         assert_eq!(
-            update_condvar_cushion_us(grown, Duration::from_millis(5), Duration::from_millis(5)),
-            grown
+            update_condvar_cushion_us(
+                decayed_at_limit,
+                Duration::from_millis(5),
+                Duration::from_millis(7)
+            ),
+            decayed_at_limit
+        );
+        // Clean wakeups never decay below BASE_CONDVAR_CUSHION_US.
+        assert_eq!(
+            update_condvar_cushion_us(
+                BASE_CONDVAR_CUSHION_US + 20,
+                Duration::from_millis(5),
+                Duration::from_millis(5)
+            ),
+            BASE_CONDVAR_CUSHION_US
         );
         assert_eq!(
-            update_condvar_cushion_us(grown, Duration::from_millis(5), Duration::from_millis(80)),
+            update_condvar_cushion_us(
+                decayed_at_limit,
+                Duration::from_millis(5),
+                Duration::from_millis(80)
+            ),
             MAX_CONDVAR_CUSHION_US
         );
     }

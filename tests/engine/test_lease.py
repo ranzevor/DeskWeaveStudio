@@ -460,7 +460,12 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
             seg_chord = first.segment_submit(
                 lease_a, gen_a, "seg-chord-1", "target-win-a", op_chord
             )
-            self.assertEqual(seg_chord["state"], "sent")
+            if seg_chord["state"] != "sent":
+                self.assertEqual(
+                    seg_chord["state"],
+                    "sent",
+                    (seg_chord, first.lease_status(lease_a)),
+                )
 
             # Residual $expr in segment.submit is rejected with INVALID_ARGUMENT.
             invalid_expr = loads((_INVALID_EXAMPLES / "agent-expression.json").read_bytes())
