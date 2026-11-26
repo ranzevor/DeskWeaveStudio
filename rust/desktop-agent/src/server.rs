@@ -2474,11 +2474,11 @@ mod tests {
         assert_eq!(
             fake.released_batches().last().unwrap(),
             &vec![
-                HeldInput::Button {
-                    button: PointerButton::Left
-                },
                 HeldInput::Key {
                     key: "ShiftLeft".to_owned()
+                },
+                HeldInput::Button {
+                    button: PointerButton::Left
                 }
             ]
         );
@@ -2788,6 +2788,7 @@ mod tests {
     }
 
     type SubmitGate = (usize, mpsc::Sender<()>, mpsc::Receiver<()>);
+    type PointerOverride = Option<Result<deskweave_platform_api::PausePoint, PlatformError>>;
 
     struct ScriptedDesktop {
         inner: FakeDesktopSession,
@@ -2795,9 +2796,12 @@ mod tests {
         verify_outcomes: Mutex<VecDeque<Result<TargetStatus, PlatformError>>>,
         bind_overrides: Mutex<VecDeque<Result<TargetDescriptor, PlatformError>>>,
         target_version_override: Mutex<Option<Result<Option<String>, PlatformError>>>,
+        pointer_override: Mutex<PointerOverride>,
+        pointer_after_submit: Mutex<PointerOverride>,
         submit_count: Mutex<usize>,
         submit_notify: Mutex<Option<(usize, mpsc::Sender<usize>)>>,
         submit_gate: Mutex<Option<SubmitGate>>,
+        panic_on_submit: Mutex<Option<usize>>,
     }
 
     impl ScriptedDesktop {
@@ -2808,9 +2812,12 @@ mod tests {
                 verify_outcomes: Mutex::new(VecDeque::new()),
                 bind_overrides: Mutex::new(VecDeque::new()),
                 target_version_override: Mutex::new(None),
+                pointer_override: Mutex::new(None),
+                pointer_after_submit: Mutex::new(None),
                 submit_count: Mutex::new(0),
                 submit_notify: Mutex::new(None),
                 submit_gate: Mutex::new(None),
+                panic_on_submit: Mutex::new(None),
             }
         }
 
@@ -2833,6 +2840,14 @@ mod tests {
             *self.target_version_override.lock().unwrap() = override_res;
         }
 
+        fn set_pointer_override(&self, override_res: PointerOverride) {
+            *self.pointer_override.lock().unwrap() = override_res;
+        }
+
+        fn set_pointer_after_submit(&self, override_res: PointerOverride) {
+            *self.pointer_after_submit.lock().unwrap() = override_res;
+        }
+
         fn notify_submit_after(&self, count: usize, tx: mpsc::Sender<usize>) {
             *self.submit_count.lock().unwrap() = 0;
             *self.submit_notify.lock().unwrap() = Some((count, tx));
@@ -2844,6 +2859,11 @@ mod tests {
             *self.submit_count.lock().unwrap() = 0;
             *self.submit_gate.lock().unwrap() = Some((count, entered_tx, release_rx));
             (entered_rx, release_tx)
+        }
+
+        fn panic_on_submit_number(&self, count: usize) {
+            *self.submit_count.lock().unwrap() = 0;
+            *self.panic_on_submit.lock().unwrap() = Some(count);
         }
     }
 
@@ -2873,6 +2893,9 @@ mod tests {
         }
 
         fn pointer_position(&self) -> Result<deskweave_platform_api::PausePoint, PlatformError> {
+            if let Some(ref override_res) = *self.pointer_override.lock().unwrap() {
+                return override_res.clone();
+            }
             self.inner.pointer_position()
         }
 
@@ -2976,11 +2999,28 @@ mod tests {
                 let _ = entered_tx.send(());
                 let _ = release_rx.recv();
             }
+            let should_panic = {
+                let mut guard = self.panic_on_submit.lock().unwrap();
+                if guard.as_ref().is_some_and(|&target| target == current) {
+                    guard.take();
+                    true
+                } else {
+                    false
+                }
+            };
+            if should_panic {
+                panic!("simulated native driver panic during submit_event");
+            }
             let scripted = self.submit_outcomes.lock().unwrap().pop_front();
             let outcome = match scripted {
                 Some(res) => res,
                 None => self.inner.emitter().submit_event(token, action),
             };
+            if matches!(outcome, Ok(SubmissionOutcome::Submitted))
+                && let Some(next_ptr) = self.pointer_after_submit.lock().unwrap().take()
+            {
+                *self.pointer_override.lock().unwrap() = Some(next_ptr);
+            }
             if let Some((target_cnt, ref tx)) = *self.submit_notify.lock().unwrap()
                 && current == target_cnt
             {
@@ -3223,7 +3263,7 @@ mod tests {
             .unwrap();
         assert_eq!(resumed.state, LeaseState::Active);
 
-        // Hold a second key so held_inputs = [ControlLeft, ShiftLeft], pause, verify consumed grant cannot be reused.
+        // Hold a second key so held_inputs preserves press order [ShiftLeft, ControlLeft], pause, verify consumed grant cannot be reused.
         let hold_ctrl = json!({
             "id": "hold-ctrl",
             "title": "按住 Control",
@@ -3321,10 +3361,10 @@ mod tests {
             scripted.inner.released_batches().last().unwrap(),
             &vec![
                 HeldInput::Key {
-                    key: "ControlLeft".to_owned()
+                    key: "ShiftLeft".to_owned()
                 },
                 HeldInput::Key {
-                    key: "ShiftLeft".to_owned()
+                    key: "ControlLeft".to_owned()
                 }
             ]
         );
@@ -7226,6 +7266,42 @@ mod tests {
             .unwrap();
         assert_eq!(st1.state, LeaseState::Paused);
         assert_eq!(st1.reason.as_deref(), Some("TARGET_LOST"));
+        let snap1 = st1.pause_snapshot.unwrap();
+        assert_eq!(snap1.targets[0].target_version, "1");
+        let plan_hash_tv = "a".repeat(64);
+        leases
+            .register_confirmation(
+                "grant-tv-drift",
+                crate::lease::RegisteredConfirmation {
+                    owner_workspace: "ws-ver".to_owned(),
+                    lease_id: acq1.lease_id.clone(),
+                    pause_id: snap1.pause_id.clone(),
+                    agent_epoch: ctx.agent_epoch.clone(),
+                    generation: acq1.generation,
+                    checkpoint_hash: snap1.checkpoint_hash,
+                    resume_plan_hash: plan_hash_tv.clone(),
+                    restore_target_token: Some("target-a".to_owned()),
+                    pointer_to_restore: None,
+                    expires_at_us: u64::MAX,
+                },
+            )
+            .unwrap();
+        let tv_resume_err = leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq1.lease_id,
+                    "generation": acq1.generation,
+                    "pauseId": snap1.pause_id,
+                    "resumeAttemptId": "att-tv-drift",
+                    "resumePlanHash": plan_hash_tv,
+                    "confirmationGrant": "grant-tv-drift"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(tv_resume_err.code, "TARGET_LOST");
         assert_eq!(
             scripted.inner.released_batches().last().unwrap(),
             &vec![HeldInput::Key {
@@ -7314,6 +7390,7 @@ mod tests {
             })
         };
         entered2.recv().unwrap();
+        let base_topo_ver = base_topo.version().to_string();
         let mut topo_bumped = base_topo;
         match &mut topo_bumped {
             DisplayTopology::Physical(p) => p.version += 1,
@@ -7331,6 +7408,42 @@ mod tests {
             )
             .unwrap();
         assert_eq!(st2.reason.as_deref(), Some("TOPOLOGY_CHANGED"));
+        let snap2 = st2.pause_snapshot.unwrap();
+        assert_eq!(snap2.targets[0].topology_version, base_topo_ver);
+        let plan_hash_topo = "b".repeat(64);
+        leases
+            .register_confirmation(
+                "grant-topo-drift",
+                crate::lease::RegisteredConfirmation {
+                    owner_workspace: "ws-ver".to_owned(),
+                    lease_id: acq2.lease_id.clone(),
+                    pause_id: snap2.pause_id.clone(),
+                    agent_epoch: ctx.agent_epoch.clone(),
+                    generation: acq2.generation,
+                    checkpoint_hash: snap2.checkpoint_hash,
+                    resume_plan_hash: plan_hash_topo.clone(),
+                    restore_target_token: Some("target-a".to_owned()),
+                    pointer_to_restore: None,
+                    expires_at_us: u64::MAX,
+                },
+            )
+            .unwrap();
+        let topo_resume_err = leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq2.lease_id,
+                    "generation": acq2.generation,
+                    "pauseId": snap2.pause_id,
+                    "resumeAttemptId": "att-topo-drift",
+                    "resumePlanHash": plan_hash_topo,
+                    "confirmationGrant": "grant-topo-drift"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(topo_resume_err.code, "TARGET_LOST");
         assert_eq!(
             scripted.inner.released_batches().last().unwrap(),
             &vec![HeldInput::Key {
@@ -8819,5 +8932,910 @@ mod tests {
             .unwrap();
         assert_eq!(st2.state, LeaseState::Released);
         assert_eq!(st2.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+    }
+
+    #[test]
+    fn resume_restoration_enforces_expiry_and_allows_concurrent_renew() {
+        use deskweave_platform_api::{HeldInput, LeaseState, compute_segment_payload_hash};
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases = Arc::new(LeaseCoordinator::new());
+        let ctx = make_ctx("sess-res-exp", "ws-res-exp");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+
+        // Subcase A: Expiry mid-restoration stops before next key, cleans up restored key, revokes lease.
+        let acq1 = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-res-exp", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        for (seg_id, key) in [("seg-re-1", "ControlLeft"), ("seg-re-2", "ShiftLeft")] {
+            let op = json!({
+                "id": seg_id,
+                "title": "恢复期限测试按住键",
+                "action": "keyboard.down",
+                "params": {"target": "main", "key": key},
+                "on": {}
+            });
+            let ph = compute_segment_payload_hash("target-a", &op, None).unwrap();
+            leases
+                .handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": acq1.lease_id,
+                        "generation": acq1.generation,
+                        "segmentId": seg_id,
+                        "payloadHash": ph,
+                        "targetToken": "target-a",
+                        "operation": op
+                    })),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap();
+        }
+        let paused1 = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq1.lease_id, "generation": acq1.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let snap1 = paused1.pause_snapshot.unwrap();
+        let plan_h1 = "c".repeat(64);
+        leases
+            .register_confirmation(
+                "grant-res-exp-1",
+                crate::lease::RegisteredConfirmation {
+                    owner_workspace: "ws-res-exp".to_owned(),
+                    lease_id: acq1.lease_id.clone(),
+                    pause_id: snap1.pause_id.clone(),
+                    agent_epoch: ctx.agent_epoch.clone(),
+                    generation: acq1.generation,
+                    checkpoint_hash: snap1.checkpoint_hash,
+                    resume_plan_hash: plan_h1.clone(),
+                    restore_target_token: Some("target-a".to_owned()),
+                    pointer_to_restore: None,
+                    expires_at_us: u64::MAX,
+                },
+            )
+            .unwrap();
+
+        let (entered1, release1) = scripted.gate_submit_on(1);
+        let h_res1 = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let c = ctx.clone();
+            let lid = acq1.lease_id.clone();
+            let lg = acq1.generation;
+            let pid = snap1.pause_id;
+            let ph = plan_h1;
+            thread::spawn(move || {
+                l.handle_lease_resume(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lg,
+                        "pauseId": pid,
+                        "resumeAttemptId": "att-res-exp-1",
+                        "resumePlanHash": ph,
+                        "confirmationGrant": "grant-res-exp-1"
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        entered1.recv().unwrap();
+        let before_count = scripted.inner.submitted_actions().len();
+        scripted
+            .inner
+            .fake_clock()
+            .advance_us(crate::lease::LEASE_TTL_US);
+        release1.send(()).unwrap();
+        let exp_err = h_res1.join().unwrap().unwrap_err();
+        assert_eq!(exp_err.code, "LEASE_EXPIRED");
+        let after_actions: Vec<NativeInputAction> = scripted
+            .inner
+            .submitted_actions()
+            .into_iter()
+            .skip(before_count)
+            .map(|(_, a)| a)
+            .collect();
+        assert_eq!(
+            after_actions,
+            vec![NativeInputAction::KeyDown("ControlLeft".to_owned())]
+        );
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ControlLeft".to_owned()
+            }]
+        );
+        let st_exp = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq1.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_exp.state, LeaseState::Released);
+        assert_eq!(st_exp.reason.as_deref(), Some("LEASE_EXPIRED"));
+
+        // Subcase B: Concurrent lease.renew succeeds while restoration mutex is released, extending past initial TTL.
+        let acq2 = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-res-renew", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        for (seg_id, key) in [("seg-rn-1", "ControlLeft"), ("seg-rn-2", "ShiftLeft")] {
+            let op = json!({
+                "id": seg_id,
+                "title": "并发续期按住键",
+                "action": "keyboard.down",
+                "params": {"target": "main", "key": key},
+                "on": {}
+            });
+            let ph = compute_segment_payload_hash("target-a", &op, None).unwrap();
+            leases
+                .handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": acq2.lease_id,
+                        "generation": acq2.generation,
+                        "segmentId": seg_id,
+                        "payloadHash": ph,
+                        "targetToken": "target-a",
+                        "operation": op
+                    })),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap();
+        }
+        let paused2 = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq2.lease_id, "generation": acq2.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let snap2 = paused2.pause_snapshot.unwrap();
+        let plan_h2 = "d".repeat(64);
+        leases
+            .register_confirmation(
+                "grant-res-renew-2",
+                crate::lease::RegisteredConfirmation {
+                    owner_workspace: "ws-res-exp".to_owned(),
+                    lease_id: acq2.lease_id.clone(),
+                    pause_id: snap2.pause_id.clone(),
+                    agent_epoch: ctx.agent_epoch.clone(),
+                    generation: acq2.generation,
+                    checkpoint_hash: snap2.checkpoint_hash,
+                    resume_plan_hash: plan_h2.clone(),
+                    restore_target_token: Some("target-a".to_owned()),
+                    pointer_to_restore: None,
+                    expires_at_us: u64::MAX,
+                },
+            )
+            .unwrap();
+        let (entered2, release2) = scripted.gate_submit_on(1);
+        let h_res2 = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let c = ctx.clone();
+            let lid = acq2.lease_id.clone();
+            let lg = acq2.generation;
+            let pid = snap2.pause_id;
+            let ph = plan_h2;
+            thread::spawn(move || {
+                l.handle_lease_resume(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lg,
+                        "pauseId": pid,
+                        "resumeAttemptId": "att-res-renew-2",
+                        "resumePlanHash": ph,
+                        "confirmationGrant": "grant-res-renew-2"
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        entered2.recv().unwrap();
+        scripted.inner.fake_clock().advance_us(1_500_000);
+        let renewed = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq2.lease_id, "generation": acq2.generation})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(renewed.lease_id, acq2.lease_id);
+        scripted.inner.fake_clock().advance_us(1_000_000);
+        release2.send(()).unwrap();
+        let resumed2 = h_res2.join().unwrap().unwrap();
+        assert_eq!(resumed2.state, LeaseState::Active);
+    }
+
+    #[test]
+    fn cursor_only_pause_resumes_directly_without_confirmation_grant() {
+        use deskweave_platform_api::{LeaseState, SegmentState, compute_segment_payload_hash};
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases = Arc::new(LeaseCoordinator::new());
+        let ctx = make_ctx("sess-cur", "ws-cur");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        let acq = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-cur", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+
+        let txt = json!({
+            "id": "cur-txt",
+            "title": "纯游标无确认继续",
+            "action": "keyboard.text",
+            "params": {"target": "main", "text": "xy", "intervalMs": 150},
+            "on": {}
+        });
+        let h_txt = compute_segment_payload_hash("target-a", &txt, None).unwrap();
+        let (sub_tx, sub_rx) = mpsc::channel();
+        scripted.notify_submit_after(1, sub_tx);
+        let h_seg = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let c = ctx.clone();
+            let lid = acq.lease_id.clone();
+            let lg = acq.generation;
+            thread::spawn(move || {
+                l.handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lg,
+                        "segmentId": "seg-cur-txt",
+                        "payloadHash": h_txt,
+                        "targetToken": "target-a",
+                        "operation": txt
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        sub_rx.recv().unwrap();
+        let paused = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(h_seg.join().unwrap().unwrap().state, SegmentState::Paused);
+        let snap = paused.pause_snapshot.unwrap();
+        assert!(snap.cursor.is_some());
+        assert!(snap.held_inputs.is_empty());
+
+        // Without confirmationGrant: unfocused target fails with TARGET_LOST (no focus hijack).
+        scripted
+            .inner
+            .set_target_status("target-a", TargetStatus::Unfocused);
+        let unfocused_err = leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "pauseId": snap.pause_id,
+                    "resumeAttemptId": "att-cur-unfocus",
+                    "resumePlanHash": "e".repeat(64)
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(unfocused_err.code, "TARGET_LOST");
+
+        // Once active again, direct resume without confirmationGrant completes remaining text.
+        scripted
+            .inner
+            .set_target_status("target-a", TargetStatus::Active);
+        let resumed = leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "pauseId": snap.pause_id,
+                    "resumeAttemptId": "att-cur-ok",
+                    "resumePlanHash": "e".repeat(64)
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(resumed.state, LeaseState::Active);
+        assert!(
+            scripted
+                .inner
+                .submitted_actions()
+                .iter()
+                .any(|(_, a)| matches!(a, NativeInputAction::UnicodeText(s) if s == "y"))
+        );
+    }
+
+    #[test]
+    fn pointer_delta_observes_live_pointer_position_after_submission() {
+        use deskweave_platform_api::{
+            DisplayPoint, LeaseState, PausePoint, SegmentState, compute_segment_payload_hash,
+        };
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases = Arc::new(LeaseCoordinator::new());
+        let ctx = make_ctx("sess-delta", "ws-delta");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+
+        let observed_pt = PausePoint::Display(DisplayPoint {
+            display_id: "secondary".to_owned(),
+            x: 12.5,
+            y: 34.5,
+        });
+        scripted.set_pointer_override(Some(Ok(PausePoint::Display(DisplayPoint {
+            display_id: "main".to_owned(),
+            x: 1900.0,
+            y: 50.0,
+        }))));
+        scripted.set_pointer_after_submit(Some(Ok(observed_pt.clone())));
+
+        let acq = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-delta", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let delta_op = json!({
+            "id": "delta-cross",
+            "title": "跨屏相对位移观察",
+            "action": "pointer.delta",
+            "params": {"target": "main", "dx": 100, "dy": 0, "durationMs": 0},
+            "on": {}
+        });
+        let h_delta = compute_segment_payload_hash("target-a", &delta_op, None).unwrap();
+        let seg_res = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-delta-1",
+                    "payloadHash": h_delta,
+                    "targetToken": "target-a",
+                    "operation": delta_op
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(seg_res.state, SegmentState::Sent);
+
+        // Pause checkpoint must contain observed secondary-display position, never out-of-bounds main(2000, 50).
+        let paused = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(paused.pause_snapshot.as_ref().unwrap().pointer, observed_pt);
+
+        // Resuming then running PointerDelta where live pointer query fails must clear stale ledger pointer.
+        let resumed = leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "pauseId": paused.pause_snapshot.as_ref().unwrap().pause_id,
+                    "resumeAttemptId": "att-delta-clear",
+                    "resumePlanHash": "f".repeat(64)
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let delta_err_op = json!({
+            "id": "delta-probe-fail",
+            "title": "指针查询失败清除旧坐标",
+            "action": "pointer.delta",
+            "params": {"target": "main", "dx": 5, "dy": 5, "durationMs": 0},
+            "on": {}
+        });
+        let h_delta_err = compute_segment_payload_hash("target-a", &delta_err_op, None).unwrap();
+        scripted.set_pointer_after_submit(Some(Err(PlatformError::session_unavailable(
+            "pointer unavailable",
+        ))));
+        let seg_res2 = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-delta-2",
+                    "payloadHash": h_delta_err,
+                    "targetToken": "target-a",
+                    "operation": delta_err_op
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(seg_res2.state, SegmentState::Sent);
+        assert_eq!(resumed.state, LeaseState::Active);
+        let pause_fail = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(pause_fail.code, "SESSION_UNAVAILABLE");
+    }
+
+    #[test]
+    fn keyboard_chord_pause_and_resume_preserves_original_press_order() {
+        use deskweave_platform_api::{
+            HeldInput, LeaseState, SegmentState, compute_segment_payload_hash,
+        };
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases = Arc::new(LeaseCoordinator::new());
+        let ctx = make_ctx("sess-chord", "ws-chord");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        let acq = leases
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-chord-order", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+
+        // ControlLeft -> ShiftLeft -> KeyS sorts canonically as [ControlLeft, KeyS, ShiftLeft]
+        // when hashing, yet restoration MUST press ControlLeft -> ShiftLeft -> KeyS.
+        let chord = json!({
+            "id": "chord-order",
+            "title": "组合键恢复顺序",
+            "action": "keyboard.chord",
+            "params": {
+                "target": "main",
+                "keys": ["ControlLeft", "ShiftLeft", "KeyS"],
+                "pressDurationMs": 250
+            },
+            "on": {}
+        });
+        let h_chord = compute_segment_payload_hash("target-a", &chord, None).unwrap();
+        let (sub_tx, sub_rx) = mpsc::channel();
+        scripted.notify_submit_after(3, sub_tx);
+        let h_seg = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let c = ctx.clone();
+            let lid = acq.lease_id.clone();
+            let lg = acq.generation;
+            thread::spawn(move || {
+                l.handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lg,
+                        "segmentId": "seg-chord-order",
+                        "payloadHash": h_chord,
+                        "targetToken": "target-a",
+                        "operation": chord
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        sub_rx.recv().unwrap();
+        let paused = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(h_seg.join().unwrap().unwrap().state, SegmentState::Paused);
+        let snap = paused.pause_snapshot.unwrap();
+        assert_eq!(
+            snap.held_inputs,
+            vec![
+                HeldInput::Key {
+                    key: "ControlLeft".to_owned()
+                },
+                HeldInput::Key {
+                    key: "KeyS".to_owned()
+                },
+                HeldInput::Key {
+                    key: "ShiftLeft".to_owned()
+                },
+            ]
+        );
+
+        let before_resume = scripted.inner.submitted_actions().len();
+        let plan_hash = "1".repeat(64);
+        leases
+            .register_confirmation(
+                "grant-chord-1",
+                crate::lease::RegisteredConfirmation {
+                    owner_workspace: "ws-chord".to_owned(),
+                    lease_id: acq.lease_id.clone(),
+                    pause_id: snap.pause_id.clone(),
+                    agent_epoch: ctx.agent_epoch.clone(),
+                    generation: acq.generation,
+                    checkpoint_hash: snap.checkpoint_hash,
+                    resume_plan_hash: plan_hash.clone(),
+                    restore_target_token: Some("target-a".to_owned()),
+                    pointer_to_restore: None,
+                    expires_at_us: u64::MAX,
+                },
+            )
+            .unwrap();
+        let resumed = leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "pauseId": snap.pause_id,
+                    "resumeAttemptId": "att-chord-1",
+                    "resumePlanHash": plan_hash,
+                    "confirmationGrant": "grant-chord-1"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(resumed.state, LeaseState::Active);
+        let resumed_actions: Vec<NativeInputAction> = scripted
+            .inner
+            .submitted_actions()
+            .into_iter()
+            .skip(before_resume)
+            .map(|(_, a)| a)
+            .collect();
+        assert_eq!(
+            resumed_actions,
+            vec![
+                NativeInputAction::KeyDown("ControlLeft".to_owned()),
+                NativeInputAction::KeyDown("ShiftLeft".to_owned()),
+                NativeInputAction::KeyDown("KeyS".to_owned()),
+                NativeInputAction::KeyUp("KeyS".to_owned()),
+                NativeInputAction::KeyUp("ShiftLeft".to_owned()),
+                NativeInputAction::KeyUp("ControlLeft".to_owned()),
+            ]
+        );
+
+        // Subcase B: Explicitly held keys in non-lexical order retain press order across double pause/resume.
+        for (seg_id, key) in [
+            ("seg-ord-1", "KeyZ"),
+            ("seg-ord-2", "ControlLeft"),
+            ("seg-ord-3", "ShiftLeft"),
+        ] {
+            let op = json!({
+                "id": seg_id,
+                "title": "显式多键顺序保持",
+                "action": "keyboard.down",
+                "params": {"target": "main", "key": key},
+                "on": {}
+            });
+            let ph = compute_segment_payload_hash("target-a", &op, None).unwrap();
+            leases
+                .handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": acq.lease_id,
+                        "generation": acq.generation,
+                        "segmentId": seg_id,
+                        "payloadHash": ph,
+                        "targetToken": "target-a",
+                        "operation": op
+                    })),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap();
+        }
+        for (attempt, grant_id) in [("att-ord-1", "grant-ord-1"), ("att-ord-2", "grant-ord-2")] {
+            let p_snap = leases
+                .handle_lease_pause(
+                    &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap()
+                .pause_snapshot
+                .unwrap();
+            assert_eq!(
+                p_snap.held_inputs,
+                vec![
+                    HeldInput::Key {
+                        key: "ControlLeft".to_owned()
+                    },
+                    HeldInput::Key {
+                        key: "KeyZ".to_owned()
+                    },
+                    HeldInput::Key {
+                        key: "ShiftLeft".to_owned()
+                    },
+                ]
+            );
+            let before = scripted.inner.submitted_actions().len();
+            let ph = "2".repeat(64);
+            leases
+                .register_confirmation(
+                    grant_id,
+                    crate::lease::RegisteredConfirmation {
+                        owner_workspace: "ws-chord".to_owned(),
+                        lease_id: acq.lease_id.clone(),
+                        pause_id: p_snap.pause_id.clone(),
+                        agent_epoch: ctx.agent_epoch.clone(),
+                        generation: acq.generation,
+                        checkpoint_hash: p_snap.checkpoint_hash,
+                        resume_plan_hash: ph.clone(),
+                        restore_target_token: Some("target-a".to_owned()),
+                        pointer_to_restore: None,
+                        expires_at_us: u64::MAX,
+                    },
+                )
+                .unwrap();
+            let res = leases
+                .handle_lease_resume(
+                    &json_obj(json!({
+                        "leaseId": acq.lease_id,
+                        "generation": acq.generation,
+                        "pauseId": p_snap.pause_id,
+                        "resumeAttemptId": attempt,
+                        "resumePlanHash": ph,
+                        "confirmationGrant": grant_id
+                    })),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap();
+            assert_eq!(res.state, LeaseState::Active);
+            let pressed: Vec<NativeInputAction> = scripted
+                .inner
+                .submitted_actions()
+                .into_iter()
+                .skip(before)
+                .map(|(_, a)| a)
+                .collect();
+            assert_eq!(
+                pressed,
+                vec![
+                    NativeInputAction::KeyDown("KeyZ".to_owned()),
+                    NativeInputAction::KeyDown("ControlLeft".to_owned()),
+                    NativeInputAction::KeyDown("ShiftLeft".to_owned()),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn resume_restoration_panic_cleans_up_restored_keys_and_unblocks_close() {
+        use deskweave_platform_api::{
+            CleanupOutcome, HeldInput, LeaseState, compute_segment_payload_hash,
+        };
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases = Arc::new(LeaseCoordinator::new());
+        let ctx = make_ctx("sess-res-panic", "ws-res-panic");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        let acq = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-res-panic", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+
+        for (seg_id, key) in [("seg-rp-1", "ControlLeft"), ("seg-rp-2", "ShiftLeft")] {
+            let op = json!({
+                "id": seg_id,
+                "title": "恢复异常清理测试键",
+                "action": "keyboard.down",
+                "params": {"target": "main", "key": key},
+                "on": {}
+            });
+            let ph = compute_segment_payload_hash("target-a", &op, None).unwrap();
+            leases
+                .handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": acq.lease_id,
+                        "generation": acq.generation,
+                        "segmentId": seg_id,
+                        "payloadHash": ph,
+                        "targetToken": "target-a",
+                        "operation": op
+                    })),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap();
+        }
+        let snap = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap()
+            .pause_snapshot
+            .unwrap();
+
+        let plan_hash = "3".repeat(64);
+        leases
+            .register_confirmation(
+                "grant-res-panic",
+                crate::lease::RegisteredConfirmation {
+                    owner_workspace: "ws-res-panic".to_owned(),
+                    lease_id: acq.lease_id.clone(),
+                    pause_id: snap.pause_id.clone(),
+                    agent_epoch: ctx.agent_epoch.clone(),
+                    generation: acq.generation,
+                    checkpoint_hash: snap.checkpoint_hash,
+                    resume_plan_hash: plan_hash.clone(),
+                    restore_target_token: Some("target-a".to_owned()),
+                    pointer_to_restore: None,
+                    expires_at_us: u64::MAX,
+                },
+            )
+            .unwrap();
+
+        // First restored key (ControlLeft) submits, second restored key (ShiftLeft) panics while state mutex is dropped.
+        scripted.panic_on_submit_number(2);
+        let h_resume = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let c = ctx.clone();
+            let lid = acq.lease_id.clone();
+            let lg = acq.generation;
+            let pid = snap.pause_id;
+            thread::spawn(move || {
+                l.handle_lease_resume(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lg,
+                        "pauseId": pid,
+                        "resumeAttemptId": "att-res-panic",
+                        "resumePlanHash": plan_hash,
+                        "confirmationGrant": "grant-res-panic"
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        assert!(h_resume.join().is_err());
+
+        // Coordinator state must remain unpoisoned, restored + in-flight keys released, Uncertain entered, and close unblocked.
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![
+                HeldInput::Key {
+                    key: "ControlLeft".to_owned()
+                },
+                HeldInput::Key {
+                    key: "ShiftLeft".to_owned()
+                },
+            ]
+        );
+        let st = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st.state, LeaseState::Uncertain);
+        assert_eq!(st.cleanup, CleanupOutcome::Succeeded);
+
+        let (closed_tx, closed_rx) = mpsc::channel();
+        {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let sid = ctx.session_id.clone();
+            thread::spawn(move || {
+                l.on_session_closed(&sid, d.as_ref());
+                let _ = closed_tx.send(());
+            });
+        }
+        closed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
     }
 }

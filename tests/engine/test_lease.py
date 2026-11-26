@@ -753,6 +753,52 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
             rel_b = second.lease_release(acq_b["leaseId"], acq_b["generation"], reason="finished")
             self.assertEqual(rel_b["cleanup"], "notRequired")
             self.assertGreater(rel_b["generation"], acq_b["generation"])
+
+            # 6. Contending on _send_lock shrinks remaining budget and bounds server execution.
+            acq_d = second.lease_acquire("run-deadline", ["target-win-b"], wait_ms=0)
+            op_long = {
+                "id": "long-send-lock-text",
+                "title": "发送锁消耗调用期限",
+                "action": "keyboard.text",
+                "params": {"target": "main", "text": "abcdef", "intervalMs": 120},
+                "on": {},
+            }
+            op_long_hash = compute_segment_payload_hash("target-win-b", op_long)
+            lock_held = threading.Event()
+            lock_done = threading.Event()
+
+            def _hold_send_lock():
+                with second._send_lock:
+                    lock_held.set()
+                    time.sleep(0.22)
+                lock_done.set()
+
+            holder = threading.Thread(target=_hold_send_lock, daemon=True)
+            holder.start()
+            self.assertTrue(lock_held.wait(2.0))
+            t0 = time.monotonic()
+            with self.assertRaises(DeskWeaveError) as dl_err:
+                second.segment_submit(
+                    acq_d["leaseId"],
+                    acq_d["generation"],
+                    "seg-send-lock-deadline",
+                    "target-win-b",
+                    op_long,
+                    timeout=0.35,
+                )
+            elapsed = time.monotonic() - t0
+            self.assertEqual(dl_err.exception.code, "DEADLINE_EXCEEDED")
+            self.assertLess(elapsed, 0.7)
+            holder.join(timeout=2)
+            self.assertTrue(lock_done.is_set())
+            # Server got decremented deadlineMs (~130ms), so the 600ms text stopped early.
+            time.sleep(0.25)
+            try:
+                seg_st = second.segment_status("seg-send-lock-deadline", op_long_hash)
+            except DeskWeaveError as st_err:
+                self.assertEqual(st_err.code, "INVALID_ARGUMENT")
+            else:
+                self.assertEqual(seg_st["state"], "uncertain")
         finally:
             engine_a.close()
             engine_b.close()
@@ -1285,6 +1331,124 @@ class MuxChannelRegressionTests(unittest.TestCase):
                 self.assertFalse(chan.closed)
             finally:
                 proc.close()
+
+    def test_send_lock_wait_decrements_deadline_ms_and_bounds_channel_send_budget(self):
+        import queue
+
+        class _SendBudgetChannel:
+            def __init__(self):
+                self.inbox: queue.Queue[dict | BaseException] = queue.Queue()
+                self.sent: list[dict] = []
+                self.send_budgets: list[object] = []
+                self.closed = False
+                self.block_send = False
+
+            def send(self, value, *, budget):
+                self.send_budgets.append(budget)
+                if self.block_send:
+                    while True:
+                        delay = budget.check()
+                        time.sleep(min(delay, 0.02))
+                budget.check()
+                self.sent.append(value)
+
+            def receive(self, *, budget):
+                while True:
+                    delay = budget.check()
+                    if self.closed:
+                        raise agent.closed()
+                    try:
+                        item = self.inbox.get(timeout=min(delay, 0.02))
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, BaseException):
+                        raise item
+                    return item
+
+            def close(self):
+                self.closed = True
+                self.inbox.put(agent.closed())
+
+        chan = _SendBudgetChannel()
+        proc = self._make_stub_process(chan)
+        proc._ensure_mux()
+        with patch.object(agent, "_check_owner", return_value=None):
+            try:
+                # 1. Holding _send_lock for ~140ms decrements request deadlineMs and send_budget.
+                lock_held = threading.Event()
+
+                def _hold_lock(duration_s: float):
+                    with proc._send_lock:
+                        lock_held.set()
+                        time.sleep(duration_s)
+
+                t_hold = threading.Thread(target=_hold_lock, args=(0.14,), daemon=True)
+                t_hold.start()
+                self.assertTrue(lock_held.wait(1.0))
+
+                def _reply_when_sent():
+                    deadline = time.monotonic() + 2.0
+                    while not chan.sent:
+                        if time.monotonic() >= deadline:
+                            return
+                        time.sleep(0.01)
+                    req = chan.sent[-1]
+                    chan.inbox.put(
+                        {
+                            "protocolVersion": "1.0",
+                            "kind": "response",
+                            "replyTo": req["id"],
+                            "ok": True,
+                            "result": {"state": "active"},
+                        }
+                    )
+
+                replier = threading.Thread(target=_reply_when_sent, daemon=True)
+                replier.start()
+                res = proc.call("lease.status", {"leaseId": "l1"}, timeout=0.4)
+                self.assertEqual(res, {"state": "active"})
+                t_hold.join(timeout=2)
+                replier.join(timeout=2)
+                self.assertEqual(len(chan.sent), 1)
+                self.assertLessEqual(chan.sent[0]["deadlineMs"], 320)
+                rem_at_send = chan.send_budgets[0].deadline - time.monotonic()
+                self.assertLess(rem_at_send, 0.35)
+
+                # 2. Blocking inside channel.send respects remaining caller budget (not 10s).
+                chan.block_send = True
+                t_start = time.monotonic()
+                with self.assertRaises(DeskWeaveError) as send_err:
+                    proc.call("segment.submit", {"leaseId": "l2"}, timeout=0.08)
+                self.assertEqual(send_err.exception.code, "DEADLINE_EXCEEDED")
+                self.assertLess(time.monotonic() - t_start, 0.5)
+                self.assertTrue(chan.closed)
+            finally:
+                proc.close()
+
+        # 3. _send_lock contention past caller timeout raises DEADLINE_EXCEEDED safely.
+        chan2 = _SendBudgetChannel()
+        proc2 = self._make_stub_process(chan2)
+        proc2._ensure_mux()
+        with patch.object(agent, "_check_owner", return_value=None):
+            try:
+                lock_held2 = threading.Event()
+
+                def _hold_long():
+                    with proc2._send_lock:
+                        lock_held2.set()
+                        time.sleep(0.14)
+
+                t_hold2 = threading.Thread(target=_hold_long, daemon=True)
+                t_hold2.start()
+                self.assertTrue(lock_held2.wait(1.0))
+                with self.assertRaises(DeskWeaveError) as wait_err:
+                    proc2.call("segment.submit", {"leaseId": "l3"}, timeout=0.05)
+                self.assertEqual(wait_err.exception.code, "DEADLINE_EXCEEDED")
+                t_hold2.join(timeout=2)
+                self.assertEqual(chan2.sent, [])
+                self.assertFalse(chan2.closed)
+            finally:
+                proc2.close()
 
 
 if __name__ == "__main__":

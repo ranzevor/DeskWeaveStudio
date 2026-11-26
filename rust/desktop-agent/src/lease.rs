@@ -10,7 +10,7 @@ use deskweave_platform_api::{
     PauseSnapshot, PhysicalPoint, PlatformError, SegmentCursor, SegmentResult, SegmentState,
     SubmissionOutcome, TargetBindResult, TargetDescriptor, TargetKind, TargetState, TargetStatus,
     TargetToken, TrajectoryRef, compute_segment_payload_hash, expand_input_operation,
-    format_utc_timestamp, parse_utc_timestamp, sort_held_inputs, sort_target_states,
+    format_utc_timestamp, parse_utc_timestamp, sort_target_states,
 };
 use serde_json::{Map, Value};
 
@@ -109,10 +109,12 @@ struct ActiveLease {
     state: LeaseState,
     cleanup: CleanupOutcome,
     held_inputs: Vec<HeldInput>,
+    paused_held_inputs: Vec<HeldInput>,
     pointer: Option<PausePoint>,
     physical_pointer: Option<PhysicalPoint>,
     input_target_token: Option<String>,
     in_flight: Option<InFlightSegment>,
+    resuming: bool,
     release_waiters: usize,
     release_pending: bool,
     pending_pause: Option<PendingPause>,
@@ -398,7 +400,7 @@ impl LeaseCoordinator {
                     deadline_us = deadline_us.min(pause_limit);
                 }
                 let rem_us = deadline_us.saturating_sub(now_us);
-                if rem_us == 0 && lease.in_flight.is_some() {
+                if rem_us == 0 && (lease.in_flight.is_some() || lease.resuming) {
                     self.wait_cv.notify_all();
                     5_000
                 } else {
@@ -505,9 +507,8 @@ impl LeaseCoordinator {
             (lease.pause_expires_at_us, snap)
         };
 
-        let requires_restore_target = !snap.held_inputs.is_empty()
-            || snap.cursor.is_some()
-            || claim.pointer_to_restore.is_some();
+        let requires_restore_target =
+            !snap.held_inputs.is_empty() || claim.pointer_to_restore.is_some();
         if requires_restore_target && claim.restore_target_token.is_none() {
             return Err(PlatformError::invalid_argument(
                 "包含指针或持有输入恢复的确认声明必须绑定 restoreTargetToken。",
@@ -533,7 +534,6 @@ impl LeaseCoordinator {
         if claim.restore_target_token.is_none()
             && claim.pointer_to_restore.is_none()
             && snap.held_inputs.is_empty()
-            && snap.cursor.is_none()
         {
             return Err(PlatformError::invalid_argument(
                 "该暂停检查点与继续计划无需本地确认授权。",
@@ -617,7 +617,11 @@ impl LeaseCoordinator {
             {
                 now_us >= lease.expires_at_us
             }
-            Some(lease) if lease.state == LeaseState::Paused && !lease.release_pending => {
+            Some(lease)
+                if lease.state == LeaseState::Paused
+                    && !lease.resuming
+                    && !lease.release_pending =>
+            {
                 now_us >= lease.expires_at_us
                     || lease
                         .pause_expires_at_us
@@ -648,7 +652,7 @@ impl LeaseCoordinator {
         while let Some(lease) = state.current_lease.as_mut()
             && lease.owner_session == session_id
             && lease.state != LeaseState::Uncertain
-            && lease.in_flight.is_some()
+            && (lease.in_flight.is_some() || lease.resuming)
         {
             if waited_lease
                 .as_ref()
@@ -1033,10 +1037,12 @@ impl LeaseCoordinator {
             state: LeaseState::Active,
             cleanup: CleanupOutcome::NotRequired,
             held_inputs: Vec::new(),
+            paused_held_inputs: Vec::new(),
             pointer: initial_pointer,
             physical_pointer: initial_physical,
             input_target_token: None,
             in_flight: None,
+            resuming: false,
             release_waiters: 0,
             release_pending: false,
             pending_pause: None,
@@ -1174,7 +1180,7 @@ impl LeaseCoordinator {
                             )
                             .with_retry("afterQuery"));
                         }
-                        if lease.in_flight.is_some() {
+                        if lease.in_flight.is_some() || lease.resuming {
                             if !registered_waiter {
                                 lease.release_waiters += 1;
                                 registered_waiter = true;
@@ -1292,7 +1298,7 @@ impl LeaseCoordinator {
                         "桌面租约已过期，无法暂停。",
                     ));
                 }
-                if lease.release_pending || lease.release_waiters > 0 {
+                if lease.release_pending || lease.release_waiters > 0 || lease.resuming {
                     self.wait_cv.notify_all();
                     true
                 } else if lease.in_flight.is_some() {
@@ -1339,10 +1345,10 @@ impl LeaseCoordinator {
             return Ok(snap);
         }
 
-        finalize_pause_locked(
-            &mut state, &lease_id, generation, ctx, desktop, None, None, None, true,
-        )
-        .map(|(snap, _)| snap)
+        let lease_res = finalize_pause_locked(
+            &mut state, &lease_id, generation, ctx, desktop, None, None, None, None, true,
+        );
+        lease_res.map(|(snap, _)| snap)
     }
 
     pub(crate) fn handle_lease_status(
@@ -1439,6 +1445,11 @@ impl LeaseCoordinator {
             confirmation_grant: confirmation_grant.clone(),
         };
 
+        let rpc_wall_start = Instant::now();
+        let rpc_deadline_budget = Duration::from_millis(deadline_ms);
+        // Declared before `state` so `state` always drops first if unwinding occurs.
+        let mut resume_guard = ResumingGuard::inactive(self, desktop, lease_id.clone(), generation);
+
         let mut state = self.state.lock().unwrap();
         let receipt_lookup_key = (
             ctx.workspace_id.clone(),
@@ -1464,8 +1475,14 @@ impl LeaseCoordinator {
             ));
         }
 
-        let (targets, pause_snapshot) = {
+        let (targets, pause_snapshot, paused_held_inputs) = {
             let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
+            if lease.resuming || lease.release_pending || lease.release_waiters > 0 {
+                return Err(
+                    PlatformError::new("DESKTOP_BUSY", "当前桌面租约正在恢复或释放中。")
+                        .with_retry("afterQuery"),
+                );
+            }
             if lease.state != LeaseState::Paused {
                 return Err(PlatformError::invalid_argument(
                     "仅处于 paused 状态的租约允许执行 lease.resume。",
@@ -1482,7 +1499,13 @@ impl LeaseCoordinator {
                     "pauseId 与当前租约暂停检查点不匹配。",
                 ));
             }
-            (lease.targets.clone(), snap)
+            let held_order = if lease.paused_held_inputs.is_empty() && !snap.held_inputs.is_empty()
+            {
+                snap.held_inputs.clone()
+            } else {
+                lease.paused_held_inputs.clone()
+            };
+            (lease.targets.clone(), snap, held_order)
         };
 
         verify_targets_bound_and_usable(&state, &ctx.workspace_id, &targets, desktop)?;
@@ -1494,12 +1517,11 @@ impl LeaseCoordinator {
             ));
         }
 
-        let must_restore_held_or_cursor =
-            !pause_snapshot.held_inputs.is_empty() || pause_snapshot.cursor.is_some();
-        if must_restore_held_or_cursor && confirmation_grant.is_none() {
+        let requires_held_restoration = !pause_snapshot.held_inputs.is_empty();
+        if requires_held_restoration && confirmation_grant.is_none() {
             return Err(PlatformError::new(
                 "LOCAL_CONFIRMATION_REQUIRED",
-                "恢复持有输入或段内游标需要提供可信本地 confirmationGrant。",
+                "恢复持有输入需要提供可信本地 confirmationGrant。",
             ));
         }
 
@@ -1519,141 +1541,60 @@ impl LeaseCoordinator {
 
         state.ensure_resume_receipt_capacity(&receipt_lookup_key)?;
 
-        let should_focus_target = must_restore_held_or_cursor
+        let should_focus_target = requires_held_restoration
             || reg.as_ref().is_some_and(|r| {
                 r.restore_target_token.is_some() || r.pointer_to_restore.is_some()
             });
         let should_restore_pointer = reg.as_ref().is_some_and(|r| r.pointer_to_restore.is_some());
 
-        let mut restored_held = Vec::new();
-        if should_focus_target {
-            let restore_target = reg
-                .as_ref()
-                .and_then(|r| r.restore_target_token.as_ref())
-                .or(pause_snapshot.input_target_token.as_ref())
-                .ok_or_else(|| {
-                    PlatformError::invalid_argument("恢复指针或持有输入时必须包含目标令牌。")
-                })?;
-            focus_target_checked(desktop, restore_target)?;
-            let status = verify_target_checked(desktop, restore_target)?;
-            if status != TargetStatus::Active {
-                return Err(PlatformError::target_lost(
-                    "恢复目标未能取得前台焦点，保持 paused 状态。",
-                ));
-            }
-
-            if should_restore_pointer {
-                let target_pointer = reg
-                    .as_ref()
-                    .and_then(|r| r.pointer_to_restore.as_ref())
-                    .expect("pointer_to_restore checked by should_restore_pointer");
-                let move_action = match target_pointer {
-                    PausePoint::Physical(pt) => NativeInputAction::PointerMovePhysical(*pt),
-                    PausePoint::Display(pt) => NativeInputAction::PointerMoveDisplay(pt.clone()),
-                };
-                match submit_native_action(desktop, restore_target, &move_action) {
-                    Ok(SubmissionOutcome::Submitted) => {}
-                    Ok(SubmissionOutcome::Rejected) => {
-                        return Err(PlatformError::new(
-                            "RESOURCE_DENIED",
-                            "恢复指针位置被原生端明确拒绝，保持 paused 状态。",
-                        ));
-                    }
-                    Err(err) if is_pre_dispatch_error(&err) => {
-                        return Err(err);
-                    }
-                    Ok(SubmissionOutcome::Uncertain) | Err(_) => {
-                        return fail_resume_uncertain_locked(
-                            &mut state,
-                            ctx,
-                            confirmation_grant,
-                            receipt_lookup_key,
-                            lease_id,
-                            request_key,
-                            (
-                                CleanupOutcome::NotRequired,
-                                restored_held,
-                                resume_attempt_id,
-                            ),
-                        );
-                    }
-                }
-            }
-
-            for held in &pause_snapshot.held_inputs {
-                let action = match held {
-                    HeldInput::Key { key } => NativeInputAction::KeyDown(key.clone()),
-                    HeldInput::Button { button } => NativeInputAction::PointerButtonDown(*button),
-                };
-                match submit_native_action(desktop, restore_target, &action) {
-                    Ok(SubmissionOutcome::Submitted) => {
-                        restored_held.push(held.clone());
-                    }
-                    Ok(SubmissionOutcome::Rejected) => {
-                        let cleanup = release_held_inputs(desktop, &mut restored_held);
-                        if matches!(
-                            cleanup,
-                            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
-                        ) {
-                            return Err(PlatformError::new(
-                                "RESOURCE_DENIED",
-                                "恢复持有输入被原生端明确拒绝，保持 paused 状态。",
-                            ));
-                        }
-                        return fail_resume_uncertain_locked(
-                            &mut state,
-                            ctx,
-                            confirmation_grant,
-                            receipt_lookup_key,
-                            lease_id,
-                            request_key,
-                            (cleanup, restored_held, resume_attempt_id),
-                        );
-                    }
-                    Err(err) if is_pre_dispatch_error(&err) => {
-                        let cleanup = release_held_inputs(desktop, &mut restored_held);
-                        if matches!(
-                            cleanup,
-                            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
-                        ) {
-                            return Err(err);
-                        }
-                        return fail_resume_uncertain_locked(
-                            &mut state,
-                            ctx,
-                            confirmation_grant,
-                            receipt_lookup_key,
-                            lease_id,
-                            request_key,
-                            (cleanup, restored_held, resume_attempt_id),
-                        );
-                    }
-                    Ok(SubmissionOutcome::Uncertain) | Err(_) => {
-                        record_potentially_held_press(&mut restored_held, &action);
-                        let cleanup = release_held_inputs(desktop, &mut restored_held);
-                        return fail_resume_uncertain_locked(
-                            &mut state,
-                            ctx,
-                            confirmation_grant,
-                            receipt_lookup_key,
-                            lease_id,
-                            request_key,
-                            (cleanup, restored_held, resume_attempt_id),
-                        );
-                    }
-                }
-            }
-        } else if let Some(restore_target) = &pause_snapshot.input_target_token {
-            let status = verify_target_checked(desktop, restore_target)?;
-            if status != TargetStatus::Active {
-                return Err(PlatformError::target_lost("输入目标当前不在前台。"));
-            }
+        {
+            let lease = state.current_lease.as_mut().unwrap();
+            lease.resuming = true;
+            resume_guard.arm();
         }
+        let (mut state, restoration_outcome) = self.execute_resume_restoration(
+            state,
+            desktop,
+            &lease_id,
+            generation,
+            &pause_snapshot,
+            &paused_held_inputs,
+            reg.as_ref(),
+            should_focus_target,
+            should_restore_pointer,
+            &rpc_wall_start,
+            rpc_deadline_budget,
+            &mut resume_guard,
+        );
+        if let Some(lease) = state
+            .current_lease
+            .as_mut()
+            .filter(|l| l.lease_id == lease_id && l.generation == generation)
+        {
+            lease.resuming = false;
+        }
+        let (restored_held, in_flight_press) = resume_guard.disarm();
+        debug_assert!(in_flight_press.is_none());
 
-        let resumed_pointer = if should_restore_pointer {
-            reg.as_ref().and_then(|r| r.pointer_to_restore.clone())
-        } else {
-            query_pointer_position(desktop).ok()
+        let resumed_pointer = match restoration_outcome {
+            ResumeRestorationOutcome::Completed { resumed_pointer } => resumed_pointer,
+            ResumeRestorationOutcome::FailedClean(err) => {
+                self.wait_cv.notify_all();
+                return Err(err);
+            }
+            ResumeRestorationOutcome::Uncertain { cleanup } => {
+                let res = fail_resume_uncertain_locked(
+                    &mut state,
+                    ctx,
+                    confirmation_grant,
+                    receipt_lookup_key,
+                    lease_id,
+                    request_key,
+                    (cleanup, restored_held, resume_attempt_id),
+                );
+                self.wait_cv.notify_all();
+                return res;
+            }
         };
 
         if let Some(grant) = confirmation_grant {
@@ -1666,6 +1607,7 @@ impl LeaseCoordinator {
             lease.state = LeaseState::Active;
             lease.cleanup = CleanupOutcome::NotRequired;
             lease.held_inputs = restored_held;
+            lease.paused_held_inputs.clear();
             lease.physical_pointer = match &resumed_pointer {
                 Some(PausePoint::Physical(pt)) => Some(*pt),
                 _ => None,
@@ -1727,6 +1669,10 @@ impl LeaseCoordinator {
             },
         )?;
 
+        let rem_deadline_ms = rpc_deadline_budget
+            .saturating_sub(rpc_wall_start.elapsed())
+            .as_millis()
+            .clamp(1, u64::MAX as u128) as u64;
         let (mut state, cont_res) = self.drive_segment_events(
             state,
             ctx,
@@ -1738,6 +1684,7 @@ impl LeaseCoordinator {
                 segment_id: seg.segment_id,
                 payload_hash: seg.payload_hash,
                 target_token: seg.target_token,
+                admission_targets: current_targets,
                 expected_target_version,
                 expected_topology_version,
                 events: seg.events,
@@ -1749,7 +1696,7 @@ impl LeaseCoordinator {
                 dispatched_count: seg.dispatched_count,
                 fresh_submit: false,
             },
-            deadline_ms,
+            rem_deadline_ms,
         );
 
         let final_snapshot = if let Some(lease) = state
@@ -1775,6 +1722,263 @@ impl LeaseCoordinator {
             },
         )?;
         Ok(final_snapshot)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn execute_resume_restoration<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, CoordinatorState>,
+        desktop: &dyn DesktopSession,
+        lease_id: &str,
+        generation: u64,
+        pause_snapshot: &PauseSnapshot,
+        paused_held_inputs: &[HeldInput],
+        reg: Option<&RegisteredConfirmation>,
+        should_focus_target: bool,
+        should_restore_pointer: bool,
+        rpc_wall_start: &Instant,
+        rpc_deadline_budget: Duration,
+        resume_guard: &mut ResumingGuard<'_>,
+    ) -> (MutexGuard<'a, CoordinatorState>, ResumeRestorationOutcome) {
+        if let Some(early) = check_resume_boundary_locked(
+            &mut state,
+            desktop,
+            lease_id,
+            generation,
+            reg,
+            rpc_wall_start,
+            rpc_deadline_budget,
+            &mut resume_guard.restored_held,
+        ) {
+            return (state, early);
+        }
+
+        if should_focus_target {
+            let restore_target = match reg
+                .and_then(|r| r.restore_target_token.as_deref())
+                .or(pause_snapshot.input_target_token.as_deref())
+            {
+                Some(token) => token,
+                None => {
+                    return (
+                        state,
+                        ResumeRestorationOutcome::FailedClean(PlatformError::invalid_argument(
+                            "恢复指针或持有输入时必须包含目标令牌。",
+                        )),
+                    );
+                }
+            };
+
+            drop(state);
+            let focus_res = focus_target_checked(desktop, restore_target);
+            state = self.state.lock().unwrap();
+            if let Err(err) = focus_res {
+                return (state, ResumeRestorationOutcome::FailedClean(err));
+            }
+            if let Some(early) = check_resume_boundary_locked(
+                &mut state,
+                desktop,
+                lease_id,
+                generation,
+                reg,
+                rpc_wall_start,
+                rpc_deadline_budget,
+                &mut resume_guard.restored_held,
+            ) {
+                return (state, early);
+            }
+
+            drop(state);
+            let verify_res = verify_target_checked(desktop, restore_target);
+            state = self.state.lock().unwrap();
+            let status = match verify_res {
+                Ok(status) => status,
+                Err(err) => return (state, ResumeRestorationOutcome::FailedClean(err)),
+            };
+            if let Some(early) = check_resume_boundary_locked(
+                &mut state,
+                desktop,
+                lease_id,
+                generation,
+                reg,
+                rpc_wall_start,
+                rpc_deadline_budget,
+                &mut resume_guard.restored_held,
+            ) {
+                return (state, early);
+            }
+            if status != TargetStatus::Active {
+                return (
+                    state,
+                    ResumeRestorationOutcome::FailedClean(PlatformError::target_lost(
+                        "恢复目标未能取得前台焦点，保持 paused 状态。",
+                    )),
+                );
+            }
+
+            if should_restore_pointer {
+                let target_pointer = reg
+                    .and_then(|r| r.pointer_to_restore.as_ref())
+                    .expect("pointer_to_restore checked by should_restore_pointer");
+                let move_action = match target_pointer {
+                    PausePoint::Physical(pt) => NativeInputAction::PointerMovePhysical(*pt),
+                    PausePoint::Display(pt) => NativeInputAction::PointerMoveDisplay(pt.clone()),
+                };
+                drop(state);
+                let move_res = submit_native_action(desktop, restore_target, &move_action);
+                state = self.state.lock().unwrap();
+                match move_res {
+                    Ok(SubmissionOutcome::Submitted) => {
+                        if let Some(early) = check_resume_boundary_locked(
+                            &mut state,
+                            desktop,
+                            lease_id,
+                            generation,
+                            reg,
+                            rpc_wall_start,
+                            rpc_deadline_budget,
+                            &mut resume_guard.restored_held,
+                        ) {
+                            return (state, early);
+                        }
+                    }
+                    Ok(SubmissionOutcome::Rejected) => {
+                        return (
+                            state,
+                            ResumeRestorationOutcome::FailedClean(PlatformError::new(
+                                "RESOURCE_DENIED",
+                                "恢复指针位置被原生端明确拒绝，保持 paused 状态。",
+                            )),
+                        );
+                    }
+                    Err(err) if is_pre_dispatch_error(&err) => {
+                        return (state, ResumeRestorationOutcome::FailedClean(err));
+                    }
+                    Ok(SubmissionOutcome::Uncertain) | Err(_) => {
+                        return (
+                            state,
+                            ResumeRestorationOutcome::Uncertain {
+                                cleanup: CleanupOutcome::NotRequired,
+                            },
+                        );
+                    }
+                }
+            }
+
+            for held in paused_held_inputs {
+                let action = match held {
+                    HeldInput::Key { key } => NativeInputAction::KeyDown(key.clone()),
+                    HeldInput::Button { button } => NativeInputAction::PointerButtonDown(*button),
+                };
+                resume_guard.in_flight_press = Some(held.clone());
+                drop(state);
+                let submit_res = submit_native_action(desktop, restore_target, &action);
+                state = self.state.lock().unwrap();
+                resume_guard.in_flight_press = None;
+                match submit_res {
+                    Ok(SubmissionOutcome::Submitted) => {
+                        resume_guard.restored_held.push(held.clone());
+                        if let Some(early) = check_resume_boundary_locked(
+                            &mut state,
+                            desktop,
+                            lease_id,
+                            generation,
+                            reg,
+                            rpc_wall_start,
+                            rpc_deadline_budget,
+                            &mut resume_guard.restored_held,
+                        ) {
+                            return (state, early);
+                        }
+                    }
+                    Ok(SubmissionOutcome::Rejected) => {
+                        let cleanup = release_held_inputs(desktop, &mut resume_guard.restored_held);
+                        if matches!(
+                            cleanup,
+                            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+                        ) {
+                            return (
+                                state,
+                                ResumeRestorationOutcome::FailedClean(PlatformError::new(
+                                    "RESOURCE_DENIED",
+                                    "恢复持有输入被原生端明确拒绝，保持 paused 状态。",
+                                )),
+                            );
+                        }
+                        return (state, ResumeRestorationOutcome::Uncertain { cleanup });
+                    }
+                    Err(err) if is_pre_dispatch_error(&err) => {
+                        let cleanup = release_held_inputs(desktop, &mut resume_guard.restored_held);
+                        if matches!(
+                            cleanup,
+                            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+                        ) {
+                            return (state, ResumeRestorationOutcome::FailedClean(err));
+                        }
+                        return (state, ResumeRestorationOutcome::Uncertain { cleanup });
+                    }
+                    Ok(SubmissionOutcome::Uncertain) | Err(_) => {
+                        record_potentially_held_press(&mut resume_guard.restored_held, &action);
+                        let cleanup = release_held_inputs(desktop, &mut resume_guard.restored_held);
+                        return (state, ResumeRestorationOutcome::Uncertain { cleanup });
+                    }
+                }
+            }
+        } else if let Some(restore_target) = &pause_snapshot.input_target_token {
+            drop(state);
+            let verify_res = verify_target_checked(desktop, restore_target);
+            state = self.state.lock().unwrap();
+            let status = match verify_res {
+                Ok(status) => status,
+                Err(err) => return (state, ResumeRestorationOutcome::FailedClean(err)),
+            };
+            if let Some(early) = check_resume_boundary_locked(
+                &mut state,
+                desktop,
+                lease_id,
+                generation,
+                reg,
+                rpc_wall_start,
+                rpc_deadline_budget,
+                &mut resume_guard.restored_held,
+            ) {
+                return (state, early);
+            }
+            if status != TargetStatus::Active {
+                return (
+                    state,
+                    ResumeRestorationOutcome::FailedClean(PlatformError::target_lost(
+                        "输入目标当前不在前台。",
+                    )),
+                );
+            }
+        }
+
+        let resumed_pointer = if should_restore_pointer {
+            reg.and_then(|r| r.pointer_to_restore.clone())
+        } else {
+            drop(state);
+            let ptr = query_pointer_position(desktop).ok();
+            state = self.state.lock().unwrap();
+            if let Some(early) = check_resume_boundary_locked(
+                &mut state,
+                desktop,
+                lease_id,
+                generation,
+                reg,
+                rpc_wall_start,
+                rpc_deadline_budget,
+                &mut resume_guard.restored_held,
+            ) {
+                return (state, early);
+            }
+            ptr
+        };
+
+        (
+            state,
+            ResumeRestorationOutcome::Completed { resumed_pointer },
+        )
     }
 
     pub(crate) fn handle_segment_submit(
@@ -1872,7 +2076,7 @@ impl LeaseCoordinator {
             ));
         }
 
-        let current_pointer = {
+        let (lease_targets, current_pointer) = {
             let needs_start_pointer = operation.get("action").and_then(Value::as_str)
                 == Some("pointer.move")
                 && operation
@@ -1881,12 +2085,16 @@ impl LeaseCoordinator {
                     .and_then(Value::as_u64)
                     .is_some_and(|d| d > 0);
 
-            {
+            let lease_targets = {
                 let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
-                if lease.in_flight.is_some() || lease.release_pending || lease.release_waiters > 0 {
+                if lease.in_flight.is_some()
+                    || lease.resuming
+                    || lease.release_pending
+                    || lease.release_waiters > 0
+                {
                     return Err(PlatformError::new(
                         "DESKTOP_BUSY",
-                        "当前租约已有输入段正在执行或释放。",
+                        "当前租约已有输入段正在执行、恢复或释放。",
                     )
                     .with_retry("afterQuery"));
                 }
@@ -1896,7 +2104,8 @@ impl LeaseCoordinator {
                         "输入段 targetToken 不在该租约已授权的目标集合内。",
                     ));
                 }
-            }
+                lease.targets.clone()
+            };
 
             let target_check = verify_target_expiry_locked(&state, &target_token).and_then(|()| {
                 match verify_target_checked(desktop, &target_token)? {
@@ -1939,13 +2148,11 @@ impl LeaseCoordinator {
             } else if needs_start_pointer && lease.pointer.is_none() {
                 return Err(live_pointer.unwrap_err());
             }
-            lease.pointer.clone()
+            (lease_targets, lease.pointer.clone())
         };
 
-        let version_pair = read_live_target_version(&state, &target_token, desktop)
-            .and_then(|tv| Ok((tv, current_topology_version(desktop)?)));
-        let (expected_target_version, expected_topology_version) = match version_pair {
-            Ok(pair) => pair,
+        let admission_targets = match build_target_states(&state, &lease_targets, desktop) {
+            Ok(targets_state) => targets_state,
             Err(err) => {
                 if state
                     .current_lease
@@ -1964,6 +2171,12 @@ impl LeaseCoordinator {
                 return Err(err);
             }
         };
+        let target_admission = admission_targets
+            .iter()
+            .find(|ts| ts.target_token == target_token)
+            .ok_or_else(|| PlatformError::target_lost("输入段目标不在租约实时检查集合中。"))?;
+        let expected_target_version = target_admission.target_version.clone();
+        let expected_topology_version = target_admission.topology_version.clone();
 
         let current_topology = desktop.topology().ok();
         let atomic_events = expand_input_operation(
@@ -2021,6 +2234,7 @@ impl LeaseCoordinator {
                 segment_id,
                 payload_hash,
                 target_token,
+                admission_targets,
                 expected_target_version,
                 expected_topology_version,
                 events: atomic_events,
@@ -2052,6 +2266,7 @@ impl LeaseCoordinator {
             generation,
             ctx,
             desktop,
+            None,
             None,
             None,
             Some(reason),
@@ -2228,6 +2443,7 @@ impl LeaseCoordinator {
                         cumulative_shift_us,
                         None,
                         true,
+                        false,
                     );
                     return (state, res);
                 }
@@ -2476,6 +2692,7 @@ impl LeaseCoordinator {
                             cumulative_shift_us,
                             Some(drift_reason),
                             false,
+                            true,
                         );
                         return (state, res);
                     }
@@ -2560,6 +2777,7 @@ impl LeaseCoordinator {
                             cumulative_shift_us,
                             Some("INPUT_TIMING_OVERRUN"),
                             false,
+                            false,
                         );
                         return (state, res);
                     }
@@ -2586,6 +2804,7 @@ impl LeaseCoordinator {
                                 cumulative_shift_us,
                                 Some("INPUT_TIMING_OVERRUN"),
                                 false,
+                                false,
                             );
                             return (state, res);
                         }
@@ -2598,6 +2817,12 @@ impl LeaseCoordinator {
             // Release coordinator lock around native event emission so concurrent pause/status/release never blocks.
             drop(state);
             let submit_outcome = submit_native_action(desktop, &run.target_token, &event.action);
+            let observed_delta_pointer = match (&submit_outcome, &event.action) {
+                (Ok(SubmissionOutcome::Submitted), NativeInputAction::PointerDelta { .. }) => {
+                    Some(query_pointer_position(desktop).ok())
+                }
+                _ => None,
+            };
             state = self.state.lock().unwrap();
 
             let lease_still_matches = state
@@ -2620,7 +2845,7 @@ impl LeaseCoordinator {
                     dispatched_count += 1;
                     let lease = state.current_lease.as_mut().unwrap();
                     lease.input_target_token = Some(run.target_token.clone());
-                    apply_action_to_lease_ledger(lease, &event.action);
+                    apply_action_to_lease_ledger(lease, &event.action, observed_delta_pointer);
                 }
                 Ok(SubmissionOutcome::Rejected) if dispatched_count == 0 => {
                     let (pause_req, release_req, should_finalize_pausing) = {
@@ -2907,6 +3132,7 @@ impl LeaseCoordinator {
         cumulative_shift_us: u64,
         pause_reason: Option<&str>,
         refresh_ttl: bool,
+        already_drifted: bool,
     ) -> Result<SegmentResult, PlatformError> {
         let cursor = SegmentCursor {
             segment_id: run.segment_id.clone(),
@@ -2941,6 +3167,7 @@ impl LeaseCoordinator {
             desktop,
             Some(cursor),
             Some(suspended),
+            Some((&run.admission_targets, already_drifted)),
             pause_reason,
             refresh_ttl,
         );
@@ -3158,6 +3385,92 @@ impl LeaseCoordinator {
     }
 }
 
+struct ResumingGuard<'a> {
+    coordinator: &'a LeaseCoordinator,
+    desktop: &'a dyn DesktopSession,
+    lease_id: String,
+    generation: u64,
+    restored_held: Vec<HeldInput>,
+    in_flight_press: Option<HeldInput>,
+    active: bool,
+}
+
+impl<'a> ResumingGuard<'a> {
+    fn inactive(
+        coordinator: &'a LeaseCoordinator,
+        desktop: &'a dyn DesktopSession,
+        lease_id: String,
+        generation: u64,
+    ) -> Self {
+        Self {
+            coordinator,
+            desktop,
+            lease_id,
+            generation,
+            restored_held: Vec::new(),
+            in_flight_press: None,
+            active: false,
+        }
+    }
+
+    fn arm(&mut self) {
+        self.active = true;
+    }
+
+    fn disarm(&mut self) -> (Vec<HeldInput>, Option<HeldInput>) {
+        self.active = false;
+        (
+            std::mem::take(&mut self.restored_held),
+            self.in_flight_press.take(),
+        )
+    }
+}
+
+impl Drop for ResumingGuard<'_> {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        let mut state = match self.coordinator.state.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if let Some(in_flight) = self.in_flight_press.take()
+            && !self.restored_held.contains(&in_flight)
+        {
+            self.restored_held.push(in_flight);
+        }
+        if let Some(lease) = state
+            .current_lease
+            .as_mut()
+            .filter(|l| l.lease_id == self.lease_id && l.generation == self.generation)
+        {
+            lease.resuming = false;
+            if !self.restored_held.is_empty() {
+                let cleanup = release_held_inputs(self.desktop, &mut self.restored_held);
+                lease.held_inputs = std::mem::take(&mut self.restored_held);
+                lease.state = LeaseState::Uncertain;
+                lease.cleanup = cleanup;
+                lease.pause_snapshot = None;
+                lease.paused_held_inputs.clear();
+                lease.pending_pause = None;
+                lease.suspended_segment = None;
+                lease.pause_expires_at_us = None;
+                lease.reason = Some("EFFECT_UNCERTAIN".to_owned());
+            }
+        } else if !self.restored_held.is_empty() {
+            let _ = release_held_inputs(self.desktop, &mut self.restored_held);
+        }
+        self.coordinator.wait_cv.notify_all();
+    }
+}
+
+enum ResumeRestorationOutcome {
+    Completed { resumed_pointer: Option<PausePoint> },
+    FailedClean(PlatformError),
+    Uncertain { cleanup: CleanupOutcome },
+}
+
 struct SegmentRun {
     lease_id: String,
     generation: u64,
@@ -3165,6 +3478,7 @@ struct SegmentRun {
     segment_id: String,
     payload_hash: String,
     target_token: String,
+    admission_targets: Vec<TargetState>,
     expected_target_version: String,
     expected_topology_version: String,
     events: Vec<AtomicInputEvent>,
@@ -3386,18 +3700,135 @@ fn record_potentially_held_press(held_inputs: &mut Vec<HeldInput>, action: &Nati
             let item = HeldInput::Key { key: key.clone() };
             if !held_inputs.contains(&item) {
                 held_inputs.push(item);
-                sort_held_inputs(held_inputs);
             }
         }
         NativeInputAction::PointerButtonDown(button) => {
             let item = HeldInput::Button { button: *button };
             if !held_inputs.contains(&item) {
                 held_inputs.push(item);
-                sort_held_inputs(held_inputs);
             }
         }
         _ => {}
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_resume_boundary_locked(
+    state: &mut CoordinatorState,
+    desktop: &dyn DesktopSession,
+    lease_id: &str,
+    generation: u64,
+    reg: Option<&RegisteredConfirmation>,
+    rpc_wall_start: &Instant,
+    rpc_deadline_budget: Duration,
+    restored_held: &mut Vec<HeldInput>,
+) -> Option<ResumeRestorationOutcome> {
+    let Some((l_state, expires_at_us, pause_expires_at_us, release_pending, release_waiters)) =
+        state
+            .current_lease
+            .as_ref()
+            .filter(|l| l.lease_id == lease_id && l.generation == generation)
+            .map(|l| {
+                (
+                    l.state,
+                    l.expires_at_us,
+                    l.pause_expires_at_us,
+                    l.release_pending,
+                    l.release_waiters,
+                )
+            })
+    else {
+        let _ = release_held_inputs(desktop, restored_held);
+        return Some(ResumeRestorationOutcome::FailedClean(PlatformError::new(
+            "LEASE_EXPIRED",
+            "恢复期间桌面租约已失效或撤销。",
+        )));
+    };
+    if l_state != LeaseState::Paused {
+        let _ = release_held_inputs(desktop, restored_held);
+        return Some(ResumeRestorationOutcome::FailedClean(PlatformError::new(
+            "LEASE_EXPIRED",
+            "恢复期间桌面租约状态已变更。",
+        )));
+    }
+
+    if desktop.emergency().state() == EmergencyState::Locked {
+        let cleanup = release_held_inputs(desktop, restored_held);
+        if matches!(
+            cleanup,
+            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+        ) {
+            revoke_current_lease_locked(state, desktop, "EMERGENCY_LOCKED");
+            return Some(ResumeRestorationOutcome::FailedClean(PlatformError::new(
+                "RESOURCE_DENIED",
+                "桌面处于急停锁定状态，终止恢复。",
+            )));
+        }
+        return Some(ResumeRestorationOutcome::Uncertain { cleanup });
+    }
+
+    if release_pending || release_waiters > 0 {
+        let cleanup = release_held_inputs(desktop, restored_held);
+        if matches!(
+            cleanup,
+            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+        ) {
+            return Some(ResumeRestorationOutcome::FailedClean(PlatformError::new(
+                "LEASE_EXPIRED",
+                "恢复期间桌面租约被请求释放或关闭。",
+            )));
+        }
+        return Some(ResumeRestorationOutcome::Uncertain { cleanup });
+    }
+
+    let now_us = desktop.clock().now_us();
+    if now_us >= expires_at_us || pause_expires_at_us.is_some_and(|limit| now_us >= limit) {
+        let cleanup = release_held_inputs(desktop, restored_held);
+        if matches!(
+            cleanup,
+            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+        ) {
+            revoke_current_lease_locked(state, desktop, "LEASE_EXPIRED");
+            return Some(ResumeRestorationOutcome::FailedClean(PlatformError::new(
+                "LEASE_EXPIRED",
+                "恢复期间桌面租约已过期。",
+            )));
+        }
+        return Some(ResumeRestorationOutcome::Uncertain { cleanup });
+    }
+
+    if reg.is_some_and(|r| now_us >= r.expires_at_us) {
+        let cleanup = release_held_inputs(desktop, restored_held);
+        if matches!(
+            cleanup,
+            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+        ) {
+            return Some(ResumeRestorationOutcome::FailedClean(PlatformError::new(
+                "RESOURCE_DENIED",
+                "恢复确认授权已超过有效期，保持 paused 状态。",
+            )));
+        }
+        return Some(ResumeRestorationOutcome::Uncertain { cleanup });
+    }
+
+    if rpc_wall_start.elapsed() >= rpc_deadline_budget {
+        let cleanup = release_held_inputs(desktop, restored_held);
+        if matches!(
+            cleanup,
+            CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+        ) {
+            return Some(ResumeRestorationOutcome::FailedClean(
+                PlatformError::new(
+                    "DEADLINE_EXCEEDED",
+                    "恢复执行超出请求时限，保持 paused 状态。",
+                )
+                .with_retry("afterQuery"),
+            ));
+        }
+        return Some(ResumeRestorationOutcome::Uncertain { cleanup });
+    }
+
+    None
 }
 
 fn is_pre_dispatch_error(err: &PlatformError) -> bool {
@@ -3505,7 +3936,7 @@ fn finalize_or_uncertain_pausing_locked(
         return;
     }
     if finalize_pause_locked(
-        state, lease_id, generation, ctx, desktop, None, None, None, true,
+        state, lease_id, generation, ctx, desktop, None, None, None, None, true,
     )
     .is_err()
         && let Some(lease) = state.current_lease.as_mut()
@@ -3514,6 +3945,7 @@ fn finalize_or_uncertain_pausing_locked(
         lease.state = LeaseState::Uncertain;
         lease.cleanup = cleanup;
         lease.pause_snapshot = None;
+        lease.paused_held_inputs.clear();
         lease.pending_pause = None;
         lease.suspended_segment = None;
         lease.pause_expires_at_us = None;
@@ -3538,6 +3970,8 @@ fn fail_resume_uncertain_locked(
         let lease = state.current_lease.as_mut().unwrap();
         let suspended = lease.suspended_segment.take();
         lease.held_inputs = restored_held;
+        lease.paused_held_inputs.clear();
+        lease.resuming = false;
         lease.state = LeaseState::Uncertain;
         lease.cleanup = cleanup;
         lease.pause_snapshot = None;
@@ -3620,17 +4054,11 @@ fn finalize_pause_locked(
     desktop: &dyn DesktopSession,
     cursor: Option<SegmentCursor>,
     mut suspended: Option<SuspendedSegment>,
+    segment_admission_targets: Option<(&[TargetState], bool)>,
     pause_reason: Option<&str>,
     refresh_ttl: bool,
 ) -> Result<(LeaseSnapshot, Option<SegmentResult>), PlatformError> {
-    let (
-        targets,
-        lease_pointer,
-        input_target_token,
-        mut held_before_release,
-        lease_epoch,
-        lease_id_str,
-    ) = {
+    let (targets, lease_pointer, input_target_token, held_press_order, lease_epoch, lease_id_str) = {
         let lease = require_active_owner_lease_mut(state, lease_id, generation, ctx)?;
         if !matches!(lease.state, LeaseState::Active | LeaseState::Pausing) {
             return Err(PlatformError::new(
@@ -3653,8 +4081,17 @@ fn finalize_pause_locked(
         None => query_pointer_position(desktop)?,
     };
 
-    sort_held_inputs(&mut held_before_release);
-    let target_states = build_target_states(state, &targets, desktop)?;
+    let mut target_states = match segment_admission_targets {
+        Some((adm, true)) => adm.to_vec(),
+        _ => {
+            let live = build_target_states(state, &targets, desktop)?;
+            match segment_admission_targets {
+                Some((adm, false)) if live != adm => adm.to_vec(),
+                _ => live,
+            }
+        }
+    };
+    sort_target_states(&mut target_states);
     let next_pause_seq = state.next_pause_seq + 1;
     let pause_id = format!("pause-{next_pause_seq}");
     let (created_at, expires_at) = current_and_expiry_utc_timestamps(1_800);
@@ -3677,7 +4114,7 @@ fn finalize_pause_locked(
         created_at,
         expires_at,
         cursor,
-        held_before_release,
+        held_press_order.clone(),
         pointer.clone(),
         target_states,
         snapshot_input_target,
@@ -3701,6 +4138,7 @@ fn finalize_pause_locked(
                 lease.state = LeaseState::Paused;
                 lease.cleanup = cleanup;
                 lease.pause_snapshot = Some(candidate_snapshot.clone());
+                lease.paused_held_inputs = held_press_order;
                 lease.pending_pause = None;
                 lease.pause_expires_at_us = Some(now_us.saturating_add(PAUSE_RETENTION_US));
                 if refresh_ttl {
@@ -3740,6 +4178,7 @@ fn finalize_pause_locked(
                 lease.state = LeaseState::Pausing;
                 lease.cleanup = CleanupOutcome::Pending;
                 lease.pause_snapshot = None;
+                lease.paused_held_inputs.clear();
                 lease.pause_expires_at_us = None;
                 lease.reason = Some("INPUT_RELEASE_PENDING".to_owned());
                 lease.suspended_segment = None;
@@ -3776,6 +4215,7 @@ fn finalize_pause_locked(
                 lease.state = LeaseState::Uncertain;
                 lease.cleanup = CleanupOutcome::Failed;
                 lease.pause_snapshot = None;
+                lease.paused_held_inputs.clear();
                 lease.pending_pause = None;
                 lease.suspended_segment = None;
                 lease.pause_expires_at_us = None;
@@ -3857,6 +4297,7 @@ fn finish_uncertain_segment_locked(
         lease.state = LeaseState::Uncertain;
         lease.cleanup = cleanup;
         lease.pause_snapshot = None;
+        lease.paused_held_inputs.clear();
         lease.pending_pause = None;
         lease.suspended_segment = None;
         lease.pause_expires_at_us = None;
@@ -3890,6 +4331,7 @@ fn revoke_current_lease_locked(
 ) -> (u64, CleanupOutcome) {
     let mut lease = state.current_lease.take().unwrap();
     lease.in_flight = None;
+    lease.resuming = false;
     lease.release_pending = false;
     lease.release_waiters = 0;
     let unfinished = lease
@@ -3903,6 +4345,7 @@ fn revoke_current_lease_locked(
     lease.generation = new_generation;
     lease.cleanup = cleanup;
     lease.pause_snapshot = None;
+    lease.paused_held_inputs.clear();
     lease.pending_pause = None;
     lease.pause_expires_at_us = None;
 
@@ -4016,7 +4459,11 @@ fn verify_confirmation_grant(
     Ok(reg.clone())
 }
 
-fn apply_action_to_lease_ledger(lease: &mut ActiveLease, action: &NativeInputAction) {
+fn apply_action_to_lease_ledger(
+    lease: &mut ActiveLease,
+    action: &NativeInputAction,
+    observed_delta_pointer: Option<Option<PausePoint>>,
+) {
     match action {
         NativeInputAction::PointerMovePhysical(pt) => {
             let clamped = PhysicalPoint {
@@ -4032,39 +4479,18 @@ fn apply_action_to_lease_ledger(lease: &mut ActiveLease, action: &NativeInputAct
             bounded.y = bounded.y.clamp(0.0, MAX_COORD_F64);
             lease.pointer = Some(PausePoint::Display(bounded));
         }
-        NativeInputAction::PointerDelta { dx, dy } => {
-            if let Some(ref mut phys) = lease.physical_pointer {
-                phys.x = phys
-                    .x
-                    .saturating_add(dx.round() as i64)
-                    .clamp(MIN_COORD_I64, MAX_COORD_I64);
-                phys.y = phys
-                    .y
-                    .saturating_add(dy.round() as i64)
-                    .clamp(MIN_COORD_I64, MAX_COORD_I64);
-            }
-            match &mut lease.pointer {
-                Some(PausePoint::Physical(pt)) => {
-                    pt.x =
-                        pt.x.saturating_add(dx.round() as i64)
-                            .clamp(MIN_COORD_I64, MAX_COORD_I64);
-                    pt.y =
-                        pt.y.saturating_add(dy.round() as i64)
-                            .clamp(MIN_COORD_I64, MAX_COORD_I64);
-                    lease.physical_pointer = Some(*pt);
-                }
-                Some(PausePoint::Display(pt)) => {
-                    pt.x = (pt.x + dx).clamp(0.0, MAX_COORD_F64);
-                    pt.y = (pt.y + dy).clamp(0.0, MAX_COORD_F64);
-                }
-                None => {}
-            }
+        NativeInputAction::PointerDelta { .. } => {
+            let observed = observed_delta_pointer.flatten();
+            lease.physical_pointer = match observed {
+                Some(PausePoint::Physical(pt)) => Some(pt),
+                _ => None,
+            };
+            lease.pointer = observed;
         }
         NativeInputAction::PointerButtonDown(button) => {
             let item = HeldInput::Button { button: *button };
             if !lease.held_inputs.contains(&item) {
                 lease.held_inputs.push(item);
-                sort_held_inputs(&mut lease.held_inputs);
             }
         }
         NativeInputAction::PointerButtonUp(button) => {
@@ -4075,7 +4501,6 @@ fn apply_action_to_lease_ledger(lease: &mut ActiveLease, action: &NativeInputAct
             let item = HeldInput::Key { key: key.clone() };
             if !lease.held_inputs.contains(&item) {
                 lease.held_inputs.push(item);
-                sort_held_inputs(&mut lease.held_inputs);
             }
         }
         NativeInputAction::KeyUp(key) => {
@@ -4484,6 +4909,11 @@ mod tests {
                 segment_id: "seg-pausing-emg".to_owned(),
                 payload_hash,
                 target_token: "target-a".to_owned(),
+                admission_targets: vec![TargetState {
+                    target_token: "target-a".to_owned(),
+                    target_version: tv.clone(),
+                    topology_version: topov.clone(),
+                }],
                 expected_target_version: tv,
                 expected_topology_version: topov,
                 events: vec![AtomicInputEvent {

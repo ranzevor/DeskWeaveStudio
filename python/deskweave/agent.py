@@ -1293,6 +1293,11 @@ class AgentProcess(Resource):
         except BaseException:
             pass
 
+    @staticmethod
+    def _deadline_ms(budget: Budget) -> int:
+        deadline_seconds = min(remaining(budget), 86_400)
+        return max(1, min(86_400_000, math.ceil(deadline_seconds * 1000)))
+
     def _exchange_frame(
         self,
         key: str,
@@ -1300,6 +1305,7 @@ class AgentProcess(Resource):
         *,
         budget: Budget,
         is_control: bool = False,
+        refresh_deadline: bool = False,
     ) -> dict:
         self._ensure_mux()
         waiter = _PendingWaiter()
@@ -1320,12 +1326,26 @@ class AgentProcess(Resource):
                     budget.check_time()
                     if key in self._pending:
                         raise DeskWeaveError("REQUEST_CONFLICT", "并发请求标识符冲突。")
-                    self._pending[key] = waiter
             if pending_raise is None:
                 sent = False
+                registered = False
                 try:
                     _check_owner(runtime_dir, self._owner_identity)
-                    send_budget = Budget(10.0, Cancellation(None, self._stopping))
+                    with self._mux_lock:
+                        if self._stopping.is_set():
+                            raise closed()
+                        if self._fatal_error is not None:
+                            raise self._fatal_error
+                        rem_seconds = remaining(budget)
+                        if refresh_deadline:
+                            outgoing["deadlineMs"] = max(
+                                1, min(86_400_000, math.ceil(min(rem_seconds, 86_400) * 1000))
+                            )
+                        if key in self._pending:
+                            raise DeskWeaveError("REQUEST_CONFLICT", "并发请求标识符冲突。")
+                        self._pending[key] = waiter
+                        registered = True
+                    send_budget = Budget(rem_seconds, Cancellation(None, self._stopping))
                     channel.send(outgoing, budget=send_budget)
                     sent = True
                     with self._mux_lock:
@@ -1341,16 +1361,24 @@ class AgentProcess(Resource):
                             raise self._fatal_error
                         self._ensure_reader_locked(channel, runtime_dir)
                 except BaseException as error:
-                    with self._mux_lock:
-                        if not sent:
-                            self._pending.pop(key, None)
-                        recorded = closed() if self._stopping.is_set() else error
-                        if self._fatal_error is None:
-                            self._fatal_error = recorded
-                        self._mux_cond.notify_all()
-                    pending_raise = recorded
-                    if not self._stopping.is_set():
-                        send_error_to_abort = recorded
+                    is_pre_send_budget_error = (
+                        not registered
+                        and isinstance(error, DeskWeaveError)
+                        and error.code in {"DEADLINE_EXCEEDED", "CANCELLED"}
+                    )
+                    if is_pre_send_budget_error:
+                        pending_raise = error
+                    else:
+                        with self._mux_lock:
+                            if not sent:
+                                self._pending.pop(key, None)
+                            recorded = closed() if self._stopping.is_set() else error
+                            if self._fatal_error is None:
+                                self._fatal_error = recorded
+                            self._mux_cond.notify_all()
+                        pending_raise = recorded
+                        if not self._stopping.is_set():
+                            send_error_to_abort = recorded
         finally:
             self._send_lock.release()
         if send_error_to_abort is not None and not self._stopping.is_set():
@@ -1558,8 +1586,7 @@ class AgentProcess(Resource):
             raise closed()
         budget = Budget(timeout, Cancellation(cancel, self._stopping))
         request_id = secrets.token_hex(16)
-        deadline_seconds = min(remaining(budget), 86_400)
-        deadline_ms = max(1, min(86_400_000, math.ceil(deadline_seconds * 1000)))
+        deadline_ms = self._deadline_ms(budget)
         request = {
             "protocolVersion": "1.0",
             "kind": "request",
@@ -1579,6 +1606,7 @@ class AgentProcess(Resource):
             request_id,
             request,
             budget=budget,
+            refresh_deadline=True,
         )
         try:
             if (
