@@ -2283,17 +2283,31 @@ impl LeaseCoordinator {
                 return Err(err);
             }
 
-            let live_pointer = query_pointer_position(desktop);
+            let live_pointer = desktop
+                .pointer_position()
+                .and_then(|pt| pt.validate().map(|()| pt));
             let lease = state.current_lease.as_mut().unwrap();
-            if let Ok(pt) = live_pointer {
-                if lease.pointer.is_none() || lease.input_target_token.is_none() {
-                    if let PausePoint::Physical(phys) = pt {
-                        lease.physical_pointer = Some(phys);
-                    }
+            match live_pointer {
+                Ok(pt) => {
+                    lease.physical_pointer = match &pt {
+                        PausePoint::Physical(phys) => Some(*phys),
+                        PausePoint::Display(_) => None,
+                    };
                     lease.pointer = Some(pt);
                 }
-            } else if needs_start_pointer && lease.pointer.is_none() {
-                return Err(live_pointer.unwrap_err());
+                #[cfg(feature = "test-authority")]
+                Err(ref err) if err.code == "CAPABILITY_NOT_IMPLEMENTED" => {
+                    if lease.pointer.is_none() {
+                        let origin = PhysicalPoint { x: 0, y: 0 };
+                        lease.physical_pointer = Some(origin);
+                        lease.pointer = Some(PausePoint::Physical(origin));
+                    }
+                }
+                Err(err) => {
+                    if needs_start_pointer && lease.pointer.is_none() {
+                        return Err(err);
+                    }
+                }
             }
             (lease_targets, lease.pointer.clone())
         };

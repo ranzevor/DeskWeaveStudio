@@ -10256,4 +10256,149 @@ mod tests {
             .unwrap_err();
         assert_eq!(renew_err_2.code, "LEASE_EXPIRED");
     }
+
+    #[test]
+    fn between_segment_pointer_drift_refreshes_ledger_before_smooth_move() {
+        use deskweave_platform_api::{PausePoint, PhysicalPoint, compute_segment_payload_hash};
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+
+        let leases = LeaseCoordinator::new();
+        let ctx = make_ctx("sess-ptr-refresh", "ws-ptr-refresh");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        let acq = leases
+            .handle_lease_acquire(
+                &json_obj(json!({
+                    "runId": "run-ptr-refresh",
+                    "targets": ["target-a"],
+                    "waitMs": 0,
+                    "interruptPolicy": "ignore"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+
+        // Segment 1 populates both lease.pointer and lease.input_target_token at (100, 100).
+        let move_1 = json!({
+            "id": "ptr-move-1",
+            "title": "初始移动",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 100, "y": 100},
+                "durationMs": 0
+            },
+            "on": {}
+        });
+        let h_1 = compute_segment_payload_hash("target-a", &move_1, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-ptr-1",
+                    "payloadHash": h_1,
+                    "targetToken": "target-a",
+                    "operation": move_1
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Simulate external pointer movement between segments while interruptPolicy=ignore.
+        scripted.inner.set_pointer(PhysicalPoint { x: 400, y: 300 });
+        let before = scripted.inner.submitted_actions().len();
+        let move_2 = json!({
+            "id": "ptr-move-2",
+            "title": "跨段观测平滑移动",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 500, "y": 380},
+                "durationMs": 40
+            },
+            "on": {}
+        });
+        let h_2 = compute_segment_payload_hash("target-a", &move_2, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-ptr-2",
+                    "payloadHash": h_2,
+                    "targetToken": "target-a",
+                    "operation": move_2
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        let moved = &scripted.inner.submitted_actions()[before..];
+        assert!(moved.len() >= 5);
+        for (_, action) in moved {
+            let NativeInputAction::PointerMovePhysical(pt) = action else {
+                panic!("expected PointerMovePhysical");
+            };
+            assert!(
+                (400..=500).contains(&pt.x) && (300..=380).contains(&pt.y),
+                "unexpected jump away from live observed (400, 300) -> (500, 380): {pt:?}"
+            );
+        }
+
+        // Another external pointer move before a non-pointer segment also refreshes ledger & pause snapshot.
+        scripted.inner.set_pointer(PhysicalPoint { x: 610, y: 220 });
+        let kd = json!({
+            "id": "ptr-refresh-kd",
+            "title": "按键检查刷新位置",
+            "action": "keyboard.down",
+            "params": {"target": "main", "key": "ShiftLeft"},
+            "on": {}
+        });
+        let h_kd = compute_segment_payload_hash("target-a", &kd, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-ptr-kd",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let paused = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(
+            paused.pause_snapshot.unwrap().pointer,
+            PausePoint::Physical(PhysicalPoint { x: 610, y: 220 })
+        );
+    }
 }
