@@ -1348,7 +1348,23 @@ impl LeaseCoordinator {
         let lease_res = finalize_pause_locked(
             &mut state, &lease_id, generation, ctx, desktop, None, None, None, None, true,
         );
-        lease_res.map(|(snap, _)| snap)
+        match lease_res {
+            Ok((snap, _)) => Ok(snap),
+            Err(err) => {
+                if let Some(lease) = state.current_lease.as_mut().filter(|l| {
+                    l.lease_id == lease_id
+                        && l.generation == generation
+                        && (!l.held_inputs.is_empty() || l.state == LeaseState::Pausing)
+                }) {
+                    mark_pause_uncertain_locked(lease, desktop);
+                    let snap = lease.to_snapshot();
+                    self.wait_cv.notify_all();
+                    snap.validate()?;
+                    return Ok(snap);
+                }
+                Err(err)
+            }
+        }
     }
 
     pub(crate) fn handle_lease_status(
@@ -1552,18 +1568,23 @@ impl LeaseCoordinator {
             lease.resuming = true;
             resume_guard.arm();
         }
+        let check_ctx = ResumeCheckContext {
+            workspace_id: &ctx.workspace_id,
+            lease_id: &lease_id,
+            generation,
+            targets: &targets,
+            pause_snapshot: &pause_snapshot,
+            reg: reg.as_ref(),
+            rpc_wall_start: &rpc_wall_start,
+            rpc_deadline_budget,
+        };
         let (mut state, restoration_outcome) = self.execute_resume_restoration(
             state,
             desktop,
-            &lease_id,
-            generation,
-            &pause_snapshot,
+            &check_ctx,
             &paused_held_inputs,
-            reg.as_ref(),
             should_focus_target,
             should_restore_pointer,
-            &rpc_wall_start,
-            rpc_deadline_budget,
             &mut resume_guard,
         );
         if let Some(lease) = state
@@ -1724,39 +1745,207 @@ impl LeaseCoordinator {
         Ok(final_snapshot)
     }
 
+    fn revalidate_resume_target_state<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, CoordinatorState>,
+        desktop: &dyn DesktopSession,
+        check_ctx: &ResumeCheckContext<'_>,
+        restore_target: Option<&str>,
+        resume_guard: &mut ResumingGuard<'_>,
+    ) -> (
+        MutexGuard<'a, CoordinatorState>,
+        Option<ResumeRestorationOutcome>,
+    ) {
+        if let Some(early) = check_resume_boundary_locked(
+            &mut state,
+            desktop,
+            check_ctx.lease_id,
+            check_ctx.generation,
+            check_ctx.reg,
+            check_ctx.rpc_wall_start,
+            check_ctx.rpc_deadline_budget,
+            &mut resume_guard.restored_held,
+        ) {
+            return (state, Some(early));
+        }
+
+        let target_auth_res: Result<Vec<(String, String)>, PlatformError> = (|| {
+            let now_secs = current_utc_secs();
+            let mut fallbacks = Vec::with_capacity(check_ctx.targets.len());
+            for token in check_ctx.targets {
+                let bound = state.bound_targets.get(token).ok_or_else(|| {
+                    PlatformError::new("RESOURCE_DENIED", format!("目标令牌未绑定：{token}"))
+                })?;
+                if bound.owner_workspace != check_ctx.workspace_id {
+                    return Err(PlatformError::new(
+                        "ACCESS_DENIED",
+                        "目标令牌不属于当前工作空间。",
+                    ));
+                }
+                let exp_secs = parse_utc_timestamp(&bound.descriptor.expires_at)?;
+                if exp_secs <= now_secs {
+                    return Err(PlatformError::target_lost(format!(
+                        "目标授权已超过有效期：{token}"
+                    )));
+                }
+                fallbacks.push((token.clone(), bound.descriptor.target_version.clone()));
+            }
+            if let Some(rt) = restore_target
+                && !check_ctx.targets.iter().any(|t| t == rt)
+            {
+                let bound = state.bound_targets.get(rt).ok_or_else(|| {
+                    PlatformError::new("RESOURCE_DENIED", format!("目标令牌未绑定：{rt}"))
+                })?;
+                if bound.owner_workspace != check_ctx.workspace_id {
+                    return Err(PlatformError::new(
+                        "ACCESS_DENIED",
+                        "目标令牌不属于当前工作空间。",
+                    ));
+                }
+                let exp_secs = parse_utc_timestamp(&bound.descriptor.expires_at)?;
+                if exp_secs <= now_secs {
+                    return Err(PlatformError::target_lost(format!(
+                        "目标授权已超过有效期：{rt}"
+                    )));
+                }
+            }
+            Ok(fallbacks)
+        })();
+
+        let bound_fallbacks = match target_auth_res {
+            Ok(fallbacks) => fallbacks,
+            Err(err) => {
+                let cleanup = release_held_inputs(desktop, &mut resume_guard.restored_held);
+                let outcome = if matches!(
+                    cleanup,
+                    CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+                ) {
+                    ResumeRestorationOutcome::FailedClean(err)
+                } else {
+                    ResumeRestorationOutcome::Uncertain { cleanup }
+                };
+                return (state, Some(outcome));
+            }
+        };
+
+        drop(state);
+        let unlocked_res: Result<(), PlatformError> = (|| {
+            let mut checked_rt = false;
+            for (token, _) in &bound_fallbacks {
+                let status = verify_target_checked(desktop, token)?;
+                if restore_target == Some(token.as_str()) {
+                    checked_rt = true;
+                    if status != TargetStatus::Active {
+                        return Err(PlatformError::target_lost(
+                            "恢复目标未处于前台焦点，保持 paused 状态。",
+                        ));
+                    }
+                } else if matches!(status, TargetStatus::Lost | TargetStatus::Expired) {
+                    return Err(PlatformError::target_lost(format!(
+                        "目标已失效或丢失：{token}"
+                    )));
+                }
+            }
+            if let Some(rt) = restore_target
+                && !checked_rt
+            {
+                let status = verify_target_checked(desktop, rt)?;
+                if status != TargetStatus::Active {
+                    return Err(PlatformError::target_lost(
+                        "恢复目标未处于前台焦点，保持 paused 状态。",
+                    ));
+                }
+            }
+
+            let topology_version = current_topology_version(desktop)?;
+            let mut live_targets = Vec::with_capacity(bound_fallbacks.len());
+            for (token, fallback_version) in &bound_fallbacks {
+                let live_version = match desktop
+                    .targets()
+                    .target_version(&TargetToken(token.clone()))
+                {
+                    Ok(Some(v)) => v,
+                    Ok(None) => fallback_version.clone(),
+                    #[cfg(feature = "test-authority")]
+                    Err(err) if err.code == "CAPABILITY_NOT_IMPLEMENTED" => {
+                        fallback_version.clone()
+                    }
+                    Err(err) => return Err(err),
+                };
+                live_targets.push(TargetState {
+                    target_token: token.clone(),
+                    target_version: live_version,
+                    topology_version: topology_version.clone(),
+                });
+            }
+            sort_target_states(&mut live_targets);
+            if live_targets != check_ctx.pause_snapshot.targets {
+                return Err(PlatformError::target_lost(
+                    "目标版本或显示拓扑已变化，保持 paused 状态。",
+                ));
+            }
+            Ok(())
+        })();
+        state = self.state.lock().unwrap();
+
+        if let Some(early) = check_resume_boundary_locked(
+            &mut state,
+            desktop,
+            check_ctx.lease_id,
+            check_ctx.generation,
+            check_ctx.reg,
+            check_ctx.rpc_wall_start,
+            check_ctx.rpc_deadline_budget,
+            &mut resume_guard.restored_held,
+        ) {
+            return (state, Some(early));
+        }
+
+        if let Err(err) = unlocked_res {
+            let cleanup = release_held_inputs(desktop, &mut resume_guard.restored_held);
+            let outcome = if matches!(
+                cleanup,
+                CleanupOutcome::Succeeded | CleanupOutcome::NotRequired
+            ) {
+                ResumeRestorationOutcome::FailedClean(err)
+            } else {
+                ResumeRestorationOutcome::Uncertain { cleanup }
+            };
+            return (state, Some(outcome));
+        }
+
+        (state, None)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn execute_resume_restoration<'a>(
         &'a self,
         mut state: MutexGuard<'a, CoordinatorState>,
         desktop: &dyn DesktopSession,
-        lease_id: &str,
-        generation: u64,
-        pause_snapshot: &PauseSnapshot,
+        check_ctx: &ResumeCheckContext<'_>,
         paused_held_inputs: &[HeldInput],
-        reg: Option<&RegisteredConfirmation>,
         should_focus_target: bool,
         should_restore_pointer: bool,
-        rpc_wall_start: &Instant,
-        rpc_deadline_budget: Duration,
         resume_guard: &mut ResumingGuard<'_>,
     ) -> (MutexGuard<'a, CoordinatorState>, ResumeRestorationOutcome) {
         if let Some(early) = check_resume_boundary_locked(
             &mut state,
             desktop,
-            lease_id,
-            generation,
-            reg,
-            rpc_wall_start,
-            rpc_deadline_budget,
+            check_ctx.lease_id,
+            check_ctx.generation,
+            check_ctx.reg,
+            check_ctx.rpc_wall_start,
+            check_ctx.rpc_deadline_budget,
             &mut resume_guard.restored_held,
         ) {
             return (state, early);
         }
 
         if should_focus_target {
-            let restore_target = match reg
+            let restore_target = match check_ctx
+                .reg
                 .and_then(|r| r.restore_target_token.as_deref())
-                .or(pause_snapshot.input_target_token.as_deref())
+                .or(check_ctx.pause_snapshot.input_target_token.as_deref())
             {
                 Some(token) => token,
                 None => {
@@ -1775,49 +1964,21 @@ impl LeaseCoordinator {
             if let Err(err) = focus_res {
                 return (state, ResumeRestorationOutcome::FailedClean(err));
             }
-            if let Some(early) = check_resume_boundary_locked(
-                &mut state,
+            let (next_state, early) = self.revalidate_resume_target_state(
+                state,
                 desktop,
-                lease_id,
-                generation,
-                reg,
-                rpc_wall_start,
-                rpc_deadline_budget,
-                &mut resume_guard.restored_held,
-            ) {
+                check_ctx,
+                Some(restore_target),
+                resume_guard,
+            );
+            state = next_state;
+            if let Some(early) = early {
                 return (state, early);
-            }
-
-            drop(state);
-            let verify_res = verify_target_checked(desktop, restore_target);
-            state = self.state.lock().unwrap();
-            let status = match verify_res {
-                Ok(status) => status,
-                Err(err) => return (state, ResumeRestorationOutcome::FailedClean(err)),
-            };
-            if let Some(early) = check_resume_boundary_locked(
-                &mut state,
-                desktop,
-                lease_id,
-                generation,
-                reg,
-                rpc_wall_start,
-                rpc_deadline_budget,
-                &mut resume_guard.restored_held,
-            ) {
-                return (state, early);
-            }
-            if status != TargetStatus::Active {
-                return (
-                    state,
-                    ResumeRestorationOutcome::FailedClean(PlatformError::target_lost(
-                        "恢复目标未能取得前台焦点，保持 paused 状态。",
-                    )),
-                );
             }
 
             if should_restore_pointer {
-                let target_pointer = reg
+                let target_pointer = check_ctx
+                    .reg
                     .and_then(|r| r.pointer_to_restore.as_ref())
                     .expect("pointer_to_restore checked by should_restore_pointer");
                 let move_action = match target_pointer {
@@ -1829,16 +1990,15 @@ impl LeaseCoordinator {
                 state = self.state.lock().unwrap();
                 match move_res {
                     Ok(SubmissionOutcome::Submitted) => {
-                        if let Some(early) = check_resume_boundary_locked(
-                            &mut state,
+                        let (next_state, early) = self.revalidate_resume_target_state(
+                            state,
                             desktop,
-                            lease_id,
-                            generation,
-                            reg,
-                            rpc_wall_start,
-                            rpc_deadline_budget,
-                            &mut resume_guard.restored_held,
-                        ) {
+                            check_ctx,
+                            Some(restore_target),
+                            resume_guard,
+                        );
+                        state = next_state;
+                        if let Some(early) = early {
                             return (state, early);
                         }
                     }
@@ -1878,16 +2038,15 @@ impl LeaseCoordinator {
                 match submit_res {
                     Ok(SubmissionOutcome::Submitted) => {
                         resume_guard.restored_held.push(held.clone());
-                        if let Some(early) = check_resume_boundary_locked(
-                            &mut state,
+                        let (next_state, early) = self.revalidate_resume_target_state(
+                            state,
                             desktop,
-                            lease_id,
-                            generation,
-                            reg,
-                            rpc_wall_start,
-                            rpc_deadline_budget,
-                            &mut resume_guard.restored_held,
-                        ) {
+                            check_ctx,
+                            Some(restore_target),
+                            resume_guard,
+                        );
+                        state = next_state;
+                        if let Some(early) = early {
                             return (state, early);
                         }
                     }
@@ -1924,52 +2083,40 @@ impl LeaseCoordinator {
                     }
                 }
             }
-        } else if let Some(restore_target) = &pause_snapshot.input_target_token {
-            drop(state);
-            let verify_res = verify_target_checked(desktop, restore_target);
-            state = self.state.lock().unwrap();
-            let status = match verify_res {
-                Ok(status) => status,
-                Err(err) => return (state, ResumeRestorationOutcome::FailedClean(err)),
-            };
-            if let Some(early) = check_resume_boundary_locked(
-                &mut state,
+        } else if let Some(restore_target) = check_ctx.pause_snapshot.input_target_token.as_deref()
+        {
+            let (next_state, early) = self.revalidate_resume_target_state(
+                state,
                 desktop,
-                lease_id,
-                generation,
-                reg,
-                rpc_wall_start,
-                rpc_deadline_budget,
-                &mut resume_guard.restored_held,
-            ) {
+                check_ctx,
+                Some(restore_target),
+                resume_guard,
+            );
+            state = next_state;
+            if let Some(early) = early {
                 return (state, early);
-            }
-            if status != TargetStatus::Active {
-                return (
-                    state,
-                    ResumeRestorationOutcome::FailedClean(PlatformError::target_lost(
-                        "输入目标当前不在前台。",
-                    )),
-                );
             }
         }
 
+        let effective_restore_target = check_ctx
+            .reg
+            .and_then(|r| r.restore_target_token.as_deref())
+            .or(check_ctx.pause_snapshot.input_target_token.as_deref());
         let resumed_pointer = if should_restore_pointer {
-            reg.and_then(|r| r.pointer_to_restore.clone())
+            check_ctx.reg.and_then(|r| r.pointer_to_restore.clone())
         } else {
             drop(state);
             let ptr = query_pointer_position(desktop).ok();
             state = self.state.lock().unwrap();
-            if let Some(early) = check_resume_boundary_locked(
-                &mut state,
+            let (next_state, early) = self.revalidate_resume_target_state(
+                state,
                 desktop,
-                lease_id,
-                generation,
-                reg,
-                rpc_wall_start,
-                rpc_deadline_budget,
-                &mut resume_guard.restored_held,
-            ) {
+                check_ctx,
+                effective_restore_target,
+                resume_guard,
+            );
+            state = next_state;
+            if let Some(early) = early {
                 return (state, early);
             }
             ptr
@@ -3465,6 +3612,17 @@ impl Drop for ResumingGuard<'_> {
     }
 }
 
+struct ResumeCheckContext<'a> {
+    workspace_id: &'a str,
+    lease_id: &'a str,
+    generation: u64,
+    targets: &'a [String],
+    pause_snapshot: &'a PauseSnapshot,
+    reg: Option<&'a RegisteredConfirmation>,
+    rpc_wall_start: &'a Instant,
+    rpc_deadline_budget: Duration,
+}
+
 enum ResumeRestorationOutcome {
     Completed { resumed_pointer: Option<PausePoint> },
     FailedClean(PlatformError),
@@ -3915,6 +4073,18 @@ fn record_rejected_segment_locked(
     Ok(rejected_result)
 }
 
+fn mark_pause_uncertain_locked(lease: &mut ActiveLease, desktop: &dyn DesktopSession) {
+    let cleanup = release_held_inputs(desktop, &mut lease.held_inputs);
+    lease.state = LeaseState::Uncertain;
+    lease.cleanup = cleanup;
+    lease.pause_snapshot = None;
+    lease.paused_held_inputs.clear();
+    lease.pending_pause = None;
+    lease.suspended_segment = None;
+    lease.pause_expires_at_us = None;
+    lease.reason = Some("EFFECT_UNCERTAIN".to_owned());
+}
+
 fn finalize_or_uncertain_pausing_locked(
     state: &mut CoordinatorState,
     lease_id: &str,
@@ -3941,15 +4111,7 @@ fn finalize_or_uncertain_pausing_locked(
     .is_err()
         && let Some(lease) = state.current_lease.as_mut()
     {
-        let cleanup = release_held_inputs(desktop, &mut lease.held_inputs);
-        lease.state = LeaseState::Uncertain;
-        lease.cleanup = cleanup;
-        lease.pause_snapshot = None;
-        lease.paused_held_inputs.clear();
-        lease.pending_pause = None;
-        lease.suspended_segment = None;
-        lease.pause_expires_at_us = None;
-        lease.reason = Some("EFFECT_UNCERTAIN".to_owned());
+        mark_pause_uncertain_locked(lease, desktop);
     }
 }
 
