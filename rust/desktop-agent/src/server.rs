@@ -2802,6 +2802,7 @@ mod tests {
         submit_notify: Mutex<Option<(usize, mpsc::Sender<usize>)>>,
         submit_gate: Mutex<Option<SubmitGate>>,
         panic_on_submit: Mutex<Option<usize>>,
+        trigger_emergency_on_pointer: Mutex<bool>,
     }
 
     impl ScriptedDesktop {
@@ -2818,6 +2819,7 @@ mod tests {
                 submit_notify: Mutex::new(None),
                 submit_gate: Mutex::new(None),
                 panic_on_submit: Mutex::new(None),
+                trigger_emergency_on_pointer: Mutex::new(false),
             }
         }
 
@@ -2865,6 +2867,10 @@ mod tests {
             *self.submit_count.lock().unwrap() = 0;
             *self.panic_on_submit.lock().unwrap() = Some(count);
         }
+
+        fn set_trigger_emergency_on_pointer(&self, trigger: bool) {
+            *self.trigger_emergency_on_pointer.lock().unwrap() = trigger;
+        }
     }
 
     impl DesktopSession for ScriptedDesktop {
@@ -2893,6 +2899,17 @@ mod tests {
         }
 
         fn pointer_position(&self) -> Result<deskweave_platform_api::PausePoint, PlatformError> {
+            {
+                let mut trigger = self.trigger_emergency_on_pointer.lock().unwrap();
+                if *trigger {
+                    *trigger = false;
+                    let _ = self.inner.emergency().trigger_lock();
+                    return Err(PlatformError::new(
+                        "RESOURCE_DENIED",
+                        "emergency locked during pointer query",
+                    ));
+                }
+            }
             if let Some(ref override_res) = *self.pointer_override.lock().unwrap() {
                 return override_res.clone();
             }
@@ -10400,5 +10417,1419 @@ mod tests {
             paused.pause_snapshot.unwrap().pointer,
             PausePoint::Physical(PhysicalPoint { x: 610, y: 220 })
         );
+    }
+
+    #[test]
+    fn idle_held_lease_emergency_lock_revokes_clears_waiters_and_blocks_concurrent_renew() {
+        use deskweave_platform_api::{
+            CleanupOutcome, EmergencyState, HeldInput, LeaseState, compute_segment_payload_hash,
+        };
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+
+        let leases = Arc::new(LeaseCoordinator::new());
+        let ctx_owner = make_ctx("sess-emg-idle", "ws-emg-idle");
+        let ctx_waiter = make_ctx("sess-emg-waiter", "ws-emg-idle");
+        let ctx_other_same_ws = make_ctx("sess-emg-other-same-ws", "ws-emg-idle");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap();
+
+        let acq = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-emg-idle", "targets": ["target-a"], "waitMs": 0})),
+                &ctx_owner,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+
+        let kd = json!({
+            "id": "emg-idle-kd",
+            "title": "段间保持按键",
+            "action": "keyboard.down",
+            "params": {"target": "main", "key": "ShiftLeft"},
+            "on": {}
+        });
+        let h_kd = compute_segment_payload_hash("target-a", &kd, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-emg-idle-kd",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_owner,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        let stop_bg = StopSignal::new().unwrap();
+        let bg_handle = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let s = stop_bg.clone();
+            thread::spawn(move || {
+                l.drive_expiry_loop(d.as_ref(), &s);
+            })
+        };
+
+        let waiter_handle = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let c = ctx_waiter;
+            thread::spawn(move || {
+                l.handle_lease_acquire(
+                    &json_obj(json!({
+                        "runId": "run-emg-waiter",
+                        "targets": ["target-a"],
+                        "waitMs": 5000
+                    })),
+                    &c,
+                    d.as_ref(),
+                    || false,
+                    5000,
+                )
+            })
+        };
+
+        let queue_deadline = Instant::now() + Duration::from_secs(2);
+        while leases.wait_queue_len() == 0 {
+            assert!(
+                Instant::now() < queue_deadline,
+                "waiter did not enqueue in time"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        let emg_gen = scripted.emergency().trigger_lock().unwrap();
+        let non_owner_renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx_other_same_ws,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(non_owner_renew_err.code, "ACCESS_DENIED");
+
+        let renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(renew_err.code, "RESOURCE_DENIED");
+
+        let waiter_err = waiter_handle.join().unwrap().unwrap_err();
+        assert_eq!(waiter_err.code, "RESOURCE_DENIED");
+
+        let cleanup_deadline = Instant::now() + Duration::from_secs(2);
+        while scripted.inner.released_batches().is_empty() || leases.wait_queue_len() != 0 {
+            assert!(
+                Instant::now() < cleanup_deadline,
+                "idle emergency cleanup did not settle in time"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned()
+            }]
+        );
+        let status = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq.lease_id})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status.state, LeaseState::Released);
+        assert_eq!(status.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+
+        scripted.emergency().rearm(emg_gen).unwrap();
+        assert_eq!(scripted.emergency().state(), EmergencyState::Armed);
+        let after_rearm_renew = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(after_rearm_renew.code, "LEASE_EXPIRED");
+
+        stop_bg.trigger();
+        leases.notify_all();
+        bg_handle.join().unwrap();
+
+        // Subcase B: sub-tick trigger_lock + immediate rearm without background loop still revokes idle held lease
+        // and rejects any waiter woken after rearm with RESOURCE_DENIED (not SESSION_UNAVAILABLE).
+        let acq_2 = leases
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-after-rearm", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_owner,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        assert_ne!(acq_2.lease_id, acq.lease_id);
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_2.lease_id,
+                    "generation": acq_2.generation,
+                    "segmentId": "seg-emg-subtick-kd",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_owner,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        let waiter_rearm_handle = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let c = make_ctx("sess-emg-waiter-rearm", "ws-emg-idle");
+            thread::spawn(move || {
+                l.handle_lease_acquire(
+                    &json_obj(json!({
+                        "runId": "run-emg-waiter-rearm",
+                        "targets": ["target-a"],
+                        "waitMs": 5000
+                    })),
+                    &c,
+                    d.as_ref(),
+                    || false,
+                    5000,
+                )
+            })
+        };
+        let queue_deadline_2 = Instant::now() + Duration::from_secs(2);
+        while leases.wait_queue_len() == 0 {
+            assert!(
+                Instant::now() < queue_deadline_2,
+                "second waiter did not enqueue in time"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        let releases_before_subtick = scripted.inner.released_batches().len();
+        let subtick_lock_gen = scripted.emergency().trigger_lock().unwrap();
+        scripted.emergency().rearm(subtick_lock_gen).unwrap();
+        leases.notify_all();
+
+        let waiter_rearm_err = waiter_rearm_handle.join().unwrap().unwrap_err();
+        assert_eq!(waiter_rearm_err.code, "RESOURCE_DENIED");
+
+        let subtick_renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_2.lease_id, "generation": acq_2.generation})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(subtick_renew_err.code, "LEASE_EXPIRED");
+        assert_eq!(
+            scripted.inner.released_batches().len(),
+            releases_before_subtick + 1
+        );
+        let status_2 = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_2.lease_id})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status_2.state, LeaseState::Released);
+        assert_eq!(status_2.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+
+        // Subcase C: Idle emergency lock with release failure marks Uncertain and blocks subsequent acquire after rearm.
+        let acq_3 = leases
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-emg-uncertain", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_owner,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_3.lease_id,
+                    "generation": acq_3.generation,
+                    "segmentId": "seg-emg-uncertain-kd",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_owner,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        scripted.inner.set_cleanup_outcome(CleanupOutcome::Failed);
+        let uncertain_lock_gen = scripted.emergency().trigger_lock().unwrap();
+        let uncertain_renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_3.lease_id, "generation": acq_3.generation})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(uncertain_renew_err.code, "RESOURCE_DENIED");
+        let status_3 = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_3.lease_id})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status_3.state, LeaseState::Uncertain);
+        assert_eq!(status_3.cleanup, CleanupOutcome::Failed);
+        scripted.emergency().rearm(uncertain_lock_gen).unwrap();
+        let after_uncertain_acq = leases
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-blocked-uncertain", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_owner,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(after_uncertain_acq.code, "EFFECT_UNCERTAIN");
+
+        // Subcases D/E/F on clean coordinator: paused resume emergency lock, TTL+emergency ordering, and pointer_position trigger during finalize_or_uncertain_pausing_locked.
+        let (topo_2, caps_2) = macos_topology_and_caps();
+        let scripted_2 = Arc::new(ScriptedDesktop::new(caps_2, Ok(topo_2)));
+        scripted_2
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases_2 = Arc::new(LeaseCoordinator::new());
+        let ctx_owner_2 = make_ctx("sess-emg-2-owner", "ws-emg-2");
+        let ctx_other_2 = make_ctx("sess-emg-2-other", "ws-emg-2");
+        leases_2
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+            )
+            .unwrap();
+
+        // Subcase D: Paused lease + trigger_lock() enforces ACCESS_DENIED / RESOURCE_DENIED on resume and stays revoked across rearm.
+        let acq_d = leases_2
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-emg-paused-d", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let paused_d = leases_2
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq_d.lease_id, "generation": acq_d.generation})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let pause_id_d = paused_d.pause_snapshot.unwrap().pause_id;
+        let emg_gen_d = scripted_2.emergency().trigger_lock().unwrap();
+        let non_owner_resume_err = leases_2
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq_d.lease_id,
+                    "generation": acq_d.generation,
+                    "pauseId": pause_id_d,
+                    "resumeAttemptId": "att-emg-non-owner",
+                    "resumePlanHash": "a".repeat(64)
+                })),
+                &ctx_other_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(non_owner_resume_err.code, "ACCESS_DENIED");
+        let owner_resume_err = leases_2
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq_d.lease_id,
+                    "generation": acq_d.generation,
+                    "pauseId": pause_id_d,
+                    "resumeAttemptId": "att-emg-owner",
+                    "resumePlanHash": "b".repeat(64)
+                })),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(owner_resume_err.code, "RESOURCE_DENIED");
+        scripted_2.emergency().rearm(emg_gen_d).unwrap();
+        let status_d = leases_2
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_d.lease_id})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status_d.state, LeaseState::Released);
+        assert_eq!(status_d.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+        let resume_after_rearm_err = leases_2
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq_d.lease_id,
+                    "generation": acq_d.generation,
+                    "pauseId": pause_id_d,
+                    "resumeAttemptId": "att-emg-after-rearm",
+                    "resumePlanHash": "c".repeat(64)
+                })),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(resume_after_rearm_err.code, "LEASE_EXPIRED");
+
+        // Subcase E: Idle lease with both trigger_lock() and 2s heartbeat TTL elapsed records EMERGENCY_LOCKED (not LEASE_EXPIRED) on segment.submit.
+        let acq_e = leases_2
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-emg-ttl-e", "targets": ["target-a"], "waitMs": 0})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let emg_gen_e = scripted_2.emergency().trigger_lock().unwrap();
+        scripted_2.inner.fake_clock().advance_us(2_500_000);
+        let seg_emg_err = leases_2
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_e.lease_id,
+                    "generation": acq_e.generation,
+                    "segmentId": "seg-emg-before-ttl",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(seg_emg_err.code, "RESOURCE_DENIED");
+        let status_e = leases_2
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_e.lease_id})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status_e.state, LeaseState::Released);
+        assert_eq!(status_e.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+        scripted_2.emergency().rearm(emg_gen_e).unwrap();
+
+        // Subcase F: Emergency lock triggered inside pointer_position during in-flight pause revokes EMERGENCY_LOCKED rather than wedging Uncertain.
+        let acq_f = leases_2
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-emg-ptr-pause-f", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let (entered_rx, release_tx) = scripted_2.gate_submit_on(1);
+        let seg_handle_f = {
+            let l = Arc::clone(&leases_2);
+            let d = Arc::clone(&scripted_2);
+            let c = ctx_owner_2.clone();
+            let lid = acq_f.lease_id.clone();
+            let lease_gen = acq_f.generation;
+            let op = kd.clone();
+            let ph = h_kd.clone();
+            thread::spawn(move || {
+                l.handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lease_gen,
+                        "segmentId": "seg-emg-ptr-pause",
+                        "payloadHash": ph,
+                        "targetToken": "target-a",
+                        "operation": op
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        entered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("gated segment did not enter submit");
+        let pause_handle_f = {
+            let l = Arc::clone(&leases_2);
+            let d = Arc::clone(&scripted_2);
+            let c = ctx_owner_2.clone();
+            let lid = acq_f.lease_id.clone();
+            let lease_gen = acq_f.generation;
+            thread::spawn(move || {
+                l.handle_lease_pause(
+                    &json_obj(json!({"leaseId": lid, "generation": lease_gen})),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        let pausing_deadline = Instant::now() + Duration::from_secs(2);
+        while leases_2
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_f.lease_id})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+            )
+            .unwrap()
+            .state
+            != LeaseState::Pausing
+        {
+            assert!(
+                Instant::now() < pausing_deadline,
+                "lease did not enter Pausing state before release"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        scripted_2.set_trigger_emergency_on_pointer(true);
+        release_tx.send(()).unwrap();
+        let _ = seg_handle_f.join().unwrap().unwrap();
+        let pause_err_f = pause_handle_f.join().unwrap().unwrap_err();
+        assert_eq!(pause_err_f.code, "RESOURCE_DENIED");
+        let status_f = leases_2
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_f.lease_id})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status_f.state, LeaseState::Released);
+        assert_eq!(status_f.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+        let emg_gen_f = scripted_2.emergency().generation();
+        scripted_2.emergency().rearm(emg_gen_f).unwrap();
+        let acq_after_f = leases_2
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-after-ptr-emg", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        leases_2
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_after_f.lease_id,
+                    "generation": acq_after_f.generation,
+                    "reason": "finished"
+                })),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Subcase G: Emergency lock inside finalize_pause_locked via suspend_segment_on_pause_locked (dispatched_count == 0, held_inputs non-empty) revokes EMERGENCY_LOCKED instead of wedging Uncertain.
+        let acq_g = leases_2
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-emg-suspend-zero-g", "targets": ["target-a"], "waitMs": 0})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        leases_2
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_g.lease_id,
+                    "generation": acq_g.generation,
+                    "segmentId": "seg-emg-g-kd",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let move_op_g = json!({
+            "id": "slow-move-emg-g",
+            "title": "未派发延迟段急停清理",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 140, "y": 90},
+                "durationMs": 200_000
+            },
+            "on": {}
+        });
+        let h_move_g = compute_segment_payload_hash("target-a", &move_op_g, None).unwrap();
+        let h_move_g_q = h_move_g.clone();
+        let seg_handle_g = {
+            let l = Arc::clone(&leases_2);
+            let d = Arc::clone(&scripted_2);
+            let c = ctx_owner_2.clone();
+            let lid = acq_g.lease_id.clone();
+            let lease_gen = acq_g.generation;
+            thread::spawn(move || {
+                l.handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lease_gen,
+                        "segmentId": "seg-emg-g-move",
+                        "payloadHash": h_move_g,
+                        "targetToken": "target-a",
+                        "operation": move_op_g
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        let running_deadline_g = Instant::now() + Duration::from_secs(2);
+        loop {
+            if let Ok(st) = leases_2.handle_segment_status(
+                &json_obj(json!({"segmentId": "seg-emg-g-move", "payloadHash": h_move_g_q})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+            ) && st.state == deskweave_platform_api::SegmentState::Running
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < running_deadline_g,
+                "delayed segment did not enter Running state in time"
+            );
+            thread::sleep(Duration::from_millis(2));
+        }
+        let rel_before_g = scripted_2.inner.released_batches().len();
+        scripted_2.set_trigger_emergency_on_pointer(true);
+        let pause_err_g = leases_2
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq_g.lease_id, "generation": acq_g.generation})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(pause_err_g.code, "RESOURCE_DENIED");
+        let seg_err_g = seg_handle_g.join().unwrap().unwrap_err();
+        assert_eq!(seg_err_g.code, "RESOURCE_DENIED");
+        let status_g = leases_2
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_g.lease_id})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(status_g.state, LeaseState::Released);
+        assert_eq!(status_g.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+        assert_eq!(scripted_2.inner.released_batches().len(), rel_before_g + 1);
+        assert_eq!(
+            scripted_2.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned()
+            }]
+        );
+        let emg_gen_g = scripted_2.emergency().generation();
+        scripted_2.emergency().rearm(emg_gen_g).unwrap();
+        let acq_after_g = leases_2
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-after-suspend-zero-g", "targets": ["target-a"], "waitMs": 0})),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        leases_2
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_after_g.lease_id,
+                    "generation": acq_after_g.generation,
+                    "reason": "finished"
+                })),
+                &ctx_owner_2,
+                scripted_2.as_ref(),
+                5000,
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn cross_segment_held_key_target_unfocus_and_drift_pauses_on_renew_and_monitor() {
+        use deskweave_platform_api::{
+            DisplayTopology, HeldInput, LeaseState, TargetStatus, compute_segment_payload_hash,
+        };
+
+        let (base_topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(base_topo.clone())));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+
+        let leases = Arc::new(LeaseCoordinator::new());
+        let ctx = make_ctx("sess-cross-focus", "ws-cross-focus");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+
+        // Subcase A: interruptPolicy=ignore + cross-segment held ShiftLeft -> foreground switch -> lease.renew pauses & releases.
+        let acq_a = leases
+            .handle_lease_acquire(
+                &json_obj(json!({
+                    "runId": "run-focus-renew",
+                    "targets": ["target-a"],
+                    "waitMs": 0,
+                    "interruptPolicy": "ignore"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let kd_shift = json!({
+            "id": "focus-kd-shift",
+            "title": "跨段按住Shift",
+            "action": "keyboard.down",
+            "params": {"target": "main", "key": "ShiftLeft"},
+            "on": {}
+        });
+        let h_shift = compute_segment_payload_hash("target-a", &kd_shift, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_a.lease_id,
+                    "generation": acq_a.generation,
+                    "segmentId": "seg-focus-a",
+                    "payloadHash": h_shift,
+                    "targetToken": "target-a",
+                    "operation": kd_shift
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        scripted
+            .inner
+            .set_target_status("target-a", TargetStatus::Unfocused);
+        let renew_unfocus_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_a.lease_id, "generation": acq_a.generation})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(renew_unfocus_err.code, "TARGET_LOST");
+        assert_eq!(renew_unfocus_err.retry, "afterQuery");
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned()
+            }]
+        );
+        let st_a = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_a.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_a.state, LeaseState::Paused);
+        assert_eq!(st_a.reason.as_deref(), Some("TARGET_LOST"));
+        assert_eq!(
+            st_a.pause_snapshot.unwrap().held_inputs,
+            vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned()
+            }]
+        );
+        leases
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_a.lease_id,
+                    "generation": acq_a.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Subcase B: background monitor pauses & releases ControlLeft without awaiting another RPC.
+        scripted
+            .inner
+            .set_target_status("target-a", TargetStatus::Active);
+        let acq_b = leases
+            .handle_lease_acquire(
+                &json_obj(json!({
+                    "runId": "run-focus-monitor",
+                    "targets": ["target-a"],
+                    "waitMs": 0,
+                    "interruptPolicy": "ignore"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let kd_ctrl = json!({
+            "id": "focus-kd-ctrl",
+            "title": "跨段按住Ctrl",
+            "action": "keyboard.down",
+            "params": {"target": "main", "key": "ControlLeft"},
+            "on": {}
+        });
+        let h_ctrl = compute_segment_payload_hash("target-a", &kd_ctrl, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_b.lease_id,
+                    "generation": acq_b.generation,
+                    "segmentId": "seg-focus-b",
+                    "payloadHash": h_ctrl,
+                    "targetToken": "target-a",
+                    "operation": kd_ctrl
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        let releases_before = scripted.inner.released_batches().len();
+        let stop_bg = StopSignal::new().unwrap();
+        let bg_handle = {
+            let l = Arc::clone(&leases);
+            let d = Arc::clone(&scripted);
+            let s = stop_bg.clone();
+            thread::spawn(move || {
+                l.drive_expiry_loop(d.as_ref(), &s);
+            })
+        };
+        scripted
+            .inner
+            .set_target_status("target-a", TargetStatus::Unfocused);
+        let release_deadline = Instant::now() + Duration::from_secs(2);
+        while scripted.inner.released_batches().len() == releases_before {
+            assert!(
+                Instant::now() < release_deadline,
+                "background monitor did not pause unfocused lease in time"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ControlLeft".to_owned()
+            }]
+        );
+        let st_b = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_b.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_b.state, LeaseState::Paused);
+        assert_eq!(st_b.reason.as_deref(), Some("TARGET_LOST"));
+        assert_eq!(
+            st_b.pause_snapshot.unwrap().held_inputs,
+            vec![HeldInput::Key {
+                key: "ControlLeft".to_owned()
+            }]
+        );
+        stop_bg.trigger();
+        leases.notify_all();
+        bg_handle.join().unwrap();
+        leases
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_b.lease_id,
+                    "generation": acq_b.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Subcase C: target_version drift and topology_version drift during renew pause & preserve pre-drift baseline.
+        scripted
+            .inner
+            .set_target_status("target-a", TargetStatus::Active);
+        let acq_c1 = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-drift-tv", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let kd_alt = json!({
+            "id": "focus-kd-alt",
+            "title": "跨段按住Alt",
+            "action": "keyboard.down",
+            "params": {"target": "main", "key": "AltLeft"},
+            "on": {}
+        });
+        let h_alt = compute_segment_payload_hash("target-a", &kd_alt, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_c1.lease_id,
+                    "generation": acq_c1.generation,
+                    "segmentId": "seg-focus-c1",
+                    "payloadHash": h_alt,
+                    "targetToken": "target-a",
+                    "operation": kd_alt
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        scripted.inner.set_target_version("target-a", "2");
+        let tv_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_c1.lease_id, "generation": acq_c1.generation})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(tv_err.code, "TARGET_LOST");
+        assert_eq!(tv_err.retry, "afterQuery");
+        let st_c1 = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_c1.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_c1.state, LeaseState::Paused);
+        assert_eq!(st_c1.reason.as_deref(), Some("TARGET_LOST"));
+        assert_eq!(st_c1.pause_snapshot.unwrap().targets[0].target_version, "1");
+        leases
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_c1.lease_id,
+                    "generation": acq_c1.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        scripted.inner.set_target_version("target-a", "1");
+        let acq_c2 = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-drift-topo", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_c2.lease_id,
+                    "generation": acq_c2.generation,
+                    "segmentId": "seg-focus-c2",
+                    "payloadHash": h_alt,
+                    "targetToken": "target-a",
+                    "operation": kd_alt
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let expected_base_topo_ver = base_topo.version().to_string();
+        let mut drifted_topo = base_topo;
+        match &mut drifted_topo {
+            DisplayTopology::Physical(t) => t.version += 1,
+            DisplayTopology::DisplayLocal(t) => t.version += 1,
+        }
+        scripted.inner.set_topology(Ok(drifted_topo));
+        let topo_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_c2.lease_id, "generation": acq_c2.generation})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(topo_err.code, "TARGET_LOST");
+        assert_eq!(topo_err.retry, "afterQuery");
+        let st_c2 = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_c2.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_c2.state, LeaseState::Paused);
+        assert_eq!(st_c2.reason.as_deref(), Some("TOPOLOGY_CHANGED"));
+        assert_eq!(
+            st_c2.pause_snapshot.unwrap().targets[0].topology_version,
+            expected_base_topo_ver
+        );
+
+        // Subcase D: Multi-target un-held focus switch between authorized targets keeps lease Active until all bound targets lose focus or held_inputs is non-empty.
+        let (topo_d, caps_d) = macos_topology_and_caps();
+        let scripted_d = Arc::new(ScriptedDesktop::new(caps_d, Ok(topo_d)));
+        scripted_d
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        scripted_d
+            .inner
+            .register_grant("grant-b", target_desc("target-b", "2099-01-01T00:00:00Z"));
+        let leases_d = Arc::new(LeaseCoordinator::new());
+        let ctx_d = make_ctx("sess-multi-focus", "ws-multi-focus");
+        leases_d
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx_d,
+                scripted_d.as_ref(),
+            )
+            .unwrap();
+        leases_d
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-b"})),
+                &ctx_d,
+                scripted_d.as_ref(),
+            )
+            .unwrap();
+
+        let acq_d1 = leases_d
+            .handle_lease_acquire(
+                &json_obj(json!({
+                    "runId": "run-multi-focus-1",
+                    "targets": ["target-a", "target-b"],
+                    "waitMs": 0,
+                    "interruptPolicy": "ignore"
+                })),
+                &ctx_d,
+                scripted_d.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let move_a = json!({
+            "id": "multi-move-a",
+            "title": "无按住切换焦点移动",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 110, "y": 120},
+                "durationMs": 0
+            },
+            "on": {}
+        });
+        let h_move_a = compute_segment_payload_hash("target-a", &move_a, None).unwrap();
+        leases_d
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_d1.lease_id,
+                    "generation": acq_d1.generation,
+                    "segmentId": "seg-multi-move-a",
+                    "payloadHash": h_move_a,
+                    "targetToken": "target-a",
+                    "operation": move_a
+                })),
+                &ctx_d,
+                scripted_d.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        scripted_d
+            .inner
+            .set_target_status("target-a", TargetStatus::Unfocused);
+        let renew_ok = leases_d
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_d1.lease_id, "generation": acq_d1.generation})),
+                &ctx_d,
+                scripted_d.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(renew_ok.generation, acq_d1.generation);
+        assert_eq!(
+            leases_d
+                .handle_lease_status(
+                    &json_obj(json!({"leaseId": acq_d1.lease_id})),
+                    &ctx_d,
+                    scripted_d.as_ref(),
+                )
+                .unwrap()
+                .state,
+            LeaseState::Active
+        );
+
+        scripted_d
+            .inner
+            .set_target_status("target-b", TargetStatus::Unfocused);
+        let renew_all_unfocused = leases_d
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_d1.lease_id, "generation": acq_d1.generation})),
+                &ctx_d,
+                scripted_d.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(renew_all_unfocused.code, "TARGET_LOST");
+        let st_d1 = leases_d
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_d1.lease_id})),
+                &ctx_d,
+                scripted_d.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_d1.state, LeaseState::Paused);
+        assert_eq!(st_d1.reason.as_deref(), Some("TARGET_LOST"));
+        leases_d
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_d1.lease_id,
+                    "generation": acq_d1.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx_d,
+                scripted_d.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        scripted_d
+            .inner
+            .set_target_status("target-a", TargetStatus::Active);
+        scripted_d
+            .inner
+            .set_target_status("target-b", TargetStatus::Active);
+        let acq_d2 = leases_d
+            .handle_lease_acquire(
+                &json_obj(json!({
+                    "runId": "run-multi-focus-2",
+                    "targets": ["target-a", "target-b"],
+                    "waitMs": 0,
+                    "interruptPolicy": "ignore"
+                })),
+                &ctx_d,
+                scripted_d.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        leases_d
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_d2.lease_id,
+                    "generation": acq_d2.generation,
+                    "segmentId": "seg-multi-kd-a",
+                    "payloadHash": h_shift,
+                    "targetToken": "target-a",
+                    "operation": kd_shift
+                })),
+                &ctx_d,
+                scripted_d.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let rel_before_d2 = scripted_d.inner.released_batches().len();
+        scripted_d
+            .inner
+            .set_target_status("target-a", TargetStatus::Unfocused);
+        let renew_held_err = leases_d
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_d2.lease_id, "generation": acq_d2.generation})),
+                &ctx_d,
+                scripted_d.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(renew_held_err.code, "TARGET_LOST");
+        let st_d2 = leases_d
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_d2.lease_id})),
+                &ctx_d,
+                scripted_d.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_d2.state, LeaseState::Paused);
+        assert_eq!(st_d2.reason.as_deref(), Some("TARGET_LOST"));
+        assert_eq!(scripted_d.inner.released_batches().len(), rel_before_d2 + 1);
+        assert_eq!(
+            scripted_d.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned()
+            }]
+        );
+    }
+
+    #[test]
+    fn between_segment_external_pointer_move_samples_live_position_on_direct_pause() {
+        use deskweave_platform_api::{
+            DisplayPoint, LeaseState, PausePoint, PhysicalPoint, compute_segment_payload_hash,
+        };
+
+        let (topo, caps) = macos_topology_and_caps();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+
+        let leases = LeaseCoordinator::new();
+        let ctx = make_ctx("sess-pause-live-ptr", "ws-pause-live-ptr");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        let acq = leases
+            .handle_lease_acquire(
+                &json_obj(json!({
+                    "runId": "run-pause-live-ptr",
+                    "targets": ["target-a"],
+                    "waitMs": 0,
+                    "interruptPolicy": "ignore"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+
+        let move_1 = json!({
+            "id": "pause-ptr-move-1",
+            "title": "记录初始坐标",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 120, "y": 140},
+                "durationMs": 0
+            },
+            "on": {}
+        });
+        let h_1 = compute_segment_payload_hash("target-a", &move_1, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-live-1",
+                    "payloadHash": h_1,
+                    "targetToken": "target-a",
+                    "operation": move_1
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Simulate external pointer movement after move_1, then directly pause.
+        scripted.inner.set_pointer(PhysicalPoint { x: 520, y: 340 });
+        let paused = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(paused.state, LeaseState::Paused);
+        let snap = paused.pause_snapshot.unwrap();
+        assert_eq!(
+            snap.pointer,
+            PausePoint::Physical(PhysicalPoint { x: 520, y: 340 })
+        );
+
+        let resumed = leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "pauseId": snap.pause_id,
+                    "resumeAttemptId": "att-live-ptr",
+                    "resumePlanHash": "a".repeat(64)
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(resumed.state, LeaseState::Active);
+
+        let move_disp = json!({
+            "id": "pause-ptr-move-disp",
+            "title": "切换到副屏前坐标",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 150, "y": 160},
+                "durationMs": 0
+            },
+            "on": {}
+        });
+        let h_disp = compute_segment_payload_hash("target-a", &move_disp, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-live-disp",
+                    "payloadHash": h_disp,
+                    "targetToken": "target-a",
+                    "operation": move_disp
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let disp_pt = PausePoint::Display(DisplayPoint {
+            display_id: "secondary".to_owned(),
+            x: 42.5,
+            y: 88.25,
+        });
+        scripted.inner.set_pause_pointer(disp_pt.clone());
+        let paused_disp = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        let snap_disp = paused_disp.pause_snapshot.unwrap();
+        assert_eq!(snap_disp.pointer, disp_pt);
+        leases
+            .handle_lease_resume(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "pauseId": snap_disp.pause_id,
+                    "resumeAttemptId": "att-live-disp",
+                    "resumePlanHash": "b".repeat(64)
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        let move_2 = json!({
+            "id": "pause-ptr-move-2",
+            "title": "再次记录坐标",
+            "action": "pointer.move",
+            "params": {
+                "target": "main",
+                "position": {"kind": "point", "space": "desktopPhysical", "x": 200, "y": 200},
+                "durationMs": 0
+            },
+            "on": {}
+        });
+        let h_2 = compute_segment_payload_hash("target-a", &move_2, None).unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq.lease_id,
+                    "generation": acq.generation,
+                    "segmentId": "seg-live-2",
+                    "payloadHash": h_2,
+                    "targetToken": "target-a",
+                    "operation": move_2
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // If live pointer query fails on direct pause, do NOT reuse old ledger (200, 200).
+        scripted
+            .inner
+            .set_pointer_error(Some(PlatformError::session_unavailable("pointer down")));
+        let pause_err = leases
+            .handle_lease_pause(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(pause_err.code, "SESSION_UNAVAILABLE");
+
+        #[cfg(not(feature = "test-authority"))]
+        {
+            scripted
+                .inner
+                .set_pointer_error(Some(PlatformError::capability_not_implemented("unimpl")));
+            let pause_unimpl_err = leases
+                .handle_lease_pause(
+                    &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap_err();
+            assert_eq!(pause_unimpl_err.code, "CAPABILITY_NOT_IMPLEMENTED");
+        }
     }
 }

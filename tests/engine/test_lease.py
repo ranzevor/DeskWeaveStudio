@@ -513,6 +513,9 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
                 first.segment_status("seg-down-1", "0" * 64)
             self.assertEqual(status_conflict.exception.code, "REQUEST_CONFLICT")
 
+            # Renew lease before pausing so slower runners do not hit 2s TTL across earlier RPCs.
+            first.lease_renew(lease_a, gen_a)
+
             # 4. Pause lease -> releases held ShiftLeft and produces RFC 8785 JCS checkpoint.
             paused = first.lease_pause(lease_a, gen_a)
             self.assertEqual(paused["state"], "paused")
@@ -666,7 +669,7 @@ class DesktopLeaseAgentIntegrationTests(unittest.TestCase):
                 "id": "mux-long-text",
                 "title": "并发多路复用测试",
                 "action": "keyboard.text",
-                "params": {"target": "main", "text": "ab", "intervalMs": 450},
+                "params": {"target": "main", "text": "abcde", "intervalMs": 400},
                 "on": {},
             }
             long_hash = compute_segment_payload_hash("target-win-a", op_long)
