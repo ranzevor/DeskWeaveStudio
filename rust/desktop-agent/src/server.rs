@@ -2789,6 +2789,7 @@ mod tests {
 
     type SubmitGate = (usize, mpsc::Sender<()>, mpsc::Receiver<()>);
     type PointerOverride = Option<Result<deskweave_platform_api::PausePoint, PlatformError>>;
+    type VerifyCallback = (usize, Box<dyn FnOnce(&FakeDesktopSession) + Send>);
 
     struct ScriptedDesktop {
         inner: FakeDesktopSession,
@@ -2803,6 +2804,9 @@ mod tests {
         submit_gate: Mutex<Option<SubmitGate>>,
         panic_on_submit: Mutex<Option<usize>>,
         trigger_emergency_on_pointer: Mutex<bool>,
+        verify_count: Mutex<usize>,
+        verify_gate: Mutex<Option<SubmitGate>>,
+        verify_on_call: Mutex<Option<VerifyCallback>>,
     }
 
     impl ScriptedDesktop {
@@ -2820,6 +2824,9 @@ mod tests {
                 submit_gate: Mutex::new(None),
                 panic_on_submit: Mutex::new(None),
                 trigger_emergency_on_pointer: Mutex::new(false),
+                verify_count: Mutex::new(0),
+                verify_gate: Mutex::new(None),
+                verify_on_call: Mutex::new(None),
             }
         }
 
@@ -2870,6 +2877,23 @@ mod tests {
 
         fn set_trigger_emergency_on_pointer(&self, trigger: bool) {
             *self.trigger_emergency_on_pointer.lock().unwrap() = trigger;
+        }
+
+        fn gate_verify_on(&self, count: usize) -> (mpsc::Receiver<()>, mpsc::Sender<()>) {
+            let (entered_tx, entered_rx) = mpsc::channel();
+            let (release_tx, release_rx) = mpsc::channel();
+            *self.verify_count.lock().unwrap() = 0;
+            *self.verify_gate.lock().unwrap() = Some((count, entered_tx, release_rx));
+            (entered_rx, release_tx)
+        }
+
+        fn on_verify_call(
+            &self,
+            count: usize,
+            cb: impl FnOnce(&FakeDesktopSession) + Send + 'static,
+        ) {
+            *self.verify_count.lock().unwrap() = 0;
+            *self.verify_on_call.lock().unwrap() = Some((count, Box::new(cb)));
         }
     }
 
@@ -2966,6 +2990,34 @@ mod tests {
             &self,
             token: &deskweave_platform_api::TargetToken,
         ) -> Result<deskweave_platform_api::TargetStatus, PlatformError> {
+            let count = {
+                let mut c = self.verify_count.lock().unwrap();
+                *c += 1;
+                *c
+            };
+            let cb = {
+                let mut hook = self.verify_on_call.lock().unwrap();
+                if hook.as_ref().is_some_and(|(target, _)| *target == count) {
+                    hook.take().map(|(_, f)| f)
+                } else {
+                    None
+                }
+            };
+            if let Some(f) = cb {
+                f(&self.inner);
+            }
+            let gate = {
+                let mut slot = self.verify_gate.lock().unwrap();
+                if slot.as_ref().is_some_and(|(target, _, _)| *target == count) {
+                    slot.take()
+                } else {
+                    None
+                }
+            };
+            if let Some((_, entered_tx, release_rx)) = gate {
+                let _ = entered_tx.send(());
+                let _ = release_rx.recv();
+            }
             if let Some(next) = self.verify_outcomes.lock().unwrap().pop_front() {
                 return next;
             }
@@ -11915,5 +11967,190 @@ mod tests {
                 .unwrap_err();
             assert_eq!(pause_unimpl_err.code, "CAPABILITY_NOT_IMPLEMENTED");
         }
+    }
+
+    #[test]
+    fn pre_submit_native_target_probes_run_unlocked_and_recheck_ttl_and_rpc_deadline() {
+        use deskweave_platform_api::{LeaseState, SegmentState, compute_segment_payload_hash};
+
+        let kd = json!({
+            "id": "probe-zero-kd",
+            "title": "零延迟按下校验",
+            "action": "keyboard.down",
+            "params": {"target": "main", "key": "ShiftLeft"},
+            "on": {}
+        });
+        let h_kd = compute_segment_payload_hash("target-a", &kd, None).unwrap();
+
+        // Subcase A: TTL consumed during drive_segment_events native probe aborts before key emit.
+        let (topo_a, caps_a) = macos_topology_and_caps();
+        let scripted_a = Arc::new(ScriptedDesktop::new(caps_a, Ok(topo_a)));
+        scripted_a
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases_a = LeaseCoordinator::new();
+        let ctx_a = make_ctx("sess-probe-ttl", "ws-probe-ttl");
+        leases_a
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx_a,
+                scripted_a.as_ref(),
+            )
+            .unwrap();
+        let acq_a = leases_a
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-probe-ttl", "targets": ["target-a"], "waitMs": 0})),
+                &ctx_a,
+                scripted_a.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        scripted_a.inner.fake_clock().advance_us(1_900_000);
+        scripted_a.on_verify_call(2, |inner| {
+            inner.fake_clock().advance_us(200_000);
+        });
+        let seg_err_a = leases_a
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_a.lease_id,
+                    "generation": acq_a.generation,
+                    "segmentId": "seg-probe-ttl",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_a,
+                scripted_a.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(seg_err_a.code, "LEASE_EXPIRED");
+        assert!(scripted_a.inner.submitted_actions().is_empty());
+        let st_a = leases_a
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_a.lease_id})),
+                &ctx_a,
+                scripted_a.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_a.state, LeaseState::Released);
+        assert_eq!(st_a.reason.as_deref(), Some("LEASE_EXPIRED"));
+
+        // Subcase B: Concurrent lease.renew succeeds while drive_segment_events probe is blocked unlocked.
+        let (topo_b, caps_b) = macos_topology_and_caps();
+        let scripted_b = Arc::new(ScriptedDesktop::new(caps_b, Ok(topo_b)));
+        scripted_b
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases_b = Arc::new(LeaseCoordinator::new());
+        let ctx_b = make_ctx("sess-probe-renew", "ws-probe-renew");
+        leases_b
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx_b,
+                scripted_b.as_ref(),
+            )
+            .unwrap();
+        let acq_b = leases_b
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-probe-renew", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_b,
+                scripted_b.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let (entered_rx, release_tx) = scripted_b.gate_verify_on(2);
+        let seg_handle_b = {
+            let l = Arc::clone(&leases_b);
+            let d = Arc::clone(&scripted_b);
+            let c = ctx_b.clone();
+            let lid = acq_b.lease_id.clone();
+            let lease_gen = acq_b.generation;
+            let ph = h_kd.clone();
+            let op = kd.clone();
+            thread::spawn(move || {
+                l.handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lease_gen,
+                        "segmentId": "seg-probe-renew",
+                        "payloadHash": ph,
+                        "targetToken": "target-a",
+                        "operation": op
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        entered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("drive_segment_events probe did not reach verify_target");
+        scripted_b.inner.fake_clock().advance_us(1_900_000);
+        let renew_b = leases_b
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_b.lease_id, "generation": acq_b.generation})),
+                &ctx_b,
+                scripted_b.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(renew_b.generation, acq_b.generation);
+        scripted_b.inner.fake_clock().advance_us(200_000);
+        release_tx.send(()).unwrap();
+        let seg_res_b = seg_handle_b.join().unwrap().unwrap();
+        assert_eq!(seg_res_b.state, SegmentState::Sent);
+        assert_eq!(scripted_b.inner.submitted_actions().len(), 1);
+
+        // Subcase C: RPC deadlineMs consumed during native probe fails with DEADLINE_EXCEEDED without pressing key.
+        let (topo_c, caps_c) = macos_topology_and_caps();
+        let scripted_c = Arc::new(ScriptedDesktop::new(caps_c, Ok(topo_c)));
+        scripted_c
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases_c = LeaseCoordinator::new();
+        let ctx_c = make_ctx("sess-probe-deadline", "ws-probe-deadline");
+        leases_c
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx_c,
+                scripted_c.as_ref(),
+            )
+            .unwrap();
+        let acq_c = leases_c
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-probe-deadline", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_c,
+                scripted_c.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        scripted_c.on_verify_call(2, |_| {
+            thread::sleep(Duration::from_millis(80));
+        });
+        let seg_err_c = leases_c
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_c.lease_id,
+                    "generation": acq_c.generation,
+                    "segmentId": "seg-probe-deadline",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_c,
+                scripted_c.as_ref(),
+                30,
+            )
+            .unwrap_err();
+        assert_eq!(seg_err_c.code, "DEADLINE_EXCEEDED");
+        assert!(scripted_c.inner.submitted_actions().is_empty());
     }
 }
