@@ -10487,6 +10487,87 @@ mod tests {
             })
         };
 
+        // Subcase A1: Pure autonomous `drive_expiry_loop` revocation and cleanup with zero waiters and zero RPCs.
+        let releases_before_bg = scripted.inner.released_batches().len();
+        let bg_emg_gen = scripted.emergency().trigger_lock().unwrap();
+        let bg_cleanup_deadline = Instant::now() + Duration::from_secs(2);
+        while scripted.inner.released_batches().len() == releases_before_bg {
+            assert!(
+                Instant::now() < bg_cleanup_deadline,
+                "background emergency monitor did not release idle held inputs in time"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned()
+            }]
+        );
+        let non_owner_bg_renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx_other_same_ws,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(non_owner_bg_renew_err.code, "ACCESS_DENIED");
+        let owner_bg_renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(owner_bg_renew_err.code, "RESOURCE_DENIED");
+        let bg_status = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq.lease_id})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(bg_status.state, LeaseState::Released);
+        assert_eq!(bg_status.reason.as_deref(), Some("EMERGENCY_LOCKED"));
+        scripted.emergency().rearm(bg_emg_gen).unwrap();
+        assert_eq!(scripted.emergency().state(), EmergencyState::Armed);
+        let after_bg_rearm_renew = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(after_bg_rearm_renew.code, "LEASE_EXPIRED");
+
+        // Subcase A2: Wait for background cleanup and wait-queue drain before invoking any coordinator RPC.
+        let acq_w = leases
+            .handle_lease_acquire(
+                &json_obj(
+                    json!({"runId": "run-emg-idle-waiter", "targets": ["target-a"], "waitMs": 0}),
+                ),
+                &ctx_owner,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_w.lease_id,
+                    "generation": acq_w.generation,
+                    "segmentId": "seg-emg-idle-waiter-kd",
+                    "payloadHash": h_kd,
+                    "targetToken": "target-a",
+                    "operation": kd
+                })),
+                &ctx_owner,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
         let waiter_handle = {
             let l = Arc::clone(&leases);
             let d = Arc::clone(&scripted);
@@ -10515,33 +10596,15 @@ mod tests {
             thread::sleep(Duration::from_millis(5));
         }
 
+        let releases_before_lock = scripted.inner.released_batches().len();
         let emg_gen = scripted.emergency().trigger_lock().unwrap();
-        let non_owner_renew_err = leases
-            .handle_lease_renew(
-                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
-                &ctx_other_same_ws,
-                scripted.as_ref(),
-            )
-            .unwrap_err();
-        assert_eq!(non_owner_renew_err.code, "ACCESS_DENIED");
-
-        let renew_err = leases
-            .handle_lease_renew(
-                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
-                &ctx_owner,
-                scripted.as_ref(),
-            )
-            .unwrap_err();
-        assert_eq!(renew_err.code, "RESOURCE_DENIED");
-
-        let waiter_err = waiter_handle.join().unwrap().unwrap_err();
-        assert_eq!(waiter_err.code, "RESOURCE_DENIED");
-
         let cleanup_deadline = Instant::now() + Duration::from_secs(2);
-        while scripted.inner.released_batches().is_empty() || leases.wait_queue_len() != 0 {
+        while scripted.inner.released_batches().len() == releases_before_lock
+            || leases.wait_queue_len() != 0
+        {
             assert!(
                 Instant::now() < cleanup_deadline,
-                "idle emergency cleanup did not settle in time"
+                "idle emergency cleanup did not settle before RPC"
             );
             thread::sleep(Duration::from_millis(5));
         }
@@ -10551,9 +10614,30 @@ mod tests {
                 key: "ShiftLeft".to_owned()
             }]
         );
+        let waiter_err = waiter_handle.join().unwrap().unwrap_err();
+        assert_eq!(waiter_err.code, "RESOURCE_DENIED");
+
+        let non_owner_renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_w.lease_id, "generation": acq_w.generation})),
+                &ctx_other_same_ws,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(non_owner_renew_err.code, "ACCESS_DENIED");
+
+        let renew_err = leases
+            .handle_lease_renew(
+                &json_obj(json!({"leaseId": acq_w.lease_id, "generation": acq_w.generation})),
+                &ctx_owner,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(renew_err.code, "RESOURCE_DENIED");
+
         let status = leases
             .handle_lease_status(
-                &json_obj(json!({"leaseId": acq.lease_id})),
+                &json_obj(json!({"leaseId": acq_w.lease_id})),
                 &ctx_owner,
                 scripted.as_ref(),
             )
@@ -10565,7 +10649,7 @@ mod tests {
         assert_eq!(scripted.emergency().state(), EmergencyState::Armed);
         let after_rearm_renew = leases
             .handle_lease_renew(
-                &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                &json_obj(json!({"leaseId": acq_w.lease_id, "generation": acq_w.generation})),
                 &ctx_owner,
                 scripted.as_ref(),
             )
