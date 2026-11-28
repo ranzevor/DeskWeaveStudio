@@ -12467,4 +12467,317 @@ mod tests {
         assert_eq!(st_c.state, LeaseState::Released);
         assert_eq!(st_c.reason.as_deref(), Some("TARGET_LOST"));
     }
+
+    #[test]
+    fn stale_target_probes_across_pause_and_resume_are_discarded() {
+        use deskweave_platform_api::{
+            HeldInput, LeaseAcquireResult, LeaseState, SegmentState, TargetStatus,
+            compute_segment_payload_hash,
+        };
+
+        let make_kd = |id: &str, title: &str, key: &str| {
+            json!({
+                "id": id,
+                "title": title,
+                "action": "keyboard.down",
+                "params": {"target": "main", "key": key},
+                "on": {}
+            })
+        };
+
+        let setup_lease = |suffix: &str, key: &str, run_id: &str, seg_id: &str| {
+            let (topo, caps) = macos_topology_and_caps();
+            let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(topo)));
+            scripted
+                .inner
+                .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+            let leases = Arc::new(LeaseCoordinator::new());
+            let ctx = make_ctx(
+                &format!("sess-stale-{suffix}"),
+                &format!("ws-stale-{suffix}"),
+            );
+            leases
+                .handle_target_bind(
+                    &json_obj(json!({"selectionGrant": "grant-a"})),
+                    &ctx,
+                    scripted.as_ref(),
+                )
+                .unwrap();
+            let acq = leases
+                .handle_lease_acquire(
+                    &json_obj(json!({"runId": run_id, "targets": ["target-a"], "waitMs": 0})),
+                    &ctx,
+                    scripted.as_ref(),
+                    || false,
+                    5000,
+                )
+                .unwrap();
+            let op_kd = make_kd(&format!("kd-{suffix}"), "保持按键", key);
+            let h_kd = compute_segment_payload_hash("target-a", &op_kd, None).unwrap();
+            let seg_res = leases
+                .handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": acq.lease_id,
+                        "generation": acq.generation,
+                        "segmentId": seg_id,
+                        "payloadHash": h_kd,
+                        "targetToken": "target-a",
+                        "operation": op_kd
+                    })),
+                    &ctx,
+                    scripted.as_ref(),
+                    5000,
+                )
+                .unwrap();
+            assert_eq!(seg_res.state, SegmentState::Sent);
+            assert!(scripted.inner.released_batches().is_empty());
+            (scripted, leases, ctx, acq)
+        };
+
+        let pause_and_resume = |leases: &LeaseCoordinator,
+                                scripted: &ScriptedDesktop,
+                                ctx: &SessionContext,
+                                acq: &LeaseAcquireResult,
+                                grant_id: &str,
+                                att_id: &str,
+                                plan_ch: &str| {
+            let paused = leases
+                .handle_lease_pause(
+                    &json_obj(json!({"leaseId": acq.lease_id, "generation": acq.generation})),
+                    ctx,
+                    scripted,
+                    5000,
+                )
+                .unwrap();
+            assert_eq!(paused.state, LeaseState::Paused);
+            let snap = paused.pause_snapshot.unwrap();
+            let plan_hash = plan_ch.repeat(64);
+            leases
+                .register_confirmation(
+                    grant_id,
+                    crate::lease::RegisteredConfirmation {
+                        owner_workspace: ctx.workspace_id.clone(),
+                        lease_id: acq.lease_id.clone(),
+                        pause_id: snap.pause_id.clone(),
+                        agent_epoch: ctx.agent_epoch.clone(),
+                        generation: acq.generation,
+                        checkpoint_hash: snap.checkpoint_hash,
+                        resume_plan_hash: plan_hash.clone(),
+                        restore_target_token: Some("target-a".to_owned()),
+                        pointer_to_restore: None,
+                        expires_at_us: u64::MAX,
+                    },
+                )
+                .unwrap();
+            let resumed = leases
+                .handle_lease_resume(
+                    &json_obj(json!({
+                        "leaseId": acq.lease_id,
+                        "generation": acq.generation,
+                        "pauseId": snap.pause_id,
+                        "resumeAttemptId": att_id,
+                        "resumePlanHash": plan_hash,
+                        "confirmationGrant": grant_id
+                    })),
+                    ctx,
+                    scripted,
+                    5000,
+                )
+                .unwrap();
+            assert_eq!(resumed.state, LeaseState::Active);
+        };
+
+        // Subcase A: Background monitor probe overlapping pause + resume is discarded.
+        let (scripted_a, leases_a, ctx_a, acq_a) =
+            setup_lease("bg", "ShiftLeft", "run-stale-bg", "seg-stale-bg-kd");
+        let (entered1_rx, release1_tx) = scripted_a.gate_verify_on(1);
+        let stop_bg = StopSignal::new().unwrap();
+        let bg_handle = {
+            let l = Arc::clone(&leases_a);
+            let d = Arc::clone(&scripted_a);
+            let s = stop_bg.clone();
+            thread::spawn(move || {
+                l.drive_expiry_loop(d.as_ref(), &s);
+            })
+        };
+        entered1_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("background monitor probe did not enter verify_target");
+        pause_and_resume(
+            &leases_a,
+            scripted_a.as_ref(),
+            &ctx_a,
+            &acq_a,
+            "grant-stale-a",
+            "att-stale-a",
+            "a",
+        );
+        assert_eq!(scripted_a.inner.released_batches().len(), 1);
+        scripted_a.push_verify_outcome(Ok(TargetStatus::Unfocused));
+        let (entered2_rx, release2_tx) = scripted_a.gate_verify_on(1);
+        release1_tx.send(()).unwrap();
+        entered2_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("background monitor did not advance past discarded stale probe");
+        let st_a = leases_a
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_a.lease_id})),
+                &ctx_a,
+                scripted_a.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_a.state, LeaseState::Active);
+        assert_eq!(
+            scripted_a.inner.released_batches(),
+            vec![vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned(),
+            }]]
+        );
+        stop_bg.trigger();
+        leases_a.notify_all();
+        release2_tx.send(()).unwrap();
+        bg_handle.join().unwrap();
+        leases_a
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_a.lease_id,
+                    "generation": acq_a.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx_a,
+                scripted_a.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Subcase B: Unlocked handle_lease_renew probe overlapping pause + resume is discarded.
+        let (scripted_b, leases_b, ctx_b, acq_b) = setup_lease(
+            "renew",
+            "ControlLeft",
+            "run-stale-renew",
+            "seg-stale-renew-kd",
+        );
+        let (entered_r, release_r) = scripted_b.gate_verify_on(1);
+        let renew_handle = {
+            let l = Arc::clone(&leases_b);
+            let d = Arc::clone(&scripted_b);
+            let c = ctx_b.clone();
+            let lid = acq_b.lease_id.clone();
+            let lgen = acq_b.generation;
+            thread::spawn(move || {
+                l.handle_lease_renew(
+                    &json_obj(json!({"leaseId": lid, "generation": lgen})),
+                    &c,
+                    d.as_ref(),
+                )
+            })
+        };
+        entered_r
+            .recv_timeout(Duration::from_secs(2))
+            .expect("renew probe did not enter verify_target");
+        pause_and_resume(
+            &leases_b,
+            scripted_b.as_ref(),
+            &ctx_b,
+            &acq_b,
+            "grant-stale-b",
+            "att-stale-b",
+            "b",
+        );
+        let releases_after_resume_b = scripted_b.inner.released_batches().len();
+        scripted_b.push_verify_outcome(Ok(TargetStatus::Unfocused));
+        release_r.send(()).unwrap();
+        let renew_res = renew_handle.join().unwrap();
+        assert!(renew_res.is_ok());
+        let st_b = leases_b
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_b.lease_id})),
+                &ctx_b,
+                scripted_b.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_b.state, LeaseState::Active);
+        assert_eq!(
+            scripted_b.inner.released_batches().len(),
+            releases_after_resume_b
+        );
+        leases_b
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_b.lease_id,
+                    "generation": acq_b.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx_b,
+                scripted_b.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Subcase C: Unlocked handle_segment_submit probe overlapping pause + resume is rejected without mutating held state.
+        let (scripted_c, leases_c, ctx_c, acq_c) =
+            setup_lease("submit", "AltLeft", "run-stale-submit", "seg-stale-sub-kd");
+        let kd_a = make_kd("kd-stale-a", "暂停恢复期间入段拒收", "KeyA");
+        let h_a = compute_segment_payload_hash("target-a", &kd_a, None).unwrap();
+        let (entered_s, release_s) = scripted_c.gate_verify_on(1);
+        let submit_handle = {
+            let l = Arc::clone(&leases_c);
+            let d = Arc::clone(&scripted_c);
+            let c = ctx_c.clone();
+            let lid = acq_c.lease_id.clone();
+            let lgen = acq_c.generation;
+            let op = kd_a.clone();
+            let ph = h_a.clone();
+            thread::spawn(move || {
+                l.handle_segment_submit(
+                    &json_obj(json!({
+                        "leaseId": lid,
+                        "generation": lgen,
+                        "segmentId": "seg-stale-sub-a",
+                        "payloadHash": ph,
+                        "targetToken": "target-a",
+                        "operation": op
+                    })),
+                    &c,
+                    d.as_ref(),
+                    5000,
+                )
+            })
+        };
+        entered_s
+            .recv_timeout(Duration::from_secs(2))
+            .expect("segment admission probe did not enter verify_target");
+        pause_and_resume(
+            &leases_c,
+            scripted_c.as_ref(),
+            &ctx_c,
+            &acq_c,
+            "grant-stale-c",
+            "att-stale-c",
+            "c",
+        );
+        let releases_after_resume_c = scripted_c.inner.released_batches().len();
+        let actions_after_resume_c = scripted_c.inner.submitted_actions().len();
+        scripted_c.push_verify_outcome(Ok(TargetStatus::Unfocused));
+        release_s.send(()).unwrap();
+        let submit_err = submit_handle.join().unwrap().unwrap_err();
+        assert_eq!(submit_err.code, "DESKTOP_BUSY");
+        assert_eq!(submit_err.retry, "afterQuery");
+        let st_c = leases_c
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_c.lease_id})),
+                &ctx_c,
+                scripted_c.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_c.state, LeaseState::Active);
+        assert_eq!(
+            scripted_c.inner.released_batches().len(),
+            releases_after_resume_c
+        );
+        assert_eq!(
+            scripted_c.inner.submitted_actions().len(),
+            actions_after_resume_c
+        );
+    }
 }

@@ -119,6 +119,7 @@ struct ActiveLease {
     physical_pointer: Option<PhysicalPoint>,
     input_target_token: Option<String>,
     in_flight: Option<InFlightSegment>,
+    control_revision: u64,
     resuming: bool,
     release_waiters: usize,
     release_pending: bool,
@@ -132,6 +133,13 @@ struct ActiveLease {
 }
 
 impl ActiveLease {
+    fn set_state(&mut self, next: LeaseState) {
+        if self.state != next {
+            self.state = next;
+            self.control_revision = self.control_revision.wrapping_add(1);
+        }
+    }
+
     fn to_snapshot(&self) -> LeaseSnapshot {
         LeaseSnapshot {
             lease_id: self.lease_id.clone(),
@@ -548,6 +556,7 @@ impl LeaseCoordinator {
         let still_active = state.current_lease.as_ref().is_some_and(|l| {
             l.lease_id == probe.lease_id
                 && l.generation == probe.generation
+                && l.control_revision == probe.control_revision
                 && l.state == LeaseState::Active
                 && !l.resuming
                 && !l.release_pending
@@ -1260,10 +1269,11 @@ impl LeaseCoordinator {
             physical_pointer: initial_physical,
             input_target_token: None,
             in_flight: None,
+            control_revision: 0,
             resuming: false,
             release_waiters: 0,
             release_pending: false,
-            pending_pause: None,
+            pending_pause: Option::None,
             suspended_segment: None,
             pause_snapshot: None,
             last_resume_attempt_id: None,
@@ -1354,13 +1364,14 @@ impl LeaseCoordinator {
         };
 
         if let Some(probe_item) = renew_probe {
-            let probe_res = match probe_item {
-                Err(drift) => Err(drift),
+            let (probe_rev, probe_res) = match probe_item {
+                Err(drift) => (None, Err(drift)),
                 Ok(probe) => {
+                    let rev = probe.control_revision;
                     drop(state);
                     let res = probe_active_targets_unlocked(desktop, &probe);
                     state = self.state.lock().unwrap();
-                    res
+                    (Some(rev), res)
                 }
             };
             if self.enforce_emergency_lock_locked(&mut state, desktop) {
@@ -1371,7 +1382,13 @@ impl LeaseCoordinator {
                 ));
             }
             self.refresh_lease_expiry_locked(&mut state, desktop);
-            let (is_active_now, in_flight_now, resuming_now) = {
+            let (
+                is_active_now,
+                in_flight_now,
+                resuming_now,
+                same_control_revision,
+                post_resume_drift_pending,
+            ) = {
                 let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
                 if lease.release_pending
                     || !matches!(
@@ -1395,33 +1412,46 @@ impl LeaseCoordinator {
                     lease.state == LeaseState::Active,
                     lease.in_flight.is_some(),
                     lease.resuming,
+                    probe_rev.is_none_or(|rev| lease.control_revision == rev),
+                    lease
+                        .in_flight
+                        .as_ref()
+                        .and_then(|f| f.drift_pause_reason)
+                        .is_some(),
                 )
             };
-            match probe_res {
-                Ok(live_targets) => {
-                    if is_active_now
-                        && let Some(lease) = state.current_lease.as_mut()
-                        && lease.baseline_targets.is_none()
-                    {
-                        lease.baseline_targets = Some(live_targets);
-                    }
-                }
-                Err((err, reason)) => {
-                    if is_active_now && !resuming_now {
-                        if !in_flight_now {
-                            self.pause_active_lease_on_drift_locked(
-                                &mut state, &lease_id, generation, ctx, desktop, reason,
-                            );
-                        } else if let Some(lease) = state.current_lease.as_mut()
-                            && let Some(ref mut flight) = lease.in_flight
+            if same_control_revision {
+                match probe_res {
+                    Ok(live_targets) => {
+                        if is_active_now
+                            && let Some(lease) = state.current_lease.as_mut()
+                            && lease.baseline_targets.is_none()
                         {
-                            flight.pause_requested = true;
-                            flight.drift_pause_reason.get_or_insert(reason);
-                            self.wait_cv.notify_all();
+                            lease.baseline_targets = Some(live_targets);
                         }
                     }
-                    return Err(err.with_retry("afterQuery"));
+                    Err((err, reason)) => {
+                        if is_active_now && !resuming_now {
+                            if !in_flight_now {
+                                self.pause_active_lease_on_drift_locked(
+                                    &mut state, &lease_id, generation, ctx, desktop, reason,
+                                );
+                            } else if let Some(lease) = state.current_lease.as_mut()
+                                && let Some(ref mut flight) = lease.in_flight
+                            {
+                                flight.pause_requested = true;
+                                flight.drift_pause_reason.get_or_insert(reason);
+                                self.wait_cv.notify_all();
+                            }
+                        }
+                        return Err(err.with_retry("afterQuery"));
+                    }
                 }
+            } else if is_active_now && !resuming_now && post_resume_drift_pending {
+                return Err(
+                    PlatformError::target_lost("输入目标已失焦、失效或拓扑已变化。")
+                        .with_retry("afterQuery"),
+                );
             }
         }
 
@@ -1630,7 +1660,7 @@ impl LeaseCoordinator {
                     true
                 } else if lease.in_flight.is_some() {
                     if lease.state == LeaseState::Active {
-                        lease.state = LeaseState::Pausing;
+                        lease.set_state(LeaseState::Pausing);
                     }
                     if let Some(ref mut flight) = lease.in_flight {
                         flight.pause_requested = true;
@@ -1971,7 +2001,7 @@ impl LeaseCoordinator {
         let now_us = desktop.clock().now_us();
         let (suspended, snapshot) = {
             let lease = state.current_lease.as_mut().unwrap();
-            lease.state = LeaseState::Active;
+            lease.set_state(LeaseState::Active);
             lease.cleanup = CleanupOutcome::NotRequired;
             lease.held_inputs = restored_held;
             lease.paused_held_inputs.clear();
@@ -2573,7 +2603,7 @@ impl LeaseCoordinator {
                 .and_then(Value::as_u64)
                 .is_some_and(|d| d > 0);
 
-        let lease_targets = {
+        let (lease_targets, submit_control_revision) = {
             let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
             if lease.in_flight.is_some()
                 || lease.resuming
@@ -2592,7 +2622,7 @@ impl LeaseCoordinator {
                     "输入段 targetToken 不在该租约已授权的目标集合内。",
                 ));
             }
-            lease.targets.clone()
+            (lease.targets.clone(), lease.control_revision)
         };
 
         let bound_fallbacks = match verify_target_expiry_locked(&state, &target_token)
@@ -2683,6 +2713,13 @@ impl LeaseCoordinator {
                 return Err(PlatformError::new(
                     "DESKTOP_BUSY",
                     "当前租约已有输入段正在执行、恢复或释放。",
+                )
+                .with_retry("afterQuery"));
+            }
+            if lease.control_revision != submit_control_revision {
+                return Err(PlatformError::new(
+                    "DESKTOP_BUSY",
+                    "输入段准入探测期间租约经历了暂停或恢复转换，请重新查询后提交。",
                 )
                 .with_retry("afterQuery"));
             }
@@ -4234,7 +4271,7 @@ impl LeaseCoordinator {
                         && lease.state == LeaseState::Pausing
                         && lease.pending_pause.is_none()
                     {
-                        lease.state = LeaseState::Active;
+                        lease.set_state(LeaseState::Active);
                         lease.reason = None;
                     }
                     clear_or_reject_pending_receipt(state, run, ctx);
@@ -4494,7 +4531,7 @@ impl Drop for ResumingGuard<'_> {
             if !self.restored_held.is_empty() {
                 let cleanup = release_held_inputs(self.desktop, &mut self.restored_held);
                 lease.held_inputs = std::mem::take(&mut self.restored_held);
-                lease.state = LeaseState::Uncertain;
+                lease.set_state(LeaseState::Uncertain);
                 lease.cleanup = cleanup;
                 lease.pause_snapshot = None;
                 lease.paused_held_inputs.clear();
@@ -4977,7 +5014,7 @@ fn record_rejected_segment_locked(
 
 fn mark_pause_uncertain_locked(lease: &mut ActiveLease, desktop: &dyn DesktopSession) {
     let cleanup = release_held_inputs(desktop, &mut lease.held_inputs);
-    lease.state = LeaseState::Uncertain;
+    lease.set_state(LeaseState::Uncertain);
     lease.cleanup = cleanup;
     lease.pause_snapshot = None;
     lease.paused_held_inputs.clear();
@@ -5048,7 +5085,7 @@ fn fail_resume_uncertain_locked(
         lease.held_inputs = restored_held;
         lease.paused_held_inputs.clear();
         lease.resuming = false;
-        lease.state = LeaseState::Uncertain;
+        lease.set_state(LeaseState::Uncertain);
         lease.cleanup = cleanup;
         lease.pause_snapshot = None;
         lease.pending_pause = None;
@@ -5148,6 +5185,7 @@ fn build_target_states(
 struct ActiveTargetProbe {
     lease_id: String,
     generation: u64,
+    control_revision: u64,
     workspace_id: String,
     session_id: String,
     agent_epoch: String,
@@ -5216,6 +5254,7 @@ fn build_active_target_probe_locked(
     Some(Ok(ActiveTargetProbe {
         lease_id: lease.lease_id.clone(),
         generation: lease.generation,
+        control_revision: lease.control_revision,
         workspace_id: lease.owner_workspace.clone(),
         session_id: lease.owner_session.clone(),
         agent_epoch: lease.agent_epoch.clone(),
@@ -5443,7 +5482,7 @@ fn finalize_pause_locked(
         CleanupOutcome::Succeeded | CleanupOutcome::NotRequired => {
             {
                 let lease = state.current_lease.as_mut().unwrap();
-                lease.state = LeaseState::Paused;
+                lease.set_state(LeaseState::Paused);
                 lease.cleanup = cleanup;
                 lease.pause_snapshot = Some(candidate_snapshot.clone());
                 lease.paused_held_inputs = held_press_order;
@@ -5483,7 +5522,7 @@ fn finalize_pause_locked(
         CleanupOutcome::Pending => {
             {
                 let lease = state.current_lease.as_mut().unwrap();
-                lease.state = LeaseState::Pausing;
+                lease.set_state(LeaseState::Pausing);
                 lease.cleanup = CleanupOutcome::Pending;
                 lease.pause_snapshot = None;
                 lease.paused_held_inputs.clear();
@@ -5520,7 +5559,7 @@ fn finalize_pause_locked(
         CleanupOutcome::Failed => {
             {
                 let lease = state.current_lease.as_mut().unwrap();
-                lease.state = LeaseState::Uncertain;
+                lease.set_state(LeaseState::Uncertain);
                 lease.cleanup = CleanupOutcome::Failed;
                 lease.pause_snapshot = None;
                 lease.paused_held_inputs.clear();
@@ -5602,7 +5641,7 @@ fn finish_uncertain_segment_locked(
         let lease = state.current_lease.as_mut().unwrap();
         lease.release_pending = false;
         let cleanup = release_held_inputs(desktop, &mut lease.held_inputs);
-        lease.state = LeaseState::Uncertain;
+        lease.set_state(LeaseState::Uncertain);
         lease.cleanup = cleanup;
         lease.pause_snapshot = None;
         lease.paused_held_inputs.clear();
@@ -5694,7 +5733,7 @@ fn revoke_current_lease_locked(
     }
 
     if matches!(cleanup, CleanupOutcome::Failed | CleanupOutcome::Pending) {
-        lease.state = LeaseState::Uncertain;
+        lease.set_state(LeaseState::Uncertain);
         lease.reason = Some(
             if cleanup == CleanupOutcome::Failed {
                 "INPUT_RELEASE_FAILED"
@@ -5706,7 +5745,7 @@ fn revoke_current_lease_locked(
         state.record_historical_lease(&lease);
         state.current_lease = Some(lease);
     } else {
-        lease.state = LeaseState::Released;
+        lease.set_state(LeaseState::Released);
         lease.reason = Some(reason_str.to_owned());
         state.record_historical_lease(&lease);
     }
@@ -6207,7 +6246,7 @@ mod tests {
             let mut state = leases.state.lock().unwrap();
             let lease = state.current_lease.as_mut().unwrap();
             assert!(lease.held_inputs.is_empty());
-            lease.state = LeaseState::Pausing;
+            lease.set_state(LeaseState::Pausing);
             lease.in_flight = Some(InFlightSegment {
                 target_token: "target-a".to_owned(),
                 pause_requested: true,
