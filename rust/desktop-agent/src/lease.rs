@@ -2718,6 +2718,43 @@ impl LeaseCoordinator {
             return Err(err);
         }
 
+        let admission_targets = match admission_targets_res.expect("targets built when active") {
+            Ok(targets_state) => targets_state,
+            Err(err) => {
+                if state
+                    .current_lease
+                    .as_ref()
+                    .is_some_and(|l| !l.held_inputs.is_empty())
+                {
+                    self.handle_admission_target_loss_locked(
+                        &mut state,
+                        &lease_id,
+                        generation,
+                        ctx,
+                        desktop,
+                        "TARGET_LOST",
+                    );
+                }
+                return Err(err);
+            }
+        };
+        let baseline_drift = state
+            .current_lease
+            .as_ref()
+            .and_then(|lease| lease.baseline_targets.as_deref())
+            .and_then(|baseline| check_baseline_target_drift(baseline, &admission_targets).err());
+        if let Some((err, drift_reason)) = baseline_drift {
+            self.pause_active_lease_on_drift_locked(
+                &mut state,
+                &lease_id,
+                generation,
+                ctx,
+                desktop,
+                drift_reason,
+            );
+            return Err(err.with_retry("afterQuery"));
+        }
+
         let current_pointer = {
             let lease = state.current_lease.as_mut().unwrap();
             match live_pointer.expect("pointer probed when target active") {
@@ -2743,27 +2780,6 @@ impl LeaseCoordinator {
                 }
             }
             lease.pointer.clone()
-        };
-
-        let admission_targets = match admission_targets_res.expect("targets built when active") {
-            Ok(targets_state) => targets_state,
-            Err(err) => {
-                if state
-                    .current_lease
-                    .as_ref()
-                    .is_some_and(|l| !l.held_inputs.is_empty())
-                {
-                    self.handle_admission_target_loss_locked(
-                        &mut state,
-                        &lease_id,
-                        generation,
-                        ctx,
-                        desktop,
-                        "TARGET_LOST",
-                    );
-                }
-                return Err(err);
-            }
         };
         let target_admission = admission_targets
             .iter()
@@ -2810,7 +2826,9 @@ impl LeaseCoordinator {
 
         {
             let lease = require_active_owner_lease_mut(&mut state, &lease_id, generation, ctx)?;
-            lease.baseline_targets = Some(admission_targets.clone());
+            if lease.baseline_targets.is_none() {
+                lease.baseline_targets = Some(admission_targets.clone());
+            }
             lease.in_flight = Some(InFlightSegment {
                 target_token: target_token.clone(),
                 pause_requested: false,
@@ -5208,6 +5226,29 @@ fn build_active_target_probe_locked(
     }))
 }
 
+fn check_baseline_target_drift(
+    baseline: &[TargetState],
+    live_targets: &[TargetState],
+) -> Result<(), (PlatformError, &'static str)> {
+    if let Some(topology_version) = live_targets.first().map(|ts| ts.topology_version.as_str())
+        && baseline
+            .iter()
+            .any(|ts| ts.topology_version != topology_version)
+    {
+        return Err((
+            PlatformError::target_lost("显示拓扑代次已发生变化。"),
+            "TOPOLOGY_CHANGED",
+        ));
+    }
+    if live_targets != baseline {
+        return Err((
+            PlatformError::target_lost("输入目标版本已发生变化。"),
+            "TARGET_LOST",
+        ));
+    }
+    Ok(())
+}
+
 fn probe_active_targets_unlocked(
     desktop: &dyn DesktopSession,
     probe: &ActiveTargetProbe,
@@ -5278,21 +5319,7 @@ fn probe_active_targets_unlocked(
     sort_target_states(&mut live_targets);
 
     if let Some(ref baseline) = probe.baseline_targets {
-        if baseline
-            .iter()
-            .any(|ts| ts.topology_version != topology_version)
-        {
-            return Err((
-                PlatformError::target_lost("显示拓扑代次已发生变化。"),
-                "TOPOLOGY_CHANGED",
-            ));
-        }
-        if live_targets != *baseline {
-            return Err((
-                PlatformError::target_lost("输入目标版本已发生变化。"),
-                "TARGET_LOST",
-            ));
-        }
+        check_baseline_target_drift(baseline, &live_targets)?;
     }
 
     Ok(live_targets)

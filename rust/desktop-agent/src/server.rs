@@ -12153,4 +12153,318 @@ mod tests {
         assert_eq!(seg_err_c.code, "DEADLINE_EXCEEDED");
         assert!(scripted_c.inner.submitted_actions().is_empty());
     }
+
+    #[test]
+    fn segment_submit_checks_existing_baseline_before_admission_and_pauses_or_releases_on_drift() {
+        use deskweave_platform_api::{
+            DisplayTopology, HeldInput, LeaseState, NativeInputAction, SegmentState,
+            compute_segment_payload_hash,
+        };
+
+        let make_kd = |id: &str, title: &str, key: &str| {
+            json!({
+                "id": id,
+                "title": title,
+                "action": "keyboard.down",
+                "params": {"target": "main", "key": key},
+                "on": {}
+            })
+        };
+
+        let (base_topo, caps) = macos_topology_and_caps();
+        let expected_base_topo_ver = base_topo.version().to_string();
+        let scripted = Arc::new(ScriptedDesktop::new(caps, Ok(base_topo.clone())));
+        scripted
+            .inner
+            .register_grant("grant-a", target_desc("target-a", "2099-01-01T00:00:00Z"));
+        let leases = LeaseCoordinator::new();
+        let ctx = make_ctx("sess-baseline-drift", "ws-baseline-drift");
+        leases
+            .handle_target_bind(
+                &json_obj(json!({"selectionGrant": "grant-a"})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+
+        // Subcase A: target version drift between segments pauses lease, preserves old baseline, and releases ShiftLeft without admitting KeyA.
+        let acq_a = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-drift-a", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let kd_shift = make_kd("base-kd-shift", "保持Shift", "ShiftLeft");
+        let h_shift = compute_segment_payload_hash("target-a", &kd_shift, None).unwrap();
+        let res_a1 = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_a.lease_id,
+                    "generation": acq_a.generation,
+                    "segmentId": "seg-drift-a1",
+                    "payloadHash": h_shift,
+                    "targetToken": "target-a",
+                    "operation": kd_shift
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(res_a1.state, SegmentState::Sent);
+        assert_eq!(scripted.inner.submitted_actions().len(), 1);
+        assert!(scripted.inner.released_batches().is_empty());
+
+        scripted.inner.set_target_version("target-a", "2");
+        let kd_a = make_kd("base-kd-a", "目标版本漂移阻断", "KeyA");
+        let h_a = compute_segment_payload_hash("target-a", &kd_a, None).unwrap();
+        let err_a2 = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_a.lease_id,
+                    "generation": acq_a.generation,
+                    "segmentId": "seg-drift-a2",
+                    "payloadHash": h_a,
+                    "targetToken": "target-a",
+                    "operation": kd_a
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(err_a2.code, "TARGET_LOST");
+        assert_eq!(err_a2.retry, "afterQuery");
+        let actions_a = scripted.inner.submitted_actions();
+        assert_eq!(actions_a.len(), 1);
+        assert!(
+            !actions_a
+                .iter()
+                .any(|(_, act)| matches!(act, NativeInputAction::KeyDown(k) if k == "KeyA"))
+        );
+        assert_eq!(
+            scripted.inner.released_batches(),
+            vec![vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned(),
+            }]]
+        );
+        let st_a = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_a.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_a.state, LeaseState::Paused);
+        assert_eq!(st_a.reason.as_deref(), Some("TARGET_LOST"));
+        let snap_a = st_a.pause_snapshot.unwrap();
+        assert_eq!(
+            snap_a.held_inputs,
+            vec![HeldInput::Key {
+                key: "ShiftLeft".to_owned(),
+            }]
+        );
+        assert_eq!(snap_a.targets[0].target_version, "1");
+        let seg_st_a2 = leases
+            .handle_segment_status(
+                &json_obj(json!({"segmentId": "seg-drift-a2", "payloadHash": h_a})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(seg_st_a2.code, "INVALID_ARGUMENT");
+        leases
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_a.lease_id,
+                    "generation": acq_a.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Subcase B: topology version drift between segments pauses lease with TOPOLOGY_CHANGED and preserves old baseline.
+        scripted.inner.set_target_version("target-a", "1");
+        let acq_b = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-drift-b", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let kd_ctrl = make_kd("base-kd-ctrl", "保持Ctrl", "ControlLeft");
+        let h_ctrl = compute_segment_payload_hash("target-a", &kd_ctrl, None).unwrap();
+        let res_b1 = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_b.lease_id,
+                    "generation": acq_b.generation,
+                    "segmentId": "seg-drift-b1",
+                    "payloadHash": h_ctrl,
+                    "targetToken": "target-a",
+                    "operation": kd_ctrl
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(res_b1.state, SegmentState::Sent);
+        assert_eq!(scripted.inner.submitted_actions().len(), 2);
+
+        let mut drifted_topo = base_topo.clone();
+        match &mut drifted_topo {
+            DisplayTopology::Physical(t) => t.version += 1,
+            DisplayTopology::DisplayLocal(t) => t.version += 1,
+        }
+        scripted.inner.set_topology(Ok(drifted_topo));
+        let kd_b = make_kd("base-kd-b", "拓扑版本漂移阻断", "KeyB");
+        let h_b = compute_segment_payload_hash("target-a", &kd_b, None).unwrap();
+        let err_b2 = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_b.lease_id,
+                    "generation": acq_b.generation,
+                    "segmentId": "seg-drift-b2",
+                    "payloadHash": h_b,
+                    "targetToken": "target-a",
+                    "operation": kd_b
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(err_b2.code, "TARGET_LOST");
+        assert_eq!(err_b2.retry, "afterQuery");
+        let actions_b = scripted.inner.submitted_actions();
+        assert_eq!(actions_b.len(), 2);
+        assert!(
+            !actions_b
+                .iter()
+                .any(|(_, act)| matches!(act, NativeInputAction::KeyDown(k) if k == "KeyB"))
+        );
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "ControlLeft".to_owned(),
+            }]
+        );
+        let st_b = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_b.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_b.state, LeaseState::Paused);
+        assert_eq!(st_b.reason.as_deref(), Some("TOPOLOGY_CHANGED"));
+        assert_eq!(
+            st_b.pause_snapshot.unwrap().targets[0].topology_version,
+            expected_base_topo_ver
+        );
+        let seg_st_b2 = leases
+            .handle_segment_status(
+                &json_obj(json!({"segmentId": "seg-drift-b2", "payloadHash": h_b})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap_err();
+        assert_eq!(seg_st_b2.code, "INVALID_ARGUMENT");
+        leases
+            .handle_lease_release(
+                &json_obj(json!({
+                    "leaseId": acq_b.lease_id,
+                    "generation": acq_b.generation,
+                    "reason": "cancelled"
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+
+        // Subcase C: drift fallback revokes lease and cleans held AltLeft when pause snapshot fails.
+        scripted.inner.set_topology(Ok(base_topo));
+        let acq_c = leases
+            .handle_lease_acquire(
+                &json_obj(json!({"runId": "run-drift-c", "targets": ["target-a"], "waitMs": 0})),
+                &ctx,
+                scripted.as_ref(),
+                || false,
+                5000,
+            )
+            .unwrap();
+        let kd_alt = make_kd("base-kd-alt", "保持Alt", "AltLeft");
+        let h_alt = compute_segment_payload_hash("target-a", &kd_alt, None).unwrap();
+        let res_c1 = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_c.lease_id,
+                    "generation": acq_c.generation,
+                    "segmentId": "seg-drift-c1",
+                    "payloadHash": h_alt,
+                    "targetToken": "target-a",
+                    "operation": kd_alt
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap();
+        assert_eq!(res_c1.state, SegmentState::Sent);
+        assert_eq!(scripted.inner.submitted_actions().len(), 3);
+
+        scripted.inner.set_target_version("target-a", "3");
+        scripted.set_pointer_override(Some(Err(PlatformError::session_unavailable("ptr-down"))));
+        let kd_c = make_kd("base-kd-c", "暂停失败回退释放", "KeyC");
+        let h_c = compute_segment_payload_hash("target-a", &kd_c, None).unwrap();
+        let err_c2 = leases
+            .handle_segment_submit(
+                &json_obj(json!({
+                    "leaseId": acq_c.lease_id,
+                    "generation": acq_c.generation,
+                    "segmentId": "seg-drift-c2",
+                    "payloadHash": h_c,
+                    "targetToken": "target-a",
+                    "operation": kd_c
+                })),
+                &ctx,
+                scripted.as_ref(),
+                5000,
+            )
+            .unwrap_err();
+        assert_eq!(err_c2.code, "TARGET_LOST");
+        assert_eq!(err_c2.retry, "afterQuery");
+        let actions_c = scripted.inner.submitted_actions();
+        assert_eq!(actions_c.len(), 3);
+        assert!(
+            !actions_c
+                .iter()
+                .any(|(_, act)| matches!(act, NativeInputAction::KeyDown(k) if k == "KeyC"))
+        );
+        assert_eq!(
+            scripted.inner.released_batches().last().unwrap(),
+            &vec![HeldInput::Key {
+                key: "AltLeft".to_owned(),
+            }]
+        );
+        let st_c = leases
+            .handle_lease_status(
+                &json_obj(json!({"leaseId": acq_c.lease_id})),
+                &ctx,
+                scripted.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(st_c.state, LeaseState::Released);
+        assert_eq!(st_c.reason.as_deref(), Some("TARGET_LOST"));
+    }
 }
