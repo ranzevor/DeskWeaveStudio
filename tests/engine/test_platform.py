@@ -924,7 +924,7 @@ class PlatformAgentIntegrationTests(unittest.TestCase):
 
             # Unimplemented Agent method returns METHOD_UNAVAILABLE without dropping connection.
             with self.assertRaises(DeskWeaveError) as method_err:
-                first.call("lease.acquire", {})
+                first.call("capture.create", {})
             self.assertEqual(method_err.exception.code, "METHOD_UNAVAILABLE")
 
             # Extra params on desktop.capabilities returns INVALID_ARGUMENT cleanly.

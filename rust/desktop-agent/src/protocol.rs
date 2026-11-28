@@ -279,6 +279,64 @@ pub(crate) struct Pong<'epoch> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct ConfirmationChallenge<'a> {
+    pub(crate) kind: &'static str,
+    pub(crate) version: u8,
+    pub(crate) agent_epoch: &'a str,
+    pub(crate) nonce: [u8; 32],
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ConfirmationRegister {
+    pub(crate) kind: String,
+    pub(crate) version: u8,
+    pub(crate) claim: String,
+    pub(crate) signature: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ConfirmationClaim {
+    pub(crate) kind: String,
+    pub(crate) agent_pid: u32,
+    pub(crate) agent_epoch: String,
+    pub(crate) owner: [String; 2],
+    pub(crate) scope: String,
+    pub(crate) workspace_id: String,
+    pub(crate) purpose: String,
+    pub(crate) nonce: [u8; 32],
+    pub(crate) lease_id: String,
+    pub(crate) pause_id: String,
+    pub(crate) generation: u64,
+    pub(crate) checkpoint_hash: String,
+    pub(crate) resume_plan_hash: String,
+    #[serde(default)]
+    pub(crate) restore_target_token: Option<String>,
+    #[serde(default)]
+    pub(crate) pointer_to_restore: Option<deskweave_platform_api::PausePoint>,
+    pub(crate) ttl_ms: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfirmationRegistered<'a> {
+    pub(crate) kind: &'static str,
+    pub(crate) confirmation_grant: &'a str,
+    pub(crate) expires_in_ms: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfirmationError<'a> {
+    pub(crate) kind: &'static str,
+    pub(crate) code: &'a str,
+    pub(crate) message: &'a str,
+    pub(crate) retry: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct SuccessResponse<'a, T: Serialize> {
     pub(crate) protocol_version: &'static str,
     pub(crate) kind: &'static str,

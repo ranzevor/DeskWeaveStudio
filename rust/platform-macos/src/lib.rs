@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use deskweave_platform_api::{
     BackendKind, CapabilitySnapshot, CaptureSource, CredentialStore, DesktopSession,
@@ -8,6 +9,7 @@ use deskweave_platform_api::{
 };
 
 pub const BACKEND_VERSION: &str = "0.1.0";
+const LIVE_SESSION_PROBE_TTL: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MacOsSessionFacts {
@@ -134,26 +136,28 @@ impl MacOsRawProbe {
 
 impl MacOsSessionFacts {
     pub fn probe() -> Self {
-        Self {
-            graphical_session: MacOsRawProbe::probe().graphical_session,
+        #[cfg(target_os = "macos")]
+        {
+            Self {
+                graphical_session: probe_macos_graphical_session(),
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Self {
+                graphical_session: false,
+            }
         }
     }
 }
 
 #[cfg(target_os = "macos")]
-fn probe_macos_raw() -> MacOsRawProbe {
+fn probe_macos_graphical_session() -> bool {
     use std::ffi::c_void;
 
     #[link(name = "CoreGraphics", kind = "framework")]
     unsafe extern "C" {
         fn CGSessionCopyCurrentDictionary() -> *const c_void;
-        fn CGPreflightScreenCaptureAccess() -> u8;
-        fn CGPreflightListenEventAccess() -> u8;
-    }
-
-    #[link(name = "ApplicationServices", kind = "framework")]
-    unsafe extern "C" {
-        fn AXIsProcessTrusted() -> u8;
     }
 
     #[link(name = "CoreFoundation", kind = "framework")]
@@ -163,13 +167,28 @@ fn probe_macos_raw() -> MacOsRawProbe {
 
     // Read-only WindowServer session query; never triggers any TCC privacy prompt.
     let dict = unsafe { CGSessionCopyCurrentDictionary() };
-    let graphical_session = if dict.is_null() {
+    if dict.is_null() {
         false
     } else {
         unsafe { CFRelease(dict) };
         true
-    };
-    if !graphical_session {
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn probe_macos_raw() -> MacOsRawProbe {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGPreflightScreenCaptureAccess() -> u8;
+        fn CGPreflightListenEventAccess() -> u8;
+    }
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn AXIsProcessTrusted() -> u8;
+    }
+
+    if !probe_macos_graphical_session() {
         return MacOsRawProbe {
             graphical_session: false,
             screen_recording: false,
@@ -253,10 +272,74 @@ struct TrackedMacOsState {
 }
 
 type MacOsProbeFn = Box<dyn Fn() -> MacOsProbeState + Send + Sync>;
+type MacOsSessionProbeFn = Box<dyn Fn() -> bool + Send + Sync>;
+
+struct SessionProbeCache {
+    ttl: Option<Duration>,
+    entry: Mutex<Option<(bool, Instant)>>,
+}
+
+impl SessionProbeCache {
+    fn disabled() -> Self {
+        Self {
+            ttl: None,
+            entry: Mutex::new(None),
+        }
+    }
+
+    fn with_ttl(ttl: Duration) -> Self {
+        Self {
+            ttl: Some(ttl),
+            entry: Mutex::new(None),
+        }
+    }
+
+    fn clear(&self) {
+        *self
+            .entry
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
+    fn record(&self, graphical_session: bool) {
+        if self.ttl.is_some() {
+            *self
+                .entry
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some((graphical_session, Instant::now()));
+        }
+    }
+
+    fn get_or_probe(&self, probe: &MacOsSessionProbeFn) -> bool {
+        let Some(ttl) = self.ttl else {
+            return probe();
+        };
+        {
+            let cache = self
+                .entry
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some((cached, at)) = *cache
+                && at.elapsed() < ttl
+            {
+                return cached;
+            }
+        }
+        let live = probe();
+        *self
+            .entry
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((live, Instant::now()));
+        live
+    }
+}
 
 pub struct MacOsBackend {
     arch: PlatformArch,
     probe: MacOsProbeFn,
+    session_probe: Option<MacOsSessionProbeFn>,
+    session_cache: SessionProbeCache,
     state: Mutex<TrackedMacOsState>,
     ports: UnimplementedPorts,
 }
@@ -264,13 +347,16 @@ pub struct MacOsBackend {
 impl MacOsBackend {
     pub fn detect() -> Self {
         let tracker = Mutex::new(MacOsPermissionTracker::new());
-        Self::with_probe(PlatformArch::current(), move || {
+        let mut backend = Self::with_probe(PlatformArch::current(), move || {
             let raw = MacOsRawProbe::probe();
             tracker
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .observe(raw)
-        })
+        });
+        backend.session_probe = Some(Box::new(|| MacOsSessionFacts::probe().graphical_session));
+        backend.session_cache = SessionProbeCache::with_ttl(LIVE_SESSION_PROBE_TTL);
+        backend
     }
 
     pub fn with_probe(
@@ -280,6 +366,8 @@ impl MacOsBackend {
         Self {
             arch,
             probe: Box::new(probe),
+            session_probe: None,
+            session_cache: SessionProbeCache::disabled(),
             state: Mutex::new(TrackedMacOsState {
                 last_state: None,
                 generation: 1,
@@ -287,6 +375,29 @@ impl MacOsBackend {
             }),
             ports: UnimplementedPorts::new(PlatformOs::Macos),
         }
+    }
+
+    #[cfg(test)]
+    fn with_session_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> MacOsProbeState + Send + Sync + 'static,
+        session_probe: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> Self {
+        let mut backend = Self::with_probe(arch, probe);
+        backend.session_probe = Some(Box::new(session_probe));
+        backend
+    }
+
+    #[cfg(test)]
+    fn with_cached_session_probe(
+        arch: PlatformArch,
+        probe: impl Fn() -> MacOsProbeState + Send + Sync + 'static,
+        session_probe: impl Fn() -> bool + Send + Sync + 'static,
+        ttl: Duration,
+    ) -> Self {
+        let mut backend = Self::with_session_probe(arch, probe, session_probe);
+        backend.session_cache = SessionProbeCache::with_ttl(ttl);
+        backend
     }
 
     pub fn with_raw_probe(
@@ -322,6 +433,7 @@ impl MacOsBackend {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.invalidated = true;
+        self.session_cache.clear();
     }
 
     fn refresh(&self) -> (MacOsProbeState, u64) {
@@ -330,6 +442,7 @@ impl MacOsBackend {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let probed = (self.probe)();
+        self.session_cache.record(probed.session.graphical_session);
         match state.last_state {
             None => {
                 state.last_state = Some(probed);
@@ -369,8 +482,11 @@ impl DesktopSession for MacOsBackend {
     }
 
     fn topology(&self) -> Result<DisplayTopology, PlatformError> {
-        let (probed, _) = self.refresh();
-        if probed.session.graphical_session {
+        let graphical_session = match &self.session_probe {
+            Some(probe) => self.session_cache.get_or_probe(probe),
+            None => self.refresh().0.session.graphical_session,
+        };
+        if graphical_session {
             Err(PlatformError::capability_not_implemented(
                 "macOS 原生显示拓扑枚举尚未实现。",
             ))
@@ -662,6 +778,135 @@ mod tests {
         );
     }
 
+    #[test]
+    fn macos_topology_uses_lightweight_session_probe_without_tcc_calls() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        let full_probe_calls = Arc::new(AtomicUsize::new(0));
+        let graphical_session = Arc::new(AtomicBool::new(true));
+
+        let full_probe_calls_p = Arc::clone(&full_probe_calls);
+        let graphical_p = Arc::clone(&graphical_session);
+        let graphical_s = Arc::clone(&graphical_session);
+        let backend = MacOsBackend::with_session_probe(
+            PlatformArch::Arm64,
+            move || {
+                full_probe_calls_p.fetch_add(1, Ordering::SeqCst);
+                MacOsProbeState {
+                    session: MacOsSessionFacts {
+                        graphical_session: graphical_p.load(Ordering::SeqCst),
+                    },
+                    permissions: MacOsPermissionFacts {
+                        screen_recording: PermissionGrant::Missing,
+                        input_monitoring: PermissionGrant::Missing,
+                        accessibility: PermissionGrant::Missing,
+                    },
+                }
+            },
+            move || graphical_s.load(Ordering::SeqCst),
+        );
+
+        assert_eq!(
+            backend.topology().unwrap_err().code,
+            "CAPABILITY_NOT_IMPLEMENTED"
+        );
+        graphical_session.store(false, Ordering::SeqCst);
+        assert_eq!(backend.topology().unwrap_err().code, "SESSION_UNAVAILABLE");
+        graphical_session.store(true, Ordering::SeqCst);
+        assert_eq!(
+            backend.topology().unwrap_err().code,
+            "CAPABILITY_NOT_IMPLEMENTED"
+        );
+        assert_eq!(full_probe_calls.load(Ordering::SeqCst), 0);
+
+        let caps = backend.capabilities();
+        caps.validate().unwrap();
+        assert_eq!(full_probe_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn macos_live_session_cache_reuses_within_ttl_and_clears_on_invalidate() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        let session_probe_calls = Arc::new(AtomicUsize::new(0));
+        let graphical_session = Arc::new(AtomicBool::new(true));
+
+        let graphical_p = Arc::clone(&graphical_session);
+        let calls_s = Arc::clone(&session_probe_calls);
+        let graphical_s = Arc::clone(&graphical_session);
+        let backend = MacOsBackend::with_cached_session_probe(
+            PlatformArch::Arm64,
+            move || MacOsProbeState {
+                session: MacOsSessionFacts {
+                    graphical_session: graphical_p.load(Ordering::SeqCst),
+                },
+                permissions: MacOsPermissionFacts {
+                    screen_recording: PermissionGrant::Missing,
+                    input_monitoring: PermissionGrant::Missing,
+                    accessibility: PermissionGrant::Missing,
+                },
+            },
+            move || {
+                calls_s.fetch_add(1, Ordering::SeqCst);
+                graphical_s.load(Ordering::SeqCst)
+            },
+            Duration::from_millis(200),
+        );
+
+        assert_eq!(
+            backend.topology().unwrap_err().code,
+            "CAPABILITY_NOT_IMPLEMENTED"
+        );
+        assert_eq!(
+            backend.topology().unwrap_err().code,
+            "CAPABILITY_NOT_IMPLEMENTED"
+        );
+        assert_eq!(session_probe_calls.load(Ordering::SeqCst), 1);
+
+        graphical_session.store(false, Ordering::SeqCst);
+        backend.invalidate();
+        assert_eq!(backend.topology().unwrap_err().code, "SESSION_UNAVAILABLE");
+        assert_eq!(session_probe_calls.load(Ordering::SeqCst), 2);
+
+        let short_calls = Arc::new(AtomicUsize::new(0));
+        let short_session = Arc::new(AtomicBool::new(true));
+        let short_p = Arc::clone(&short_session);
+        let short_calls_s = Arc::clone(&short_calls);
+        let short_s = Arc::clone(&short_session);
+        let short_backend = MacOsBackend::with_cached_session_probe(
+            PlatformArch::Arm64,
+            move || MacOsProbeState {
+                session: MacOsSessionFacts {
+                    graphical_session: short_p.load(Ordering::SeqCst),
+                },
+                permissions: MacOsPermissionFacts {
+                    screen_recording: PermissionGrant::Missing,
+                    input_monitoring: PermissionGrant::Missing,
+                    accessibility: PermissionGrant::Missing,
+                },
+            },
+            move || {
+                short_calls_s.fetch_add(1, Ordering::SeqCst);
+                short_s.load(Ordering::SeqCst)
+            },
+            Duration::from_millis(15),
+        );
+
+        assert_eq!(
+            short_backend.topology().unwrap_err().code,
+            "CAPABILITY_NOT_IMPLEMENTED"
+        );
+        assert_eq!(short_calls.load(Ordering::SeqCst), 1);
+
+        short_session.store(false, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(25));
+        assert_eq!(
+            short_backend.topology().unwrap_err().code,
+            "SESSION_UNAVAILABLE"
+        );
+        assert_eq!(short_calls.load(Ordering::SeqCst), 2);
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn macos_live_probe_produces_valid_snapshot() {
@@ -675,5 +920,9 @@ mod tests {
                 .iter()
                 .all(|(_, s)| s.state != FeatureState::Available)
         );
+        assert!(matches!(
+            backend.topology().unwrap_err().code,
+            "CAPABILITY_NOT_IMPLEMENTED" | "SESSION_UNAVAILABLE"
+        ));
     }
 }
